@@ -1667,6 +1667,304 @@ function vape:LoadGUI()
 	vape.Categories.Main:CreateOverlayBar()
 
 	--[[
+		Dynamic Island Overlay
+	]]
+	local DynamicIsland
+	do
+		local islandState = {
+			Title = 'Vape',
+			Body = 'Ready',
+			Accent = 0.08,
+			Until = 0
+		}
+		local showStatsToggle, animatePatternToggle, patternOpacitySlider
+		local islandFrame, subtitleLabel, statsHolder, enabledChip, timeChip, fpsChip, accentBar
+		local defaultIcon, defaultTitle, defaultPin, defaultDots, fpsAverage = nil, nil, nil, nil, 60
+
+		local function getEnabledCount()
+			local count = 0
+			for _, module in vape.Modules do
+				if module.Enabled then
+					count += 1
+				end
+			end
+			return count
+		end
+
+		local function formatClock()
+			local ok, formatted = pcall(function()
+				return os.date('%I:%M %p')
+			end)
+			return ok and formatted or '??:??'
+		end
+
+		local function applyDefaultChromeVisibility()
+			for _, object in {defaultIcon, defaultTitle, defaultPin, defaultDots} do
+				if object then
+					object.Visible = false
+				end
+			end
+		end
+
+		function vape:PushDynamicIslandMessage(title, body, duration, accent)
+			islandState.Title = tostring(title or 'Vape')
+			islandState.Body = tostring(body or '')
+			islandState.Accent = accent or islandState.Accent or 0.08
+			islandState.Until = tick() + (duration or 2.4)
+		end
+
+		function vape:PushDynamicIslandModuleMessage(name, enabled)
+			local action = enabled and 'Enabled' or 'Disabled'
+			local body = tostring(name)..' • '..string.lower(action)
+			self:PushDynamicIslandMessage(action, body, 2.6, enabled and 0.06 or 0.55)
+		end
+
+		DynamicIsland = vape:CreateOverlay({
+			Name = 'Dynamic Island',
+			Icon = getvapeasset('newvape/assets/new/vape.png'),
+			Size = UDim2.fromOffset(14, 14),
+			Position = UDim2.fromOffset(12, 12),
+			CategorySize = 420
+		})
+		vape.DynamicIsland = DynamicIsland
+		DynamicIsland.Object.Position = UDim2.new(0.5, -210, 0, 10)
+		DynamicIsland.Object.Size = UDim2.fromOffset(420, 41)
+		DynamicIsland.Object.Name = 'DynamicIslandOverlay'
+
+		for _, child in DynamicIsland.Object:GetChildren() do
+			if child.Name == 'Pin' then
+				defaultPin = child
+			elseif child.Name == 'Dots' then
+				defaultDots = child
+			elseif child:IsA('ImageLabel') and not defaultIcon then
+				defaultIcon = child
+			elseif child:IsA('TextLabel') and not defaultTitle then
+				defaultTitle = child
+			end
+		end
+		applyDefaultChromeVisibility()
+
+		islandFrame = Instance.new('Frame')
+		islandFrame.Name = 'IslandFrame'
+		islandFrame.BackgroundColor3 = Color3.fromRGB(18, 21, 27)
+		islandFrame.BorderSizePixel = 0
+		islandFrame.Position = UDim2.fromOffset(0, 0)
+		islandFrame.Size = UDim2.new(1, 0, 0, 41)
+		islandFrame.Parent = DynamicIsland.Object
+		addCorner(islandFrame, UDim.new(1, 0))
+		local islandStroke = Instance.new('UIStroke')
+		islandStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		islandStroke.Transparency = 0.2
+		islandStroke.Parent = islandFrame
+		vape:RegisterThemeSolid(islandStroke, 'Color', 0.1)
+
+		local shade = Instance.new('Frame')
+		shade.BackgroundColor3 = Color3.new()
+		shade.BackgroundTransparency = 0.74
+		shade.BorderSizePixel = 0
+		shade.Size = UDim2.new(1, 0, 1, 0)
+		shade.Parent = islandFrame
+		addCorner(shade, UDim.new(1, 0))
+
+		local patternClip = Instance.new('Frame')
+		patternClip.Name = 'Pattern'
+		patternClip.BackgroundTransparency = 1
+		patternClip.ClipsDescendants = true
+		patternClip.Size = UDim2.new(1, -20, 1, -8)
+		patternClip.Position = UDim2.fromOffset(10, 4)
+		patternClip.Parent = islandFrame
+		local patternRows = {}
+		for row = 0, 1 do
+			local rowFrame = Instance.new('Frame')
+			rowFrame.BackgroundTransparency = 1
+			rowFrame.BorderSizePixel = 0
+			rowFrame.Size = UDim2.new(1.45, 0, 0, 14)
+			rowFrame.Position = UDim2.new(-0.2, 0, 0, 4 + (row * 15))
+			rowFrame.Parent = patternClip
+			table.insert(patternRows, rowFrame)
+			for index = 0, 9 do
+				local tag = Instance.new('TextLabel')
+				tag.BackgroundTransparency = 1
+				tag.BorderSizePixel = 0
+				tag.FontFace = uipallet.FontSemiBold
+				tag.Text = 'VAPE'
+				tag.TextColor3 = Color3.new(1, 1, 1)
+				tag.TextTransparency = 0.9
+				tag.TextSize = 12
+				tag.Rotation = -8
+				tag.Size = UDim2.fromOffset(46, 14)
+				tag.Position = UDim2.fromOffset(index * 42, 0)
+				tag.Parent = rowFrame
+			end
+		end
+
+		local content = Instance.new('Frame')
+		content.BackgroundTransparency = 1
+		content.Size = UDim2.new(1, -20, 1, 0)
+		content.Position = UDim2.fromOffset(10, 0)
+		content.Parent = islandFrame
+		local contentPadding = Instance.new('UIPadding')
+		contentPadding.PaddingLeft = UDim.new(0, 8)
+		contentPadding.PaddingRight = UDim.new(0, 8)
+		contentPadding.Parent = content
+
+		local logo = Instance.new('ImageLabel')
+		logo.BackgroundTransparency = 1
+		logo.Image = getvapeasset('newvape/assets/new/vapelogo.png')
+		logo.Size = UDim2.fromOffset(56, 17)
+		logo.Position = UDim2.fromOffset(5, 4)
+		logo.Parent = content
+		local logoV4 = Instance.new('ImageLabel')
+		logoV4.BackgroundTransparency = 1
+		logoV4.Image = getvapeasset('newvape/assets/new/v4mini.png')
+		logoV4.Size = UDim2.fromOffset(18, 14)
+		logoV4.Position = UDim2.fromOffset(60, 5)
+		logoV4.Parent = content
+
+		subtitleLabel = Instance.new('TextLabel')
+		subtitleLabel.BackgroundTransparency = 1
+		subtitleLabel.FontFace = uipallet.Font
+		subtitleLabel.Text = 'Ready'
+		subtitleLabel.TextColor3 = Color3.new(1, 1, 1)
+		subtitleLabel.TextTransparency = 0.16
+		subtitleLabel.TextSize = 12
+		subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+		subtitleLabel.Position = UDim2.fromOffset(8, 20)
+		subtitleLabel.Size = UDim2.new(1, -170, 0, 16)
+		subtitleLabel.Parent = content
+
+		statsHolder = Instance.new('Frame')
+		statsHolder.BackgroundTransparency = 1
+		statsHolder.Size = UDim2.fromOffset(158, 26)
+		statsHolder.AnchorPoint = Vector2.new(1, 0.5)
+		statsHolder.Position = UDim2.new(1, -6, 0.5, 0)
+		statsHolder.Parent = content
+		local statsLayout = Instance.new('UIListLayout')
+		statsLayout.FillDirection = Enum.FillDirection.Horizontal
+		statsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+		statsLayout.Padding = UDim.new(0, 6)
+		statsLayout.Parent = statsHolder
+
+		local function createChip(labelText)
+			local chip = Instance.new('Frame')
+			chip.BackgroundColor3 = Color3.fromRGB(26, 30, 38)
+			chip.BackgroundTransparency = 0.18
+			chip.BorderSizePixel = 0
+			chip.Size = UDim2.fromOffset(48, 24)
+			chip.Parent = statsHolder
+			addCorner(chip, UDim.new(1, 0))
+			local chipStroke = Instance.new('UIStroke')
+			chipStroke.Transparency = 0.72
+			chipStroke.Parent = chip
+			vape:RegisterThemeSolid(chipStroke, 'Color', 0.16)
+			local label = Instance.new('TextLabel')
+			label.BackgroundTransparency = 1
+			label.FontFace = uipallet.FontSemiBold
+			label.Size = UDim2.new(1, -10, 1, 0)
+			label.Position = UDim2.fromOffset(5, 0)
+			label.Text = labelText
+			label.TextColor3 = uipallet.Text
+			label.TextSize = 11
+			label.Parent = chip
+			return chip, label
+		end
+
+		local enabledChipFrame
+		enabledChipFrame, enabledChip = createChip('0 MOD')
+		local timeChipFrame
+		timeChipFrame, timeChip = createChip('00:00')
+		local fpsChipFrame
+		fpsChipFrame, fpsChip = createChip('60 FPS')
+
+		accentBar = Instance.new('Frame')
+		accentBar.BorderSizePixel = 0
+		accentBar.Size = UDim2.new(1, -34, 0, 2)
+		accentBar.Position = UDim2.fromOffset(17, 38)
+		accentBar.BackgroundColor3 = Color3.new(1, 1, 1)
+		accentBar.Parent = islandFrame
+		local accentGradient = Instance.new('UIGradient')
+		accentGradient.Parent = accentBar
+		vape:RegisterThemeGradient(accentGradient, 0.08, 0)
+
+		showStatsToggle = DynamicIsland:CreateToggle({
+			Name = 'Show stat chips',
+			Default = true,
+			Function = function(enabled)
+				if statsHolder then statsHolder.Visible = enabled end
+				if subtitleLabel then subtitleLabel.Size = UDim2.new(1, enabled and -170 or -16, 0, 16) end
+			end
+		})
+		animatePatternToggle = DynamicIsland:CreateToggle({
+			Name = 'Animate VAPE pattern',
+			Default = true
+		})
+		patternOpacitySlider = DynamicIsland:CreateSlider({
+			Name = 'Pattern opacity',
+			Min = 0.02,
+			Max = 0.18,
+			Default = 0.1,
+			Decimal = 100,
+			Function = function() end
+		})
+
+		if not DynamicIsland.Button.Enabled then
+			DynamicIsland.Button:Toggle()
+		end
+		if not DynamicIsland.Pinned then
+			DynamicIsland:Pin()
+		end
+		DynamicIsland:Update()
+
+		vape:Clean(clickgui:GetPropertyChangedSignal('Visible'):Connect(function()
+			task.defer(applyDefaultChromeVisibility)
+		end))
+
+		vape:Clean(runService.RenderStepped:Connect(function(delta)
+			if not DynamicIsland or not DynamicIsland.Button.Enabled or not islandFrame or not islandFrame.Parent then
+				return
+			end
+			applyDefaultChromeVisibility()
+			local alpha = math.clamp(delta * 7, 0, 1)
+			fpsAverage = fpsAverage + (((delta > 0 and (1 / delta) or 60)) - fpsAverage) * math.min(delta * 3, 1)
+			local now = tick()
+			local messageActive = now < (islandState.Until or 0)
+			local count = getEnabledCount()
+			local idleBody = string.format('%d module%s enabled', count, count == 1 and '' or 's')
+			local displayBody = messageActive and islandState.Body or idleBody
+			subtitleLabel.Text = displayBody
+			subtitleLabel.TextColor3 = messageActive and vape:GetThemeColor(islandState.Accent or 0.08) or Color3.fromRGB(220, 224, 232)
+			subtitleLabel.TextTransparency = messageActive and 0.04 or 0.18
+			enabledChip.Text = string.format('%d MOD', count)
+			timeChip.Text = formatClock()
+			fpsChip.Text = string.format('%d FPS', math.floor(fpsAverage + 0.5))
+			statsHolder.Visible = showStatsToggle == nil or showStatsToggle.Enabled
+			if statsHolder.Visible then
+				subtitleLabel.Size = UDim2.new(1, -170, 0, 16)
+			else
+				subtitleLabel.Size = UDim2.new(1, -16, 0, 16)
+			end
+
+			local reducedMotion = vape.ReducedMotion and vape.ReducedMotion.Enabled
+			local baseOpacity = patternOpacitySlider and patternOpacitySlider.Value or 0.1
+			for rowIndex, rowFrame in ipairs(patternRows) do
+				if rowFrame and rowFrame.Parent then
+					local offset = reducedMotion and (rowIndex == 1 and 0 or -22) or ((((tick() * 20 * (animatePatternToggle and animatePatternToggle.Enabled and 1 or 0)) * (rowIndex == 1 and 1 or -1)) % 42))
+					rowFrame.Position = UDim2.new(-0.2, math.floor(offset), 0, 4 + ((rowIndex - 1) * 15))
+					for _, tag in rowFrame:GetChildren() do
+						if tag:IsA('TextLabel') then
+							tag.TextTransparency = 1 - baseOpacity
+						end
+					end
+				end
+			end
+
+			local targetBackground = messageActive and color.Dark(vape:GetThemeColor(islandState.Accent or 0.08), 0.62) or Color3.fromRGB(18, 21, 27)
+			islandFrame.BackgroundColor3 = islandFrame.BackgroundColor3:Lerp(targetBackground, alpha)
+			accentBar.BackgroundTransparency = messageActive and 0.04 or 0.18
+		end))
+	end
+
+	--[[
 		General Settings
 	]]
 
@@ -7139,6 +7437,9 @@ components = {
 			end
 
 			if vape.Loaded then vape:RecordRecent(props.Name) end
+			if vape.PushDynamicIslandModuleMessage then
+				vape:PushDynamicIslandModuleMessage(props.Name, self.Enabled)
+			end
 			task.spawn(props.Function, self.Enabled)
 		end
 
