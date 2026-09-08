@@ -6848,7 +6848,8 @@ components = {
 		themeBackground.Parent = button
 		local gradient = Instance.new('UIGradient')
 		gradient.Enabled = false
-		gradient.Rotation = 90
+		-- Diagonal corner-to-corner module theme instead of the old vertical sweep.
+		gradient.Rotation = 45
 		gradient.Parent = themeBackground
 		local moduleTitle = Instance.new('TextLabel')
 		moduleTitle.BackgroundTransparency = 1
@@ -6970,7 +6971,7 @@ components = {
 			if enabled then
 				-- Theme only the dedicated background so the text can remain readable.
 				themeBackground.BackgroundColor3 = Color3.new(1, 1, 1)
-				vape:RegisterThemeGradient(gradient, component.Index * 0.045, 90)
+				vape:RegisterThemeGradient(gradient, component.Index * 0.045, 45)
 				moduleTitle.TextColor3 = Color3.new(1, 1, 1)
 				moduleTitle.TextStrokeColor3 = Color3.new(0, 0, 0)
 				moduleTitle.TextStrokeTransparency = 0.48
