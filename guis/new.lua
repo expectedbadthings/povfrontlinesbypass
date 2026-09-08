@@ -1182,6 +1182,17 @@ function vape:CreateNotification(title, text, duration, type)
 		return
 	end
 
+	-- When the Dynamic Island is enabled + visible, it becomes Vape's notification
+	-- surface instead of spawning a second disconnected toast stack. Turning the
+	-- island off (or disabling notification merge) restores the original toasts.
+	local island = self.DynamicIsland
+	local merge = self.DynamicIslandMergeNotifications
+	if island and island.Button and island.Button.Enabled and merge and merge.Enabled
+		and self.QueueDynamicIslandNotification and (island.Pinned or (clickgui and clickgui.Visible)) then
+		self:QueueDynamicIslandNotification(title, text, duration, type)
+		return
+	end
+
 	task.delay(0, function()
 		if self.ThreadFix then
 			setthreadidentity(8)
@@ -1671,296 +1682,556 @@ function vape:LoadGUI()
 	]]
 	local DynamicIsland
 	do
-		local islandState = {
-			Title = 'Vape',
-			Body = 'Ready',
-			Accent = 0.08,
-			Until = 0
-		}
-		local showStatsToggle, animatePatternToggle, patternOpacitySlider
-		local islandFrame, subtitleLabel, statsHolder, enabledChip, timeChip, fpsChip, accentBar
-		local defaultIcon, defaultTitle, defaultPin, defaultDots, fpsAverage = nil, nil, nil, nil, 60
+		-- This intentionally uses Vape's real overlay + notification language:
+		-- standard Overlay chrome while editing, notification slice art, Vape's
+		-- own noti icons, vapelogomini/V4 and the actual guivape repeating tile.
+		local queue = {}
+		local activeNotification
+		local queueWorker = false
+		local notificationEpoch = 0
+		local dismissEpoch = 0
+		local fpsAverage = 60
+		local statsAccumulator = 0
+		local patternAccumulator = 0
+		local idleCount = 0
+		local lastClock = ''
+
+		local mergeNotifications, autoWidth, showPattern, animatePattern, showProgress
+		local showLogo, showV4, showProfile, showModules, showFPS, showClock
+		local showNotificationIcon, clickDismiss, baseWidth, maxWidth, idleHeight, notificationHeight
+		local patternOpacity, patternSpeed, durationScale, queueLimit, queueMode, islandMotion, idleClickAction
+		local patternDirection, accentLine
+
+		local card, cardStroke, patternClip, idleGroup, notificationGroup
+		local idleLogo, idleV4, idleDivider, idleTitle, idleMeta
+		local notiIconShadow, notiIcon, notiTitle, notiBody, notiLogo, queueLabel
+		local progressTrack, progressFill, accent
+		local patternRows = {}
+		local patternTiles = {}
 
 		local function getEnabledCount()
 			local count = 0
 			for _, module in vape.Modules do
-				if module.Enabled then
-					count += 1
-				end
+				if module.Enabled then count += 1 end
 			end
 			return count
 		end
 
 		local function formatClock()
-			local ok, formatted = pcall(function()
-				return os.date('%I:%M %p')
-			end)
-			return ok and formatted or '??:??'
+			local ok, result = pcall(os.date, '%I:%M %p')
+			return ok and result or '--:--'
 		end
 
-		local function applyDefaultChromeVisibility()
-			for _, object in {defaultIcon, defaultTitle, defaultPin, defaultDots} do
-				if object then
-					object.Visible = false
-				end
+		local function currentMotion()
+			local mode = islandMotion and islandMotion.Value or 'Vape'
+			if mode == 'None' or (vape.ReducedMotion and vape.ReducedMotion.Enabled) then return nil end
+			if mode == 'Snappy' then
+				return TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+			elseif mode == 'Smooth' then
+				return TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+			end
+			return TweenInfo.new(0.32, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+		end
+
+		local function animate(object, goal, group)
+			local info = currentMotion()
+			if not info then
+				for property, value in goal do object[property] = value end
+				return nil
+			end
+			return tween:Tween(object, info, goal, group or 'island')
+		end
+
+		local function getTargetWidth(notification)
+			local minimum = baseWidth and baseWidth.Value or 310
+			if not notification or not (autoWidth and autoWidth.Enabled) then return minimum end
+			local maximum = math.max(minimum, maxWidth and maxWidth.Value or 500)
+			local titleWidth = getfontbounds(removeTags(notification.Title or ''), 14, uipallet.FontSemiBold).X
+			local bodyWidth = getfontbounds(removeTags(notification.Text or ''), 13, uipallet.Font).X
+			local iconSpace = (showNotificationIcon and showNotificationIcon.Enabled) and 72 or 24
+			return math.clamp(math.max(titleWidth, bodyWidth) + iconSpace + 68, minimum, maximum)
+		end
+
+		local function resizeIsland(width, height)
+			if not DynamicIsland or not DynamicIsland.Object then return end
+			local object = DynamicIsland.Object
+			local currentWidth = object.Size.X.Offset
+			local newWidth = math.floor(width + 0.5)
+			local centerShift = (currentWidth - newWidth) * 0.5
+			local targetPosition = UDim2.new(object.Position.X.Scale, object.Position.X.Offset + centerShift, object.Position.Y.Scale, object.Position.Y.Offset)
+			local info = currentMotion()
+			if info then
+				tween:Tween(object, info, {Size = UDim2.fromOffset(newWidth, object.Size.Y.Offset), Position = targetPosition}, 'island-window')
+				tween:Tween(card, info, {Size = UDim2.new(1, 0, 0, height)}, 'island-card')
+			else
+				object.Size = UDim2.fromOffset(newWidth, object.Size.Y.Offset)
+				object.Position = targetPosition
+				card.Size = UDim2.new(1, 0, 0, height)
 			end
 		end
 
-		function vape:PushDynamicIslandMessage(title, body, duration, accent)
-			islandState.Title = tostring(title or 'Vape')
-			islandState.Body = tostring(body or '')
-			islandState.Accent = accent or islandState.Accent or 0.08
-			islandState.Until = tick() + (duration or 2.4)
+		local function setGroup(group, visible)
+			if not group then return end
+			group.Visible = true
+			local info = currentMotion()
+			if info then
+				local motion = tween:Tween(group, info, {GroupTransparency = visible and 0 or 1}, 'island-content')
+				if not visible and motion then
+					motion.Completed:Once(function()
+						if group.Parent and group.GroupTransparency >= 0.98 then group.Visible = false end
+					end)
+				end
+			else
+				group.GroupTransparency = visible and 0 or 1
+				group.Visible = visible
+			end
+		end
+
+		local function semanticColor(notificationType)
+			if notificationType == 'alert' then return Color3.fromRGB(250, 50, 56) end
+			if notificationType == 'warning' then return Color3.fromRGB(236, 129, 44) end
+			return vape:GetThemeColor(0.08)
+		end
+
+		local function updateIdleText()
+			if not idleTitle or not idleMeta then return end
+			idleCount = getEnabledCount()
+			lastClock = formatClock()
+			local profile = tostring(vape.Profile or 'default')
+			idleTitle.Text = (showProfile and showProfile.Enabled) and profile or 'Vape client'
+			local bits = {}
+			if showModules and showModules.Enabled then table.insert(bits, tostring(idleCount)..' modules') end
+			if showFPS and showFPS.Enabled then table.insert(bits, tostring(math.floor(fpsAverage + 0.5))..' FPS') end
+			if showClock and showClock.Enabled then table.insert(bits, lastClock) end
+			idleMeta.Text = #bits > 0 and table.concat(bits, '  •  ') or 'Ready'
+		end
+
+		local function updateLogoVisibility()
+			if idleLogo then idleLogo.Visible = showLogo == nil or showLogo.Enabled end
+			if idleV4 then idleV4.Visible = (showLogo == nil or showLogo.Enabled) and (showV4 == nil or showV4.Enabled) end
+			if idleDivider then idleDivider.Visible = showLogo == nil or showLogo.Enabled end
+			if idleTitle then idleTitle.Position = UDim2.fromOffset((showLogo == nil or showLogo.Enabled) and 104 or 14, 7) end
+			if idleMeta then idleMeta.Position = UDim2.fromOffset((showLogo == nil or showLogo.Enabled) and 104 or 14, 23) end
+		end
+
+		local function updatePatternVisibility()
+			if patternClip then patternClip.Visible = showPattern == nil or showPattern.Enabled end
+		end
+
+		local function updateAccentVisibility()
+			if accent then accent.Visible = accentLine == nil or accentLine.Enabled end
+		end
+
+		local function presentIdle()
+			activeNotification = nil
+			updateIdleText()
+			setGroup(notificationGroup, false)
+			setGroup(idleGroup, true)
+			resizeIsland(baseWidth and baseWidth.Value or 310, idleHeight and idleHeight.Value or 46)
+			if progressTrack then progressTrack.Visible = false end
+			if queueLabel then queueLabel.Visible = false end
+			if cardStroke then vape:RegisterThemeSolid(cardStroke, 'Color', 0.1) end
+		end
+
+		local function presentNotification(notification)
+			activeNotification = notification
+			local ntype = notification.Type or 'info'
+			if ntype ~= 'info' and ntype ~= 'warning' and ntype ~= 'alert' then ntype = 'info' end
+			local typeColor = semanticColor(ntype)
+			notiTitle.Text = "<stroke joins='round' thickness='0.3' transparency='0.5'>"..tostring(notification.Title or 'Vape')..'</stroke>'
+			notiTitle.TextColor3 = ntype == 'info' and uipallet.Text or typeColor
+			notiBody.Text = tostring(notification.Text or '')
+			notiIconShadow.Image = getvapeasset('newvape/assets/new/noti_'..ntype..'.png')
+			notiIcon.Image = notiIconShadow.Image
+			local iconsVisible = showNotificationIcon == nil or showNotificationIcon.Enabled
+			notiIconShadow.Visible = iconsVisible
+			notiTitle.Position = UDim2.fromOffset(iconsVisible and 62 or 14, 10)
+			notiTitle.Size = UDim2.new(1, iconsVisible and -136 or -88, 0, 20)
+			notiBody.Position = UDim2.fromOffset(iconsVisible and 62 or 14, 32)
+			notiBody.Size = UDim2.new(1, iconsVisible and -82 or -28, 0, 23)
+			notiLogo.Visible = showLogo == nil or showLogo.Enabled
+			queueLabel.Text = #queue > 0 and ('+'..#queue) or ''
+			queueLabel.Visible = #queue > 0
+			if cardStroke then
+				vape:UnregisterThemeSolid(cardStroke)
+				cardStroke.Color = typeColor
+			end
+			setGroup(idleGroup, false)
+			setGroup(notificationGroup, true)
+			resizeIsland(getTargetWidth(notification), notificationHeight and notificationHeight.Value or 72)
+			local duration = math.max(0.15, (notification.Duration or 3) * (durationScale and durationScale.Value or 1))
+			progressTrack.Visible = showProgress == nil or showProgress.Enabled
+			progressFill.BackgroundColor3 = typeColor
+			progressFill.Size = UDim2.new(1, 0, 1, 0)
+			tween:Cancel(progressFill)
+			if progressTrack.Visible then
+				tween:Tween(progressFill, TweenInfo.new(duration, Enum.EasingStyle.Linear), {Size = UDim2.fromScale(0, 1)})
+			end
+			return duration
+		end
+
+		local function queueNotification(notification)
+			local mode = queueMode and queueMode.Value or 'Queue'
+			local limit = queueLimit and math.max(1, math.floor(queueLimit.Value)) or 5
+			if mode == 'Replace' then
+				table.clear(queue)
+				notificationEpoch += 1
+				table.insert(queue, 1, notification)
+			elseif mode == 'Latest' then
+				table.clear(queue)
+				table.insert(queue, notification)
+			else
+				while #queue >= limit do table.remove(queue, 1) end
+				table.insert(queue, notification)
+			end
+
+			if activeNotification and queueLabel then
+				queueLabel.Text = #queue > 0 and ('+'..#queue) or ''
+				queueLabel.Visible = #queue > 0
+			end
+
+			if queueWorker then return end
+			queueWorker = true
+			task.spawn(function()
+				while DynamicIsland and DynamicIsland.Button.Enabled and #queue > 0 do
+					local item = table.remove(queue, 1)
+					local epoch = notificationEpoch
+					local dismiss = dismissEpoch
+					local duration = presentNotification(item)
+					local deadline = os.clock() + duration
+					repeat task.wait(0.035) until os.clock() >= deadline or epoch ~= notificationEpoch or dismiss ~= dismissEpoch or not DynamicIsland.Button.Enabled
+					if not DynamicIsland.Button.Enabled then break end
+				end
+				if not DynamicIsland.Button.Enabled then table.clear(queue) end
+				queueWorker = false
+				presentIdle()
+			end)
+		end
+
+		function vape:QueueDynamicIslandNotification(title, body, duration, notificationType)
+			if not DynamicIsland or not DynamicIsland.Button.Enabled then return false end
+			queueNotification({
+				Title = tostring(title or 'Vape'),
+				Text = tostring(body or ''),
+				Duration = duration or 3,
+				Type = notificationType or 'info'
+			})
+			return true
+		end
+
+		function vape:PushDynamicIslandMessage(title, body, duration, accentOffset)
+			return self:QueueDynamicIslandNotification(title, body, duration, 'info')
 		end
 
 		function vape:PushDynamicIslandModuleMessage(name, enabled)
-			local action = enabled and 'Enabled' or 'Disabled'
-			local body = tostring(name)..' • '..string.lower(action)
-			self:PushDynamicIslandMessage(action, body, 2.6, enabled and 0.06 or 0.55)
+			if not DynamicIsland or not DynamicIsland.Button.Enabled then return end
+			if not mergeNotifications or not mergeNotifications.Enabled then return end
+			if not (DynamicIsland.Pinned or (clickgui and clickgui.Visible)) then return end
+			if self.ToggleNotifications and not self.ToggleNotifications.Enabled then return end
+			self:QueueDynamicIslandNotification(name, enabled and "<font color='#00AA00'>Enabled</font>" or "<font color='#FF5A5A'>Disabled</font>", 1.5, 'info')
 		end
 
 		DynamicIsland = vape:CreateOverlay({
 			Name = 'Dynamic Island',
 			Icon = getvapeasset('newvape/assets/new/vape.png'),
-			Size = UDim2.fromOffset(14, 14),
+			Size = UDim2.fromOffset(16, 16),
 			Position = UDim2.fromOffset(12, 12),
-			CategorySize = 420
+			CategorySize = 310
 		})
 		vape.DynamicIsland = DynamicIsland
-		DynamicIsland.Object.Position = UDim2.new(0.5, -210, 0, 10)
-		DynamicIsland.Object.Size = UDim2.fromOffset(420, 41)
-		DynamicIsland.Object.Name = 'DynamicIslandOverlay'
+		DynamicIsland.Object.Position = UDim2.new(0.5, -155, 0, 12)
 
-		for _, child in DynamicIsland.Object:GetChildren() do
-			if child.Name == 'Pin' then
-				defaultPin = child
-			elseif child.Name == 'Dots' then
-				defaultDots = child
-			elseif child:IsA('ImageLabel') and not defaultIcon then
-				defaultIcon = child
-			elseif child:IsA('TextLabel') and not defaultTitle then
-				defaultTitle = child
-			end
-		end
-		applyDefaultChromeVisibility()
+		-- Use Overlay.Children, exactly like Vape's other HUD overlays. When the GUI
+		-- opens the normal Vape overlay header appears above it; when closed/pinned,
+		-- only the island remains. No fake custom editor chrome.
+		card = Instance.new('ImageButton')
+		card.Name = 'VapeDynamicIsland'
+		card.AutoButtonColor = false
+		card.BackgroundColor3 = Color3.fromRGB(20, 22, 29)
+		card.BorderSizePixel = 0
+		card.Image = getvapeasset('newvape/assets/new/notification.png')
+		card.ImageColor3 = Color3.new(1, 1, 1)
+		card.ScaleType = Enum.ScaleType.Slice
+		card.SliceCenter = Rect.new(7, 7, 9, 9)
+		card.Size = UDim2.new(1, 0, 0, 46)
+		card.Parent = DynamicIsland.Children
+		addCorner(card, UDim.new(0, 8))
+		cardStroke = Instance.new('UIStroke')
+		cardStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		cardStroke.Transparency = 0.58
+		cardStroke.Thickness = 1
+		cardStroke.Parent = card
+		vape:RegisterThemeSolid(cardStroke, 'Color', 0.1)
+		addBlur(card, true, true)
 
-		islandFrame = Instance.new('Frame')
-		islandFrame.Name = 'IslandFrame'
-		islandFrame.BackgroundColor3 = Color3.fromRGB(18, 21, 27)
-		islandFrame.BorderSizePixel = 0
-		islandFrame.Position = UDim2.fromOffset(0, 0)
-		islandFrame.Size = UDim2.new(1, 0, 0, 41)
-		islandFrame.Parent = DynamicIsland.Object
-		addCorner(islandFrame, UDim.new(1, 0))
-		local islandStroke = Instance.new('UIStroke')
-		islandStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		islandStroke.Transparency = 0.2
-		islandStroke.Parent = islandFrame
-		vape:RegisterThemeSolid(islandStroke, 'Color', 0.1)
+		local darkLayer = Instance.new('Frame')
+		darkLayer.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+		darkLayer.BackgroundTransparency = 1
+		darkLayer.BorderSizePixel = 0
+		darkLayer.Size = UDim2.fromScale(1, 1)
+		darkLayer.ZIndex = 1
+		darkLayer.Parent = card
+		addCorner(darkLayer, UDim.new(0, 8))
 
-		local shade = Instance.new('Frame')
-		shade.BackgroundColor3 = Color3.new()
-		shade.BackgroundTransparency = 0.74
-		shade.BorderSizePixel = 0
-		shade.Size = UDim2.new(1, 0, 1, 0)
-		shade.Parent = islandFrame
-		addCorner(shade, UDim.new(1, 0))
-
-		local patternClip = Instance.new('Frame')
-		patternClip.Name = 'Pattern'
+		patternClip = Instance.new('Frame')
 		patternClip.BackgroundTransparency = 1
 		patternClip.ClipsDescendants = true
-		patternClip.Size = UDim2.new(1, -20, 1, -8)
-		patternClip.Position = UDim2.fromOffset(10, 4)
-		patternClip.Parent = islandFrame
-		local patternRows = {}
-		for row = 0, 1 do
+		patternClip.Position = UDim2.fromOffset(4, 4)
+		patternClip.Size = UDim2.new(1, -8, 1, -8)
+		patternClip.ZIndex = 3
+		patternClip.Parent = card
+		addCorner(patternClip, UDim.new(0, 8))
+		for row = 0, 4 do
 			local rowFrame = Instance.new('Frame')
 			rowFrame.BackgroundTransparency = 1
 			rowFrame.BorderSizePixel = 0
-			rowFrame.Size = UDim2.new(1.45, 0, 0, 14)
-			rowFrame.Position = UDim2.new(-0.2, 0, 0, 4 + (row * 15))
+			rowFrame.Size = UDim2.new(1, 124, 0, 18)
+			rowFrame.Position = UDim2.fromOffset(-62, row * 18 - 5)
 			rowFrame.Parent = patternClip
 			table.insert(patternRows, rowFrame)
-			for index = 0, 9 do
-				local tag = Instance.new('TextLabel')
-				tag.BackgroundTransparency = 1
-				tag.BorderSizePixel = 0
-				tag.FontFace = uipallet.FontSemiBold
-				tag.Text = 'VAPE'
-				tag.TextColor3 = Color3.new(1, 1, 1)
-				tag.TextTransparency = 0.9
-				tag.TextSize = 12
-				tag.Rotation = -8
-				tag.Size = UDim2.fromOffset(46, 14)
-				tag.Position = UDim2.fromOffset(index * 42, 0)
-				tag.Parent = rowFrame
+			for tile = 0, 11 do
+				local image = Instance.new('ImageLabel')
+				image.BackgroundTransparency = 1
+				image.Image = getvapeasset('newvape/assets/new/guivape.png')
+				image.ImageColor3 = Color3.fromRGB(205, 210, 223)
+				image.ImageTransparency = 0.92
+				image.Size = UDim2.fromOffset(62, 18)
+				image.ZIndex = 3
+				image.Position = UDim2.fromOffset(tile * 62, 0)
+				image.Parent = rowFrame
+				table.insert(patternTiles, image)
 			end
 		end
 
-		local content = Instance.new('Frame')
-		content.BackgroundTransparency = 1
-		content.Size = UDim2.new(1, -20, 1, 0)
-		content.Position = UDim2.fromOffset(10, 0)
-		content.Parent = islandFrame
-		local contentPadding = Instance.new('UIPadding')
-		contentPadding.PaddingLeft = UDim.new(0, 8)
-		contentPadding.PaddingRight = UDim.new(0, 8)
-		contentPadding.Parent = content
+		local contentShade = Instance.new('Frame')
+		contentShade.BackgroundColor3 = Color3.fromRGB(17, 19, 25)
+		contentShade.BackgroundTransparency = 0.46
+		contentShade.BorderSizePixel = 0
+		contentShade.Position = UDim2.fromOffset(3, 3)
+		contentShade.Size = UDim2.new(1, -6, 1, -6)
+		contentShade.ZIndex = 2
+		contentShade.Parent = card
+		addCorner(contentShade, UDim.new(0, 8))
 
-		local logo = Instance.new('ImageLabel')
-		logo.BackgroundTransparency = 1
-		logo.Image = getvapeasset('newvape/assets/new/vapelogo.png')
-		logo.Size = UDim2.fromOffset(56, 17)
-		logo.Position = UDim2.fromOffset(5, 4)
-		logo.Parent = content
-		local logoV4 = Instance.new('ImageLabel')
-		logoV4.BackgroundTransparency = 1
-		logoV4.Image = getvapeasset('newvape/assets/new/v4mini.png')
-		logoV4.Size = UDim2.fromOffset(18, 14)
-		logoV4.Position = UDim2.fromOffset(60, 5)
-		logoV4.Parent = content
+		idleGroup = Instance.new('CanvasGroup')
+		idleGroup.BackgroundTransparency = 1
+		idleGroup.Size = UDim2.fromScale(1, 1)
+		idleGroup.ZIndex = 4
+		idleGroup.Parent = card
+		idleLogo = Instance.new('ImageLabel')
+		idleLogo.BackgroundTransparency = 1
+		idleLogo.Image = getvapeasset('newvape/assets/new/vapelogomini.png')
+		idleLogo.Position = UDim2.fromOffset(13, 14)
+		idleLogo.Size = UDim2.fromOffset(55, 16)
+		idleLogo.Parent = idleGroup
+		idleV4 = Instance.new('ImageLabel')
+		idleV4.BackgroundTransparency = 1
+		idleV4.Image = getvapeasset('newvape/assets/new/v4mini.png')
+		idleV4.Position = UDim2.fromOffset(72, 14)
+		idleV4.Size = UDim2.fromOffset(23, 16)
+		idleV4.Parent = idleGroup
+		idleDivider = Instance.new('Frame')
+		idleDivider.BorderSizePixel = 0
+		idleDivider.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		idleDivider.BackgroundTransparency = 0.86
+		idleDivider.Position = UDim2.fromOffset(101, 8)
+		idleDivider.Size = UDim2.fromOffset(1, 30)
+		idleDivider.Parent = idleGroup
+		idleTitle = Instance.new('TextLabel')
+		idleTitle.BackgroundTransparency = 1
+		idleTitle.FontFace = uipallet.FontSemiBold
+		idleTitle.Position = UDim2.fromOffset(108, 7)
+		idleTitle.Size = UDim2.new(1, -120, 0, 18)
+		idleTitle.Text = 'default'
+		idleTitle.TextColor3 = uipallet.Text
+		idleTitle.TextSize = 13
+		idleTitle.TextXAlignment = Enum.TextXAlignment.Left
+		idleTitle.TextTruncate = Enum.TextTruncate.AtEnd
+		idleTitle.Parent = idleGroup
+		idleMeta = Instance.new('TextLabel')
+		idleMeta.BackgroundTransparency = 1
+		idleMeta.FontFace = uipallet.Font
+		idleMeta.Position = UDim2.fromOffset(108, 23)
+		idleMeta.Size = UDim2.new(1, -120, 0, 16)
+		idleMeta.Text = 'Ready'
+		idleMeta.TextColor3 = Color3.fromRGB(170, 174, 184)
+		idleMeta.TextSize = 11
+		idleMeta.TextXAlignment = Enum.TextXAlignment.Left
+		idleMeta.TextTruncate = Enum.TextTruncate.AtEnd
+		idleMeta.Parent = idleGroup
 
-		subtitleLabel = Instance.new('TextLabel')
-		subtitleLabel.BackgroundTransparency = 1
-		subtitleLabel.FontFace = uipallet.Font
-		subtitleLabel.Text = 'Ready'
-		subtitleLabel.TextColor3 = Color3.new(1, 1, 1)
-		subtitleLabel.TextTransparency = 0.16
-		subtitleLabel.TextSize = 12
-		subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-		subtitleLabel.Position = UDim2.fromOffset(8, 20)
-		subtitleLabel.Size = UDim2.new(1, -170, 0, 16)
-		subtitleLabel.Parent = content
+		notificationGroup = Instance.new('CanvasGroup')
+		notificationGroup.BackgroundTransparency = 1
+		notificationGroup.GroupTransparency = 1
+		notificationGroup.Visible = false
+		notificationGroup.Size = UDim2.fromScale(1, 1)
+		notificationGroup.ZIndex = 4
+		notificationGroup.Parent = card
+		notiIconShadow = Instance.new('ImageLabel')
+		notiIconShadow.BackgroundTransparency = 1
+		notiIconShadow.Image = getvapeasset('newvape/assets/new/noti_info.png')
+		notiIconShadow.ImageColor3 = Color3.new()
+		notiIconShadow.ImageTransparency = 0.48
+		notiIconShadow.Position = UDim2.fromOffset(2, 4)
+		notiIconShadow.Size = UDim2.fromOffset(54, 54)
+		notiIconShadow.Parent = notificationGroup
+		notiIcon = notiIconShadow:Clone()
+		notiIcon.ImageColor3 = Color3.new(1, 1, 1)
+		notiIcon.ImageTransparency = 0
+		notiIcon.Position = UDim2.fromOffset(3, 3)
+		notiIcon.Size = UDim2.fromScale(1, 1)
+		notiIcon.Parent = notiIconShadow
+		notiTitle = Instance.new('TextLabel')
+		notiTitle.BackgroundTransparency = 1
+		notiTitle.FontFace = uipallet.FontSemiBold
+		notiTitle.Position = UDim2.fromOffset(62, 10)
+		notiTitle.RichText = true
+		notiTitle.Size = UDim2.new(1, -136, 0, 20)
+		notiTitle.Text = 'Vape'
+		notiTitle.TextColor3 = uipallet.Text
+		notiTitle.TextSize = 14
+		notiTitle.TextXAlignment = Enum.TextXAlignment.Left
+		notiTitle.TextTruncate = Enum.TextTruncate.AtEnd
+		notiTitle.Parent = notificationGroup
+		notiBody = Instance.new('TextLabel')
+		notiBody.BackgroundTransparency = 1
+		notiBody.FontFace = uipallet.Font
+		notiBody.Position = UDim2.fromOffset(62, 32)
+		notiBody.RichText = true
+		notiBody.Size = UDim2.new(1, -82, 0, 23)
+		notiBody.Text = ''
+		notiBody.TextColor3 = Color3.fromRGB(170, 170, 170)
+		notiBody.TextSize = 13
+		notiBody.TextXAlignment = Enum.TextXAlignment.Left
+		notiBody.TextYAlignment = Enum.TextYAlignment.Top
+		notiBody.TextTruncate = Enum.TextTruncate.AtEnd
+		notiBody.Parent = notificationGroup
+		notiLogo = Instance.new('ImageLabel')
+		notiLogo.AnchorPoint = Vector2.new(1, 0)
+		notiLogo.BackgroundTransparency = 1
+		notiLogo.Image = getvapeasset('newvape/assets/new/vapelogomini.png')
+		notiLogo.ImageTransparency = 0.72
+		notiLogo.Position = UDim2.new(1, -14, 0, 9)
+		notiLogo.Size = UDim2.fromOffset(55, 16)
+		notiLogo.Parent = notificationGroup
+		queueLabel = Instance.new('TextLabel')
+		queueLabel.AnchorPoint = Vector2.new(1, 1)
+		queueLabel.BackgroundTransparency = 1
+		queueLabel.FontFace = uipallet.FontSemiBold
+		queueLabel.Position = UDim2.new(1, -13, 1, -9)
+		queueLabel.Size = UDim2.fromOffset(30, 14)
+		queueLabel.Text = ''
+		queueLabel.TextColor3 = Color3.fromRGB(170, 174, 184)
+		queueLabel.TextSize = 10
+		queueLabel.TextXAlignment = Enum.TextXAlignment.Right
+		queueLabel.Parent = notificationGroup
 
-		statsHolder = Instance.new('Frame')
-		statsHolder.BackgroundTransparency = 1
-		statsHolder.Size = UDim2.fromOffset(158, 26)
-		statsHolder.AnchorPoint = Vector2.new(1, 0.5)
-		statsHolder.Position = UDim2.new(1, -6, 0.5, 0)
-		statsHolder.Parent = content
-		local statsLayout = Instance.new('UIListLayout')
-		statsLayout.FillDirection = Enum.FillDirection.Horizontal
-		statsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-		statsLayout.Padding = UDim.new(0, 6)
-		statsLayout.Parent = statsHolder
+		progressTrack = Instance.new('Frame')
+		progressTrack.AnchorPoint = Vector2.new(0, 1)
+		progressTrack.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		progressTrack.BackgroundTransparency = 0.9
+		progressTrack.BorderSizePixel = 0
+		progressTrack.Position = UDim2.new(0, 7, 1, -4)
+		progressTrack.Size = UDim2.new(1, -14, 0, 1)
+		progressTrack.Visible = false
+		progressTrack.ZIndex = 5
+		progressTrack.Parent = card
+		progressFill = Instance.new('Frame')
+		progressFill.BackgroundColor3 = vape:GetThemeColor(0.08)
+		progressFill.BorderSizePixel = 0
+		progressFill.Size = UDim2.fromScale(1, 1)
+		progressFill.ZIndex = 5
+		progressFill.Parent = progressTrack
 
-		local function createChip(labelText)
-			local chip = Instance.new('Frame')
-			chip.BackgroundColor3 = Color3.fromRGB(26, 30, 38)
-			chip.BackgroundTransparency = 0.18
-			chip.BorderSizePixel = 0
-			chip.Size = UDim2.fromOffset(48, 24)
-			chip.Parent = statsHolder
-			addCorner(chip, UDim.new(1, 0))
-			local chipStroke = Instance.new('UIStroke')
-			chipStroke.Transparency = 0.72
-			chipStroke.Parent = chip
-			vape:RegisterThemeSolid(chipStroke, 'Color', 0.16)
-			local label = Instance.new('TextLabel')
-			label.BackgroundTransparency = 1
-			label.FontFace = uipallet.FontSemiBold
-			label.Size = UDim2.new(1, -10, 1, 0)
-			label.Position = UDim2.fromOffset(5, 0)
-			label.Text = labelText
-			label.TextColor3 = uipallet.Text
-			label.TextSize = 11
-			label.Parent = chip
-			return chip, label
-		end
-
-		local enabledChipFrame
-		enabledChipFrame, enabledChip = createChip('0 MOD')
-		local timeChipFrame
-		timeChipFrame, timeChip = createChip('00:00')
-		local fpsChipFrame
-		fpsChipFrame, fpsChip = createChip('60 FPS')
-
-		accentBar = Instance.new('Frame')
-		accentBar.BorderSizePixel = 0
-		accentBar.Size = UDim2.new(1, -34, 0, 2)
-		accentBar.Position = UDim2.fromOffset(17, 38)
-		accentBar.BackgroundColor3 = Color3.new(1, 1, 1)
-		accentBar.Parent = islandFrame
+		accent = Instance.new('Frame')
+		accent.AnchorPoint = Vector2.new(0, 1)
+		accent.BackgroundColor3 = Color3.new(1, 1, 1)
+		accent.BorderSizePixel = 0
+		accent.Position = UDim2.new(0, 8, 1, -1)
+		accent.Size = UDim2.new(1, -16, 0, 1)
+		accent.ZIndex = 5
+		accent.Parent = card
 		local accentGradient = Instance.new('UIGradient')
-		accentGradient.Parent = accentBar
+		accentGradient.Parent = accent
 		vape:RegisterThemeGradient(accentGradient, 0.08, 0)
 
-		showStatsToggle = DynamicIsland:CreateToggle({
-			Name = 'Show stat chips',
-			Default = true,
-			Function = function(enabled)
-				if statsHolder then statsHolder.Visible = enabled end
-				if subtitleLabel then subtitleLabel.Size = UDim2.new(1, enabled and -170 or -16, 0, 16) end
+		-- Island customization lives in the overlay's own settings, not the already
+		-- crowded GUI tab.
+		mergeNotifications = DynamicIsland:CreateToggle({Name = 'Merge notifications', Default = true, Tooltip = 'Route Vape notifications through the island while it is visible.'})
+		vape.DynamicIslandMergeNotifications = mergeNotifications
+		autoWidth = DynamicIsland:CreateToggle({Name = 'Dynamic notification width', Default = true, Tooltip = 'Expand horizontally to fit notification content.'})
+		showPattern = DynamicIsland:CreateToggle({Name = 'VAPE pattern', Default = true, Function = updatePatternVisibility})
+		animatePattern = DynamicIsland:CreateToggle({Name = 'Animate pattern', Default = true, Darker = true})
+		patternDirection = DynamicIsland:CreateDropdown({Name = 'Pattern flow', List = {'Opposed', 'Left', 'Right'}, Default = 'Opposed', Darker = true})
+		patternOpacity = DynamicIsland:CreateSlider({Name = 'Pattern visibility', Min = 0, Max = 30, Default = 8, Decimal = 1, Suffix = '%', Darker = true, Function = function() end})
+		patternSpeed = DynamicIsland:CreateSlider({Name = 'Pattern speed', Min = 0, Max = 60, Default = 18, Decimal = 1, Suffix = 'px/s', Darker = true, Function = function() end})
+		accentLine = DynamicIsland:CreateToggle({Name = 'Theme accent line', Default = true, Function = updateAccentVisibility})
+		showProgress = DynamicIsland:CreateToggle({Name = 'Notification progress', Default = true})
+		showNotificationIcon = DynamicIsland:CreateToggle({Name = 'Notification icons', Default = true})
+		clickDismiss = DynamicIsland:CreateToggle({Name = 'Click to dismiss', Default = true})
+		showLogo = DynamicIsland:CreateToggle({Name = 'Vape logo', Default = true, Function = updateLogoVisibility})
+		showV4 = DynamicIsland:CreateToggle({Name = 'V4 badge', Default = true, Darker = true, Function = updateLogoVisibility})
+		showProfile = DynamicIsland:CreateToggle({Name = 'Profile name', Default = true, Function = updateIdleText})
+		showModules = DynamicIsland:CreateToggle({Name = 'Module count', Default = true, Function = updateIdleText})
+		showFPS = DynamicIsland:CreateToggle({Name = 'FPS', Default = true, Function = updateIdleText})
+		showClock = DynamicIsland:CreateToggle({Name = 'Clock', Default = true, Function = updateIdleText})
+		idleClickAction = DynamicIsland:CreateDropdown({Name = 'Idle click', List = {'Open GUI', 'Nothing'}, Default = 'Open GUI'})
+		queueMode = DynamicIsland:CreateDropdown({Name = 'Notification behavior', List = {'Queue', 'Latest', 'Replace'}, Default = 'Queue'})
+		queueLimit = DynamicIsland:CreateSlider({Name = 'Queue limit', Min = 1, Max = 8, Default = 5, Decimal = 1, Function = function() end})
+		durationScale = DynamicIsland:CreateSlider({Name = 'Duration scale', Min = 0.5, Max = 2, Default = 1, Decimal = 10, Suffix = 'x', Function = function() end})
+		islandMotion = DynamicIsland:CreateDropdown({Name = 'Island motion', List = {'Vape', 'Smooth', 'Snappy', 'None'}, Default = 'Vape'})
+		baseWidth = DynamicIsland:CreateSlider({Name = 'Idle width', Min = 240, Max = 420, Default = 310, Decimal = 1, Function = function(value, released) if released and not activeNotification then resizeIsland(value, idleHeight and idleHeight.Value or 46) end end})
+		maxWidth = DynamicIsland:CreateSlider({Name = 'Max notification width', Min = 320, Max = 620, Default = 500, Decimal = 1, Function = function() end})
+		idleHeight = DynamicIsland:CreateSlider({Name = 'Idle height', Min = 40, Max = 58, Default = 46, Decimal = 1, Function = function(value, released) if released and not activeNotification then resizeIsland(baseWidth and baseWidth.Value or 310, value) end end})
+		notificationHeight = DynamicIsland:CreateSlider({Name = 'Notification height', Min = 62, Max = 88, Default = 72, Decimal = 1, Function = function(value, released) if released and activeNotification then resizeIsland(getTargetWidth(activeNotification), value) end end})
+
+		addTooltip(card, 'LMB '..'dismiss/open GUI'..'  •  RMB island settings')
+		card.MouseButton2Click:Connect(function()
+			if clickgui.Visible then DynamicIsland:Expand(true) end
+		end)
+
+		card.MouseButton1Click:Connect(function()
+			if activeNotification then
+				if clickDismiss and clickDismiss.Enabled then
+					dismissEpoch += 1
+				end
+			elseif idleClickAction and idleClickAction.Value == 'Open GUI' then
+				clickgui.Visible = not clickgui.Visible
 			end
-		})
-		animatePatternToggle = DynamicIsland:CreateToggle({
-			Name = 'Animate VAPE pattern',
-			Default = true
-		})
-		patternOpacitySlider = DynamicIsland:CreateSlider({
-			Name = 'Pattern opacity',
-			Min = 0.02,
-			Max = 0.18,
-			Default = 0.1,
-			Decimal = 100,
-			Function = function() end
-		})
+		end)
 
-		if not DynamicIsland.Button.Enabled then
-			DynamicIsland.Button:Toggle()
-		end
-		if not DynamicIsland.Pinned then
-			DynamicIsland:Pin()
-		end
+		if not DynamicIsland.Button.Enabled then DynamicIsland.Button:Toggle() end
+		if not DynamicIsland.Pinned then DynamicIsland:Pin() end
 		DynamicIsland:Update()
-
-		vape:Clean(clickgui:GetPropertyChangedSignal('Visible'):Connect(function()
-			task.defer(applyDefaultChromeVisibility)
-		end))
+		updateLogoVisibility()
+		updatePatternVisibility()
+		updateAccentVisibility()
+		presentIdle()
 
 		vape:Clean(runService.RenderStepped:Connect(function(delta)
-			if not DynamicIsland or not DynamicIsland.Button.Enabled or not islandFrame or not islandFrame.Parent then
-				return
+			if not DynamicIsland or not DynamicIsland.Button.Enabled or not card or not card.Parent then return end
+			fpsAverage += (((delta > 0 and (1 / delta) or 60) - fpsAverage) * math.min(delta * 3, 1))
+			statsAccumulator += delta
+			patternAccumulator += delta
+			if statsAccumulator >= 0.25 then
+				statsAccumulator %= 0.25
+				if not activeNotification then updateIdleText() end
 			end
-			applyDefaultChromeVisibility()
-			local alpha = math.clamp(delta * 7, 0, 1)
-			fpsAverage = fpsAverage + (((delta > 0 and (1 / delta) or 60)) - fpsAverage) * math.min(delta * 3, 1)
-			local now = tick()
-			local messageActive = now < (islandState.Until or 0)
-			local count = getEnabledCount()
-			local idleBody = string.format('%d module%s enabled', count, count == 1 and '' or 's')
-			local displayBody = messageActive and islandState.Body or idleBody
-			subtitleLabel.Text = displayBody
-			subtitleLabel.TextColor3 = messageActive and vape:GetThemeColor(islandState.Accent or 0.08) or Color3.fromRGB(220, 224, 232)
-			subtitleLabel.TextTransparency = messageActive and 0.04 or 0.18
-			enabledChip.Text = string.format('%d MOD', count)
-			timeChip.Text = formatClock()
-			fpsChip.Text = string.format('%d FPS', math.floor(fpsAverage + 0.5))
-			statsHolder.Visible = showStatsToggle == nil or showStatsToggle.Enabled
-			if statsHolder.Visible then
-				subtitleLabel.Size = UDim2.new(1, -170, 0, 16)
-			else
-				subtitleLabel.Size = UDim2.new(1, -16, 0, 16)
-			end
-
-			local reducedMotion = vape.ReducedMotion and vape.ReducedMotion.Enabled
-			local baseOpacity = patternOpacitySlider and patternOpacitySlider.Value or 0.1
-			for rowIndex, rowFrame in ipairs(patternRows) do
-				if rowFrame and rowFrame.Parent then
-					local offset = reducedMotion and (rowIndex == 1 and 0 or -22) or ((((tick() * 20 * (animatePatternToggle and animatePatternToggle.Enabled and 1 or 0)) * (rowIndex == 1 and 1 or -1)) % 42))
-					rowFrame.Position = UDim2.new(-0.2, math.floor(offset), 0, 4 + ((rowIndex - 1) * 15))
-					for _, tag in rowFrame:GetChildren() do
-						if tag:IsA('TextLabel') then
-							tag.TextTransparency = 1 - baseOpacity
-						end
+			if patternAccumulator >= (1 / 30) then
+				patternAccumulator %= (1 / 30)
+				local visibleAmount = math.clamp((patternOpacity and patternOpacity.Value or 8) / 100, 0, 0.3)
+				for _, tile in patternTiles do tile.ImageTransparency = 1 - visibleAmount end
+				if showPattern == nil or showPattern.Enabled then
+					local moving = animatePattern and animatePattern.Enabled and not (vape.ReducedMotion and vape.ReducedMotion.Enabled)
+					local speed = moving and (patternSpeed and patternSpeed.Value or 18) or 0
+					local flow = patternDirection and patternDirection.Value or 'Opposed'
+					for index, row in ipairs(patternRows) do
+						local direction = flow == 'Left' and -1 or flow == 'Right' and 1 or (index % 2 == 0 and 1 or -1)
+						local x = -62 + ((os.clock() * speed * direction) % 62)
+						row.Position = UDim2.fromOffset(math.floor(x), ((index - 1) * 18) - 5)
 					end
 				end
 			end
-
-			local targetBackground = messageActive and color.Dark(vape:GetThemeColor(islandState.Accent or 0.08), 0.62) or Color3.fromRGB(18, 21, 27)
-			islandFrame.BackgroundColor3 = islandFrame.BackgroundColor3:Lerp(targetBackground, alpha)
-			accentBar.BackgroundTransparency = messageActive and 0.04 or 0.18
 		end))
 	end
 
@@ -7437,7 +7708,7 @@ components = {
 			end
 
 			if vape.Loaded then vape:RecordRecent(props.Name) end
-			if vape.PushDynamicIslandModuleMessage then
+			if not multiple and vape.PushDynamicIslandModuleMessage then
 				vape:PushDynamicIslandModuleMessage(props.Name, self.Enabled)
 			end
 			task.spawn(props.Function, self.Enabled)
