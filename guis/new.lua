@@ -289,10 +289,27 @@ do
 		return (callback or readfile)(path)
 	end
 
-	getvapeasset = not inputService.TouchEnabled and getcustomasset and function(path)
-		return downloadFile(path, getcustomasset)
-	end or function(path)
-		return vapeAssets[path] or ''
+	-- Prefer the built-in Roblox asset ids. The old desktop path synchronously
+	-- touched/downloaded local files even when the exact icon already had an
+	-- rbxassetid mapping, which caused a very noticeable hitch during injection.
+	-- Unknown/custom assets still fall back to getcustomasset, but only once.
+	local resolvedAssetCache = {}
+	getvapeasset = function(path)
+		local cached = resolvedAssetCache[path]
+		if cached then return cached end
+
+		local mapped = vapeAssets[path]
+		if mapped then
+			resolvedAssetCache[path] = mapped
+			return mapped
+		end
+
+		local resolved = ''
+		if not inputService.TouchEnabled and getcustomasset then
+			resolved = downloadFile(path, getcustomasset)
+		end
+		resolvedAssetCache[path] = resolved
+		return resolved
 	end
 end
 
@@ -407,15 +424,15 @@ local themecolors = {
 	Color3.fromRGB(100, 100, 110)
 }
 
-local themeNames = {'Water'}
+local themeNames = {'Digital Horizon'}
 for themeName in uipallet.Themes do
-	if themeName ~= 'Water' then
+	if themeName ~= 'Digital Horizon' then
 		table.insert(themeNames, themeName)
 	end
 end
 table.sort(themeNames, function(a, b)
-	if a == 'Water' then return b ~= 'Water' end
-	if b == 'Water' then return false end
+	if a == 'Digital Horizon' then return b ~= 'Digital Horizon' end
+	if b == 'Digital Horizon' then return false end
 	return a:lower() < b:lower()
 end)
 
@@ -437,7 +454,7 @@ end
 -- Animated named gradient themes ------------------------------------------------
 -- GUI accents are theme-only now. The legacy HSV GUI color remains only as a
 -- compatibility shim for external modules; it is no longer user-facing.
-vape.ActiveThemeName = 'Water'
+vape.ActiveThemeName = 'Digital Horizon'
 vape.ThemePhase = 0
 
 local function getThemePalette(name)
@@ -479,12 +496,12 @@ local function sampleThemeColor(colors, alpha)
 end
 
 function vape:IsGradientThemeActive()
-	local name = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Water'
+	local name = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Digital Horizon'
 	return uipallet.Themes[name] ~= nil
 end
 
 function vape:GetThemeColors(name)
-	return getThemePalette(name or self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Water')
+	return getThemePalette(name or self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Digital Horizon')
 end
 
 function vape:GetThemeColor(offset)
@@ -532,7 +549,7 @@ function vape:RegisterThemeGradient(gradient, offset, rotation)
 
 	local newOffset = offset or metadata.Offset or 0
 	local newRotation = rotation or metadata.Rotation or gradient.Rotation or 0
-	local themeName = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Water'
+	local themeName = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Digital Horizon'
 	local refresh = metadata.Theme ~= themeName or metadata.Offset ~= newOffset
 
 	metadata.Offset = newOffset
@@ -609,7 +626,7 @@ end
 function vape:UpdateThemeGradients()
 	if not self:IsGradientThemeActive() then return end
 	local phase = self.ThemePhase or 0
-	local themeName = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Water'
+	local themeName = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Digital Horizon'
 	for gradient, metadata in uipallet.ThemeObjects do
 		if not gradient or not gradient.Parent then
 			uipallet.ThemeObjects[gradient] = nil
@@ -1376,11 +1393,7 @@ function vape:LoadGUI()
 	topographyBackground.Active = false
 	topographyBackground.BackgroundTransparency = 1
 	topographyBackground.Image = 'rbxassetid://2151741365'
-	topographyBackground.ImageColor3 = Color3.fromHSV(
-		vape.GUIColor.Hue,
-		math.min(vape.GUIColor.Sat * 0.62, 0.78),
-		math.max(vape.GUIColor.Value, 0.78)
-	)
+	topographyBackground.ImageColor3 = vape:GetThemeColor(0.08)
 	topographyBackground.ImageTransparency = 0.62
 	topographyBackground.Position = UDim2.fromOffset(-180, -180)
 	topographyBackground.ScaleType = Enum.ScaleType.Tile
@@ -1851,7 +1864,7 @@ function vape:LoadGUI()
 		Name = 'Animated theme',
 		List = themeNames,
 		Function = function(value)
-			vape.ActiveThemeName = uipallet.Themes[value] and value or 'Water'
+			vape.ActiveThemeName = uipallet.Themes[value] and value or 'Digital Horizon'
 			local palette = vape:GetThemeColors(vape.ActiveThemeName)
 			uipallet.MainColor = palette[1] or Color3.fromRGB(12, 163, 232)
 			uipallet.SecondaryColor = palette[2] or palette[1] or Color3.fromRGB(12, 232, 199)
@@ -2747,16 +2760,22 @@ function vape:LoadGUI()
 	vape:Clean(task.spawn(function()
 		local hue = 0
 		repeat
-			for _, component in vape.RainbowSliders do
-				if component.Type == 'GUISlider' then
-					component:SetValue(vape:Color(hue))
-				else
-					component:SetValue(hue)
+			-- ESP/Chams color rainbows are the only legacy rainbow path left. Don't
+			-- wake this loop at high frequency when no render color picker is using it.
+			if #vape.RainbowSliders == 0 then
+				task.wait(0.2)
+			else
+				for _, component in vape.RainbowSliders do
+					if component.Type == 'GUISlider' then
+						component:SetValue(vape:Color(hue))
+					else
+						component:SetValue(hue)
+					end
 				end
-			end
 
-			local delta = task.wait(1 / vape.RainbowUpdateSpeed.Value)
-			hue = (hue + (delta * (0.2 * vape.RainbowSpeed.Value))) % 1
+				local delta = task.wait(1 / vape.RainbowUpdateSpeed.Value)
+				hue = (hue + (delta * (0.2 * vape.RainbowSpeed.Value))) % 1
+			end
 		until false
 	end))
 
@@ -2789,8 +2808,10 @@ function vape:LoadGUI()
 					or next(vape.HUDAccentObjects) ~= nil
 
 				gradientAccumulator += delta
-				if visualActive and gradientAccumulator >= (1 / 60) then
-					gradientAccumulator %= (1 / 60)
+				if visualActive and gradientAccumulator >= (1 / 30) then
+					-- Theme motion is intentionally slow, so 30 visual refreshes/sec is
+					-- indistinguishable here while halving ColorSequence churn.
+					gradientAccumulator %= (1 / 30)
 					vape:UpdateThemeGradients()
 				end
 			elseif next(uipallet.ThemeObjects) ~= nil then
@@ -3725,15 +3746,14 @@ components = {
 				children.Visible = true
 			end
 			tween:Tween(arrow, uiMotionPop, {Rotation = self.Expanded and 0 or 180})
-			tween:Tween(window, uiMotion, {Size = UDim2.fromOffset(220, targetHeight)})
+			local resizeMotion = tween:Tween(window, uiMotion, {Size = UDim2.fromOffset(220, targetHeight)})
 			divider.Visible = children.CanvasPosition.Y > 10 and self.Expanded
 
 			if not self.Expanded then
-				task.delay(0.22, function()
-					if animation == categoryAnimation and not component.Expanded then
-						children.Visible = false
-					end
-				end)
+				local function finishCollapse()
+					if animation == categoryAnimation and not component.Expanded then children.Visible = false end
+				end
+				if resizeMotion then resizeMotion.Completed:Once(finishCollapse) else finishCollapse() end
 			end
 		end
 
@@ -3797,6 +3817,10 @@ components = {
 			for _, module in vape.Modules do
 				module.Object.Visible = module.Visible
 				module.Object.Text = string.rep(' ', 12)..module.Name
+				if module.Title then
+					module.Title.Text = module.Name
+					module.Title.Position = UDim2.fromOffset(12, 0)
+				end
 				module.Edit.Visible = false
 			end
 		end)
@@ -3822,6 +3846,10 @@ components = {
 			for _, module in vape.Modules do
 				module.Object.Visible = true
 				module.Object.Text = string.rep(' ', 50)..module.Name
+				if module.Title then
+					module.Title.Text = module.Name
+					module.Title.Position = UDim2.fromOffset(48, 0)
+				end
 				module.Edit.Visible = true
 			end
 		end)
@@ -4313,15 +4341,14 @@ components = {
 				children.Visible = true
 			end
 			tween:Tween(arrow, uiMotionPop, {Rotation = self.Expanded and 0 or 180})
-			tween:Tween(window, uiMotion, {Size = UDim2.fromOffset(220, targetHeight)})
+			local resizeMotion = tween:Tween(window, uiMotion, {Size = UDim2.fromOffset(220, targetHeight)})
 			divider.Visible = children.CanvasPosition.Y > 10 and self.Expanded
 
 			if not self.Expanded then
-				task.delay(0.22, function()
-					if animation == categoryAnimation and not component.Expanded then
-						children.Visible = false
-					end
-				end)
+				local function finishCollapse()
+					if animation == categoryAnimation and not component.Expanded then children.Visible = false end
+				end
+				if resizeMotion then resizeMotion.Completed:Once(finishCollapse) else finishCollapse() end
 			end
 		end
 
@@ -4964,12 +4991,14 @@ components = {
 		dropdown.Parent = children
 		component.Object = dropdown
 		addTooltip(dropdown, props.Tooltip or props.Name)
+
 		local holder = Instance.new('Frame')
 		holder.BackgroundColor3 = color.Light(uipallet.Main, 0.034)
 		holder.Position = UDim2.fromOffset(10, 4)
 		holder.Size = UDim2.new(1, -20, 1, -11)
 		holder.Parent = dropdown
 		addCorner(holder, UDim.new(0, 6))
+
 		local button = Instance.new('TextButton')
 		button.AutoButtonColor = false
 		button.BackgroundColor3 = uipallet.Main
@@ -4977,17 +5006,19 @@ components = {
 		button.Size = UDim2.new(1, -2, 1, -2)
 		button.Text = ''
 		button.Parent = holder
+		addCorner(button, UDim.new(0, 6))
+
 		local title = Instance.new('TextLabel')
 		title.BackgroundTransparency = 1
 		title.FontFace = uipallet.Font
-		title.Size = UDim2.new(1, 0, 0, 29)
+		title.Size = UDim2.new(1, -26, 0, 29)
 		title.Text = '         '..props.Name..' - '..component.Value
 		title.TextColor3 = color.Dark(uipallet.Text, 0.16)
 		title.TextSize = 13
 		title.TextTruncate = Enum.TextTruncate.AtEnd
 		title.TextXAlignment = Enum.TextXAlignment.Left
 		title.Parent = button
-		addCorner(button, UDim.new(0, 6))
+
 		local arrow = Instance.new('ImageLabel')
 		arrow.BackgroundTransparency = 1
 		arrow.Image = getvapeasset('newvape/assets/new/expandarrow.png')
@@ -4996,35 +5027,52 @@ components = {
 		arrow.Rotation = 90
 		arrow.Size = UDim2.fromOffset(4, 8)
 		arrow.Parent = button
+
 		props.Function = props.Function or function() end
 		local dropdownchildren
+		local optionScroller
+		local searchBox
+		local emptyLabel
 		local dropdownOpen = false
 		local dropdownAnimation = 0
+		local optionEntries = {}
 
 		local function closeDropdown()
 			if not dropdownchildren then return end
 			dropdownOpen = false
 			dropdownAnimation += 1
 			local animation = dropdownAnimation
+			if searchBox then searchBox:ReleaseFocus(false) end
 
 			tween:Tween(arrow, uiMotionFast, {Rotation = 90})
-			tween:Tween(dropdown, uiMotion, {Size = UDim2.new(1, 0, 0, 40)})
-			for _, entry in dropdownchildren:GetChildren() do
-				if entry:IsA('TextButton') then
+			local motion = tween:Tween(dropdown, uiMotion, {Size = UDim2.new(1, 0, 0, 40)})
+			for _, entry in optionEntries do
+				if entry.Parent then
 					tween:Tween(entry, uiMotionFast, {TextTransparency = 1, BackgroundTransparency = 1})
 				end
 			end
 
-			task.delay(0.22, function()
+			local function finishClose()
 				if animation == dropdownAnimation and not dropdownOpen and dropdownchildren then
 					dropdownchildren:Destroy()
 					dropdownchildren = nil
+					optionScroller = nil
+					searchBox = nil
+					emptyLabel = nil
+					table.clear(optionEntries)
 				end
-			end)
+			end
+
+			if motion then
+				motion.Completed:Once(finishClose)
+			else
+				finishClose()
+			end
 		end
 
 		function component:Change(list)
 			props.List = list or {}
+			if dropdownchildren then closeDropdown() end
 			if not table.find(props.List, self.Value) then
 				self:SetValue(self.Value)
 			end
@@ -5053,81 +5101,176 @@ components = {
 			props.Function(self.Value, isClick)
 		end
 
-		button.MouseButton1Click:Connect(function()
-			if not dropdownchildren then
-				dropdownOpen = true
-				dropdownAnimation += 1
-				tween:Tween(arrow, uiMotionPop, {Rotation = 270})
+		local function openDropdown()
+			dropdownOpen = true
+			dropdownAnimation += 1
+			tween:Tween(arrow, uiMotionPop, {Rotation = 270})
 
-				local optionCount = math.max(#props.List - 1, 0)
-				local visibleCount = math.min(optionCount, 8)
-				dropdownchildren = Instance.new('ScrollingFrame')
-				dropdownchildren.Active = true
-				dropdownchildren.BackgroundTransparency = 1
-				dropdownchildren.BorderSizePixel = 0
-				dropdownchildren.CanvasSize = UDim2.fromOffset(0, optionCount * 26)
-				dropdownchildren.ClipsDescendants = true
-				dropdownchildren.Position = UDim2.fromOffset(0, 27)
-				dropdownchildren.ScrollBarImageColor3 = color.Dark(uipallet.Text, 0.16)
-				dropdownchildren.ScrollBarImageTransparency = optionCount > visibleCount and 0.35 or 1
-				dropdownchildren.ScrollBarThickness = optionCount > visibleCount and 2 or 0
-				dropdownchildren.ScrollingDirection = Enum.ScrollingDirection.Y
-				dropdownchildren.Size = UDim2.new(1, 0, 0, visibleCount * 26)
-				dropdownchildren.Parent = button
-				tween:Tween(dropdown, uiMotion, {Size = UDim2.new(1, 0, 0, 43 + visibleCount * 26)})
+			local values = {}
+			for _, value in props.List do
+				if value ~= component.Value then table.insert(values, value) end
+			end
 
-				local index = 0
-				for _, v in props.List do
-					if v == component.Value then continue end
-					local entry = Instance.new('TextButton')
-					entry.AutoButtonColor = false
-					entry.BackgroundColor3 = uipallet.Main
-					entry.BackgroundTransparency = 1
-					entry.BorderSizePixel = 0
-					entry.FontFace = uipallet.Font
-					entry.Position = UDim2.fromOffset(0, index * 26 + 4)
-					entry.Size = UDim2.new(1, 0, 0, 26)
-					entry.Text = '         '..v
-					entry.TextColor3 = color.Dark(uipallet.Text, 0.16)
-					entry.TextTransparency = 1
-					entry.TextSize = 13
-					entry.TextTruncate = Enum.TextTruncate.AtEnd
-					entry.TextXAlignment = Enum.TextXAlignment.Left
-					entry.Parent = dropdownchildren
+			local optionCount = #values
+			local searchable = optionCount >= 2
+			local searchHeight = searchable and 34 or 0
+			local maxRows = 8
 
-					local finalPosition = UDim2.fromOffset(0, index * 26)
-					task.delay(math.min(index, 7) * 0.018, function()
-						if entry.Parent and dropdownOpen then
-							tween:Tween(entry, uiMotion, {
-								Position = finalPosition,
-								TextTransparency = 0,
-								BackgroundTransparency = 0
-							})
-						end
-					end)
+			dropdownchildren = Instance.new('Frame')
+			dropdownchildren.BackgroundTransparency = 1
+			dropdownchildren.BorderSizePixel = 0
+			dropdownchildren.Position = UDim2.fromOffset(0, 28)
+			dropdownchildren.Size = UDim2.new(1, 0, 0, searchHeight)
+			dropdownchildren.Parent = button
 
-					entry.MouseEnter:Connect(function()
-						tween:Tween(entry, uiMotionFast, {
-							BackgroundColor3 = color.Light(uipallet.Main, 0.02),
-							TextColor3 = uipallet.Text
-						})
-					end)
+			if searchable then
+				local searchHolder = Instance.new('Frame')
+				searchHolder.BackgroundColor3 = color.Light(uipallet.Main, 0.035)
+				searchHolder.BackgroundTransparency = 0.04
+				searchHolder.Position = UDim2.fromOffset(7, 4)
+				searchHolder.Size = UDim2.new(1, -14, 0, 26)
+				searchHolder.Parent = dropdownchildren
+				addCorner(searchHolder, UDim.new(0, 5))
 
-					entry.MouseLeave:Connect(function()
-						tween:Tween(entry, uiMotionFast, {
-							BackgroundColor3 = uipallet.Main,
-							TextColor3 = color.Dark(uipallet.Text, 0.16)
-						})
-					end)
+				local searchIcon = Instance.new('ImageLabel')
+				searchIcon.BackgroundTransparency = 1
+				searchIcon.Image = getvapeasset('newvape/assets/new/search.png')
+				searchIcon.ImageColor3 = color.Dark(uipallet.Text, 0.32)
+				searchIcon.Position = UDim2.fromOffset(8, 7)
+				searchIcon.Size = UDim2.fromOffset(11, 11)
+				searchIcon.Parent = searchHolder
 
-					entry.MouseButton1Click:Connect(function()
-						component:SetValue(v, true)
-					end)
+				searchBox = Instance.new('TextBox')
+				searchBox.BackgroundTransparency = 1
+				searchBox.ClearTextOnFocus = false
+				searchBox.FontFace = uipallet.Font
+				searchBox.PlaceholderColor3 = color.Dark(uipallet.Text, 0.38)
+				searchBox.PlaceholderText = 'Search options...'
+				searchBox.Position = UDim2.fromOffset(25, 0)
+				searchBox.Size = UDim2.new(1, -30, 1, 0)
+				searchBox.Text = ''
+				searchBox.TextColor3 = uipallet.Text
+				searchBox.TextSize = 12
+				searchBox.TextXAlignment = Enum.TextXAlignment.Left
+				searchBox.Parent = searchHolder
+			end
 
-					index += 1
+			optionScroller = Instance.new('ScrollingFrame')
+			optionScroller.Active = true
+			optionScroller.BackgroundTransparency = 1
+			optionScroller.BorderSizePixel = 0
+			optionScroller.CanvasSize = UDim2.new()
+			optionScroller.ClipsDescendants = true
+			optionScroller.Position = UDim2.fromOffset(0, searchHeight)
+			optionScroller.ScrollBarImageColor3 = color.Dark(uipallet.Text, 0.16)
+			optionScroller.ScrollBarImageTransparency = 1
+			optionScroller.ScrollBarThickness = 2
+			optionScroller.ScrollingDirection = Enum.ScrollingDirection.Y
+			optionScroller.Size = UDim2.new(1, 0, 0, 0)
+			optionScroller.Parent = dropdownchildren
+
+			local optionLayout = Instance.new('UIListLayout')
+			optionLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			optionLayout.Parent = optionScroller
+
+			emptyLabel = Instance.new('TextLabel')
+			emptyLabel.BackgroundTransparency = 1
+			emptyLabel.FontFace = uipallet.Font
+			emptyLabel.Position = UDim2.fromOffset(0, searchHeight)
+			emptyLabel.Size = UDim2.new(1, 0, 0, 28)
+			emptyLabel.Text = 'No matching options'
+			emptyLabel.TextColor3 = color.Dark(uipallet.Text, 0.4)
+			emptyLabel.TextSize = 11
+			emptyLabel.Visible = false
+			emptyLabel.Parent = dropdownchildren
+
+			for index, value in values do
+				local entry = Instance.new('TextButton')
+				entry.AutoButtonColor = false
+				entry.BackgroundColor3 = uipallet.Main
+				entry.BackgroundTransparency = 1
+				entry.BorderSizePixel = 0
+				entry.FontFace = uipallet.Font
+				entry.LayoutOrder = index
+				entry.Name = 'Option'
+				entry.Size = UDim2.new(1, -2, 0, 26)
+				entry.Text = '         '..value
+				entry.TextColor3 = color.Dark(uipallet.Text, 0.16)
+				entry.TextTransparency = 1
+				entry.TextSize = 13
+				entry.TextTruncate = Enum.TextTruncate.AtEnd
+				entry.TextXAlignment = Enum.TextXAlignment.Left
+				entry.Parent = optionScroller
+				entry:SetAttribute('SearchValue', tostring(value):lower())
+				table.insert(optionEntries, entry)
+
+				task.delay(math.min(index - 1, 7) * 0.014, function()
+					if entry.Parent and dropdownOpen then
+						tween:Tween(entry, uiMotion, {TextTransparency = 0, BackgroundTransparency = 0})
+					end
+				end)
+
+				entry.MouseEnter:Connect(function()
+					tween:Tween(entry, uiMotionFast, {
+						BackgroundColor3 = color.Light(uipallet.Main, 0.02),
+						TextColor3 = uipallet.Text
+					})
+				end)
+
+				entry.MouseLeave:Connect(function()
+					tween:Tween(entry, uiMotionFast, {
+						BackgroundColor3 = uipallet.Main,
+						TextColor3 = color.Dark(uipallet.Text, 0.16)
+					})
+				end)
+
+				entry.MouseButton1Click:Connect(function()
+					component:SetValue(value, true)
+				end)
+			end
+
+			local function updateFilter()
+				if not dropdownOpen or not dropdownchildren then return end
+				local query = searchBox and searchBox.Text:lower():gsub('^%s+', ''):gsub('%s+$', '') or ''
+				local visible = 0
+				for _, entry in optionEntries do
+					local matches = query == '' or entry:GetAttribute('SearchValue'):find(query, 1, true) ~= nil
+					entry.Visible = matches
+					if matches then visible += 1 end
 				end
-			else
+
+				local rows = math.min(visible, maxRows)
+				local listHeight = rows * 26
+				emptyLabel.Visible = visible == 0
+				optionScroller.Visible = visible > 0
+				optionScroller.CanvasPosition = Vector2.zero
+				optionScroller.CanvasSize = UDim2.fromOffset(0, visible * 26)
+				optionScroller.ScrollBarImageTransparency = visible > maxRows and 0.35 or 1
+				optionScroller.Size = UDim2.new(1, 0, 0, visible == 0 and 0 or listHeight)
+
+				local bodyHeight = searchHeight + (visible == 0 and 28 or listHeight) + 4
+				dropdownchildren.Size = UDim2.new(1, 0, 0, bodyHeight)
+				tween:Tween(dropdown, uiMotion, {Size = UDim2.new(1, 0, 0, 31 + bodyHeight)})
+			end
+
+			if searchBox then
+				searchBox:GetPropertyChangedSignal('Text'):Connect(updateFilter)
+			end
+			updateFilter()
+
+			-- Large dropdowns behave like a command palette: open and type immediately.
+			if searchBox and optionCount > maxRows then
+				task.defer(function()
+					if dropdownOpen and searchBox and searchBox.Parent then searchBox:CaptureFocus() end
+				end)
+			end
+		end
+
+		button.MouseButton1Click:Connect(function()
+			if dropdownchildren then
 				closeDropdown()
+			else
+				openDropdown()
 			end
 		end)
 
@@ -5144,7 +5287,6 @@ components = {
 		end)
 
 		api.Options[props.Name] = component
-
 		return component
 	end,
 	Font = function(props, children, api)
@@ -5497,14 +5639,8 @@ components = {
 		arrow.Position = UDim2.new(1, -20, 0, 16)
 		arrow.Size = UDim2.fromOffset(4, 8)
 		arrow.Parent = button
-		local windowScale
 		local windowTransition = 0
-		if props.Window then
-			windowScale = Instance.new('UIScale')
-			windowScale.Name = 'MotionScale'
-			windowScale.Scale = 1
-			windowScale.Parent = props.Window
-		end
+		local windowHomePosition
 
 		function component:Destroy()
 			button:Destroy()
@@ -5534,17 +5670,26 @@ components = {
 				end
 
 				if self.Enabled then
+					local target = windowHomePosition or props.Window.Position
 					props.Window.Visible = true
-					windowScale.Scale = 0.965
-					tween:Tween(windowScale, uiMotionPop, {Scale = 1})
+					if vape.ReducedMotion and vape.ReducedMotion.Enabled then
+						props.Window.Position = target
+					else
+						-- Stay fully inside the window bounds: settle horizontally instead of scaling past the edge.
+						props.Window.Position = target + UDim2.fromOffset(10, 0)
+						tween:Tween(props.Window, uiMotionPop, {Position = target})
+					end
 				else
-					tween:Tween(windowScale, uiMotionFast, {Scale = 0.97})
-					task.delay(0.14, function()
+					windowHomePosition = props.Window.Position
+					local target = windowHomePosition
+					local motion = tween:Tween(props.Window, uiMotionFast, {Position = target + UDim2.fromOffset(8, 0)})
+					local function finishClose()
 						if transition == windowTransition and not component.Enabled then
 							props.Window.Visible = false
-							windowScale.Scale = 1
+							props.Window.Position = target
 						end
-					end)
+					end
+					if motion then motion.Completed:Once(finishClose) else finishClose() end
 				end
 			else
 				props.Function()
@@ -6564,42 +6709,32 @@ components = {
 		windowlist.FillDirectionMaxCells = 4
 		windowlist.SortOrder = Enum.SortOrder.LayoutOrder
 		windowlist.Parent = children
-		local windowScale = Instance.new('UIScale')
-		windowScale.Name = 'MotionScale'
-		windowScale.Scale = 1
-		windowScale.Parent = window
 		local legitTransition = 0
 
 		function component:Show()
 			legitTransition += 1
 			clickgui.Visible = false
 			local target = UDim2.new(0.5, -350, 0.5, -194)
-			window.Position = target + UDim2.fromOffset(0, 12)
-			windowScale.Scale = 0.96
+			window.Position = (vape.ReducedMotion and vape.ReducedMotion.Enabled) and target or (target + UDim2.fromOffset(0, 12))
 			window.Visible = true
 			vape:BlurCheck()
-			tween:Tween(window, uiMotion, {Position = target})
-			tween:Tween(windowScale, uiMotionPop, {Scale = 1})
+			tween:Tween(window, uiMotionPop, {Position = target})
 		end
 
 		function component:Hide(returnToClickGui)
 			legitTransition += 1
 			local transition = legitTransition
 			local target = window.Position
-			tween:Tween(window, uiMotionFast, {Position = target + UDim2.fromOffset(0, 10)})
-			tween:Tween(windowScale, uiMotionFast, {Scale = 0.97})
-
-			task.delay(0.14, function()
+			local motion = tween:Tween(window, uiMotionFast, {Position = target + UDim2.fromOffset(0, 8)})
+			local function finishClose()
 				if transition == legitTransition then
 					window.Visible = false
 					window.Position = target
-					windowScale.Scale = 1
-					if returnToClickGui then
-						clickgui.Visible = true
-					end
+					if returnToClickGui then clickgui.Visible = true end
 					vape:BlurCheck()
 				end
-			end)
+			end
+			if motion then motion.Completed:Once(finishClose) else finishClose() end
 		end
 
 		for index, comp in components do
@@ -6696,17 +6831,40 @@ components = {
 		button.FontFace = uipallet.Font
 		button.Name = props.Name
 		button.Size = UDim2.fromOffset(220, 40)
+		-- Keep the TextButton text property for compatibility/edit-mode code, but
+		-- render the visible module name in its own label. A UIGradient parented to
+		-- a TextButton tints BOTH its background and text; on bright theme sections
+		-- that made the module name blend into the exact same colors and disappear.
 		button.Text = string.rep(' ', 12)..props.Name
-		button.TextColor3 = color.Dark(uipallet.Text, 0.16)
-		button.TextSize = 14
-		button.TextXAlignment = Enum.TextXAlignment.Left
+		button.TextTransparency = 1
 		button.Parent = children
 		component.Object = button
 		addTooltip(button, (props.Tooltip and (props.Tooltip..'\n') or '')..'LMB toggle • RMB settings • Shift+RMB favorite')
+		local themeBackground = Instance.new('Frame')
+		themeBackground.BackgroundColor3 = uipallet.Main
+		themeBackground.BorderSizePixel = 0
+		themeBackground.Name = 'ThemeBackground'
+		themeBackground.Size = UDim2.fromScale(1, 1)
+		themeBackground.Parent = button
 		local gradient = Instance.new('UIGradient')
 		gradient.Enabled = false
 		gradient.Rotation = 90
-		gradient.Parent = button
+		gradient.Parent = themeBackground
+		local moduleTitle = Instance.new('TextLabel')
+		moduleTitle.BackgroundTransparency = 1
+		moduleTitle.FontFace = uipallet.Font
+		moduleTitle.Name = 'ModuleTitle'
+		moduleTitle.Position = UDim2.fromOffset(12, 0)
+		moduleTitle.Size = UDim2.new(1, -45, 1, 0)
+		moduleTitle.Text = props.Name
+		moduleTitle.TextColor3 = color.Dark(uipallet.Text, 0.16)
+		moduleTitle.TextSize = 14
+		moduleTitle.TextStrokeColor3 = Color3.new()
+		moduleTitle.TextStrokeTransparency = 1
+		moduleTitle.TextXAlignment = Enum.TextXAlignment.Left
+		moduleTitle.ZIndex = button.ZIndex + 2
+		moduleTitle.Parent = button
+		component.Title = moduleTitle
 		local modulechildren = Instance.new('Frame')
 		modulechildren.BackgroundColor3 = color.Dark(uipallet.Main, 0.02)
 		modulechildren.BorderSizePixel = 0
@@ -6725,6 +6883,7 @@ components = {
 		dotsbutton.Position = UDim2.new(1, -25, 0, 0)
 		dotsbutton.Size = UDim2.fromOffset(25, 40)
 		dotsbutton.Text = ''
+		dotsbutton.ZIndex = button.ZIndex + 3
 		dotsbutton.Parent = button
 		local dots = Instance.new('ImageLabel')
 		dots.BackgroundTransparency = 1
@@ -6733,6 +6892,7 @@ components = {
 		dots.Name = 'Dots'
 		dots.Position = UDim2.fromOffset(4, 12)
 		dots.Size = UDim2.fromOffset(3, 16)
+		dots.ZIndex = button.ZIndex + 4
 		dots.Parent = dotsbutton
 		local divider = Instance.new('Frame')
 		divider.BackgroundColor3 = Color3.new(0.19, 0.19, 0.19)
@@ -6742,6 +6902,7 @@ components = {
 		divider.Position = UDim2.new(0, 0, 1, -1)
 		divider.Size = UDim2.new(1, 0, 0, 1)
 		divider.Visible = false
+		divider.ZIndex = button.ZIndex + 2
 		divider.Parent = button
 		local edit = Instance.new('TextButton')
 		edit.AutoButtonColor = false
@@ -6750,11 +6911,13 @@ components = {
 		edit.Size = UDim2.fromOffset(40, 40)
 		edit.Text = ''
 		edit.Visible = false
+		edit.ZIndex = button.ZIndex + 3
 		edit.Parent = button
 		local editbox = Instance.new('Frame')
 		editbox.BorderSizePixel = 0
 		editbox.Position = UDim2.fromOffset(16, 16)
 		editbox.Size = UDim2.fromOffset(8, 8)
+		editbox.ZIndex = button.ZIndex + 4
 		editbox.Parent = edit
 		local editborder = Instance.new('UIStroke')
 		editborder.BorderOffset = UDim.new(0, 1)
@@ -6765,6 +6928,7 @@ components = {
 		component.Children = modulechildren
 		local moduleExpanded = false
 		local moduleExpandAnimation = 0
+		local applyModuleVisual
 		addMaid(component)
 
 		local function setModuleExpanded(state)
@@ -6783,54 +6947,62 @@ components = {
 			if state then
 				modulechildren.Visible = true
 			end
-			tween:Tween(modulechildren, uiMotion, {Size = UDim2.new(1, 0, 0, targetHeight)})
+			local resizeMotion = tween:Tween(modulechildren, uiMotion, {Size = UDim2.new(1, 0, 0, targetHeight)})
 			tween:Tween(dots, uiMotionFast, {Rotation = state and 90 or 0})
 			component.Bind:SetVisible(isHover or state)
+			if not component.Enabled then applyModuleVisual(true) end
 
 			if not state then
-				task.delay(0.22, function()
-					if animation == moduleExpandAnimation and not moduleExpanded then
-						modulechildren.Visible = false
-					end
-				end)
+				local function finishCollapse()
+					if animation == moduleExpandAnimation and not moduleExpanded then modulechildren.Visible = false end
+				end
+				if resizeMotion then resizeMotion.Completed:Once(finishCollapse) else finishCollapse() end
 			end
 		end
 
 		component.SetExpanded = setModuleExpanded
-		function component:Color(hue, sat, val, isRainbow)
-			if self.Enabled then
-				local themeActive = vape:IsGradientThemeActive()
-				button.TextColor3 = (vape.GUIColor.Rainbow and not themeActive) and Color3.new(0.19, 0.19, 0.19) or vape:TextColor(hue, sat, val)
+		applyModuleVisual = function(animate)
+			local enabled = component.Enabled
+			local active = isHover or moduleExpanded
+			local idleBackground = active and color.Light(uipallet.Main, 0.02) or uipallet.Main
+			local idleText = active and uipallet.Text or color.Dark(uipallet.Text, 0.16)
 
-				if themeActive then
-					button.BackgroundColor3 = Color3.new(1, 1, 1)
-					vape:RegisterThemeGradient(button.UIGradient, self.Index * 0.045, 90)
+			if enabled then
+				-- Theme only the dedicated background so the text can remain readable.
+				themeBackground.BackgroundColor3 = Color3.new(1, 1, 1)
+				vape:RegisterThemeGradient(gradient, component.Index * 0.045, 90)
+				moduleTitle.TextColor3 = Color3.new(1, 1, 1)
+				moduleTitle.TextStrokeColor3 = Color3.new(0, 0, 0)
+				moduleTitle.TextStrokeTransparency = 0.48
+				component.Bind:SetColor(moduleTitle.TextColor3)
+				dots.ImageColor3 = moduleTitle.TextColor3
+			else
+				vape:UnregisterThemeGradient(gradient)
+				moduleTitle.TextStrokeTransparency = 1
+				if animate then
+					tween:Tween(themeBackground, uiMotionFast, {BackgroundColor3 = idleBackground})
+					tween:Tween(moduleTitle, uiMotionFast, {TextColor3 = idleText})
 				else
-					vape:UnregisterThemeGradient(button.UIGradient)
-					button.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.025)) % 1)) or Color3.fromHSV(hue, sat, val)
-					button.UIGradient.Enabled = isRainbow and vape.RainbowMode.Value == 'Gradient'
-
-					if button.UIGradient.Enabled then
-						button.BackgroundColor3 = Color3.new(1, 1, 1)
-						button.UIGradient.Color = ColorSequence.new({
-							ColorSequenceKeypoint.new(0, Color3.fromHSV(vape:Color((hue - (self.Index * 0.025)) % 1))),
-							ColorSequenceKeypoint.new(1, Color3.fromHSV(vape:Color((hue - ((self.Index + 1) * 0.025)) % 1)))
-						})
-					end
+					themeBackground.BackgroundColor3 = idleBackground
+					moduleTitle.TextColor3 = idleText
 				end
-
-				self.Bind:SetColor(self.Object.TextColor3)
-				dots.ImageColor3 = self.Object.TextColor3
+				component.Bind:SetColor(color.Dark(uipallet.Text, 0.43))
+				dots.ImageColor3 = active and uipallet.Text or color.Light(uipallet.Main, 0.37)
 			end
+		end
+
+		function component:Color(hue, sat, val, isRainbow)
+			applyModuleVisual(false)
 
 			if self.Visible then
-				editbox.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.025)) % 1)) or Color3.fromHSV(hue, sat, val)
-				editborder.Color = editbox.BackgroundColor3
+				local editAccent = vape:GetThemeColor(self.Index * 0.045)
+				editbox.BackgroundColor3 = editAccent
+				editborder.Color = editAccent
 			end
 
-			for _, component in self.Options do
-				if component.Color then
-					component:Color(hue, sat, val, isRainbow)
+			for _, option in self.Options do
+				if option.Color then
+					option:Color(hue, sat, val, isRainbow)
 				end
 			end
 		end
@@ -6891,15 +7063,10 @@ components = {
 			self.Enabled = not self.Enabled
 			if clickgui.Visible and vape.SearchBar and vape.Loaded then vape.SearchBar:Refresh() end
 			divider.Visible = self.Enabled
-			gradient.Enabled = self.Enabled
-			tween:Tween(button, uiMotionFast, {
-				TextColor3 = (isHover or moduleExpanded) and uipallet.Text or color.Dark(uipallet.Text, 0.16),
-				BackgroundColor3 = (isHover or moduleExpanded) and color.Light(uipallet.Main, 0.02) or uipallet.Main
-			})
-			tween:Tween(dots, uiMotionFast, {
-				ImageColor3 = self.Enabled and Color3.fromRGB(50, 50, 50) or color.Light(uipallet.Main, 0.37)
-			})
-			component.Bind:SetColor(color.Dark(uipallet.Text, 0.43))
+			-- Apply the enabled theme immediately. Previously Toggle() tweened the row
+			-- back to its dark idle color and relied on a later global UpdateGUI pass,
+			-- so it stayed dark until another module/menu action happened.
+			applyModuleVisual(true)
 
 			if not self.Enabled then
 				for _, v in self.Connections do
@@ -6934,25 +7101,13 @@ components = {
 
 		button.MouseEnter:Connect(function()
 			isHover = true
-			if not component.Enabled and not moduleExpanded then
-				tween:Tween(button, uiMotionFast, {
-					TextColor3 = uipallet.Text,
-					BackgroundColor3 = color.Light(uipallet.Main, 0.02)
-				})
-			end
-
+			if not component.Enabled then applyModuleVisual(true) end
 			component.Bind:SetVisible(isHover or moduleExpanded)
 		end)
 
 		button.MouseLeave:Connect(function()
 			isHover = false
-			if not component.Enabled and not moduleExpanded then
-				tween:Tween(button, uiMotionFast, {
-					TextColor3 = color.Dark(uipallet.Text, 0.16),
-					BackgroundColor3 = uipallet.Main
-				})
-			end
-
+			if not component.Enabled then applyModuleVisual(true) end
 			component.Bind:SetVisible(isHover or moduleExpanded)
 		end)
 
@@ -7250,13 +7405,13 @@ components = {
 				Rotation = self.Expanded and 90 or 0,
 				ImageColor3 = self.Expanded and uipallet.Text or color.Light(uipallet.Main, 0.37)
 			})
-			tween:Tween(window, uiMotion, {Size = UDim2.fromOffset(window.Size.X.Offset,
+			local resizeMotion = tween:Tween(window, uiMotion, {Size = UDim2.fromOffset(window.Size.X.Offset,
 				self.Expanded and math.min(41 + windowlist.AbsoluteContentSize.Y / scale.Scale, 601) or 41)})
 			if not self.Expanded then
-				if vape.ReducedMotion and vape.ReducedMotion.Enabled then children.Visible = false end
-				task.delay(0.18, function()
+				local function finishCollapse()
 					if window.Parent and revision == expandRevision and not component.Expanded then children.Visible = false end
-				end)
+				end
+				if resizeMotion then resizeMotion.Completed:Once(finishCollapse) else finishCollapse() end
 			end
 		end
 		function component:Load(data)
@@ -7937,13 +8092,14 @@ components = {
 				pane.Visible = true
 				tween:Tween(pane, uiMotion, {Position = UDim2.fromOffset(0, 0)})
 			else
-				tween:Tween(pane, uiMotionFast, {Position = UDim2.fromOffset(10, 0)})
-				task.delay(0.14, function()
+				local motion = tween:Tween(pane, uiMotionFast, {Position = UDim2.fromOffset(10, 0)})
+				local function finishClose()
 					if transition == paneTransition then
 						pane.Visible = false
 						pane.Position = UDim2.fromOffset(0, 0)
 					end
-				end)
+				end
+				if motion then motion.Completed:Once(finishClose) else finishClose() end
 			end
 		end
 		local title = Instance.new('TextLabel')
