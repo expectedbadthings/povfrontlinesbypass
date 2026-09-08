@@ -390,7 +390,8 @@ uipallet = {
 		Winter = {{Color3.new(1, 1, 1), Color3.new(1, 1, 1)}, 10},
 		Wood = {{Color3.fromRGB(79, 109, 81), Color3.fromRGB(170, 139, 87), Color3.fromRGB(240, 235, 206)}, 5}
 	},
-	ThemeObjects = {}
+	ThemeObjects = {},
+	ThemeSolidObjects = setmetatable({}, {__mode = 'k'})
 }
 
 local themecolors = {
@@ -406,13 +407,15 @@ local themecolors = {
 	Color3.fromRGB(100, 100, 110)
 }
 
-local themeNames = {'None'}
+local themeNames = {'Water'}
 for themeName in uipallet.Themes do
-	table.insert(themeNames, themeName)
+	if themeName ~= 'Water' then
+		table.insert(themeNames, themeName)
+	end
 end
 table.sort(themeNames, function(a, b)
-	if a == 'None' then return b ~= 'None' end
-	if b == 'None' then return false end
+	if a == 'Water' then return b ~= 'Water' end
+	if b == 'Water' then return false end
 	return a:lower() < b:lower()
 end)
 
@@ -432,6 +435,9 @@ do
 end
 
 -- Animated named gradient themes ------------------------------------------------
+-- GUI accents are theme-only now. The legacy HSV GUI color remains only as a
+-- compatibility shim for external modules; it is no longer user-facing.
+vape.ActiveThemeName = 'Water'
 vape.ThemePhase = 0
 
 local function getThemePalette(name)
@@ -464,17 +470,21 @@ local function sampleThemeColor(colors, alpha)
 	local base = math.floor(scaled)
 	local first = (base % #colors) + 1
 	local second = (first % #colors) + 1
-	return colors[first]:Lerp(colors[second], scaled - base)
+	local blend = scaled - base
+
+	-- Cosine easing makes each palette transition melt into the next instead of
+	-- looking like a linear RGB conveyor belt. The palette still wraps perfectly.
+	blend = (1 - math.cos(blend * math.pi)) * 0.5
+	return colors[first]:Lerp(colors[second], blend)
 end
 
 function vape:IsGradientThemeActive()
-	return self.GradientTheme
-		and self.GradientTheme.Value
-		and uipallet.Themes[self.GradientTheme.Value] ~= nil
+	local name = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Water'
+	return uipallet.Themes[name] ~= nil
 end
 
 function vape:GetThemeColors(name)
-	return getThemePalette(name or (self.GradientTheme and self.GradientTheme.Value))
+	return getThemePalette(name or self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Water')
 end
 
 function vape:GetThemeColor(offset)
@@ -485,19 +495,22 @@ function vape:GetThemeColor(offset)
 	return sampleThemeColor(colors, (self.ThemePhase or 0) + (offset or 0))
 end
 
-function vape:GetThemeSequence(offset)
+function vape:GetThemeSequence(offset, phase)
 	local colors = self:GetThemeColors()
 	if not colors then
 		return ColorSequence.new(Color3.fromHSV(self.GUIColor.Hue, self.GUIColor.Sat, self.GUIColor.Value))
 	end
 
-	local steps = math.clamp(#colors, 1, 18)
+	-- More samples = a genuinely smooth travelling gradient. Animation happens by
+	-- moving the sampled palette through a stationary UIGradient, not by spinning it.
+	local steps = math.clamp(#colors * 4, 10, 18)
 	local keypoints = {}
+	local flow = phase == nil and (self.ThemePhase or 0) or phase
 	for index = 0, steps do
 		local position = index / steps
 		table.insert(keypoints, ColorSequenceKeypoint.new(
 			position,
-			sampleThemeColor(colors, position + (offset or 0))
+			sampleThemeColor(colors, position + flow + (offset or 0))
 		))
 	end
 	return ColorSequence.new(keypoints)
@@ -519,7 +532,7 @@ function vape:RegisterThemeGradient(gradient, offset, rotation)
 
 	local newOffset = offset or metadata.Offset or 0
 	local newRotation = rotation or metadata.Rotation or gradient.Rotation or 0
-	local themeName = self.GradientTheme.Value
+	local themeName = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Water'
 	local refresh = metadata.Theme ~= themeName or metadata.Offset ~= newOffset
 
 	metadata.Offset = newOffset
@@ -527,8 +540,10 @@ function vape:RegisterThemeGradient(gradient, offset, rotation)
 	metadata.Theme = themeName
 
 	gradient.Enabled = true
+	gradient.Rotation = newRotation
+	gradient.Offset = Vector2.zero
 	if refresh then
-		gradient.Color = self:GetThemeSequence(newOffset)
+		gradient.Color = self:GetThemeSequence(newOffset, self.ThemePhase or 0)
 	end
 	return gradient
 end
@@ -565,6 +580,22 @@ function vape:ApplyThemeGradient(object, property, offset, enabled, rotation)
 	return true
 end
 
+
+-- Some controls need only one property themed (for example a UIStroke, icon or
+-- text label on a neutral surface). These get a continuously animated sampled
+-- theme color without tinting the rest of the object.
+function vape:RegisterThemeSolid(object, property, offset)
+	if typeof(object) ~= 'Instance' then return object end
+	property = property or (object:IsA('UIStroke') and 'Color' or 'BackgroundColor3')
+	uipallet.ThemeSolidObjects[object] = {Property = property, Offset = offset or 0}
+	pcall(function() object[property] = self:GetThemeColor(offset or 0) end)
+	return object
+end
+
+function vape:UnregisterThemeSolid(object)
+	uipallet.ThemeSolidObjects[object] = nil
+end
+
 function vape:ClearThemeGradients()
 	for gradient in uipallet.ThemeObjects do
 		if gradient and gradient.Parent then
@@ -578,19 +609,31 @@ end
 function vape:UpdateThemeGradients()
 	if not self:IsGradientThemeActive() then return end
 	local phase = self.ThemePhase or 0
-	local themeName = self.GradientTheme.Value
+	local themeName = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Water'
 	for gradient, metadata in uipallet.ThemeObjects do
 		if not gradient or not gradient.Parent then
 			uipallet.ThemeObjects[gradient] = nil
 		else
 			local offset = type(metadata) == 'table' and (metadata.Offset or 0) or 0
 			local baseRotation = type(metadata) == 'table' and (metadata.Rotation or 0) or 0
-			if type(metadata) == 'table' and metadata.Theme ~= themeName then
+			if type(metadata) == 'table' then
 				metadata.Theme = themeName
-				gradient.Color = self:GetThemeSequence(offset)
 			end
-			gradient.Rotation = (baseRotation + (phase * 360)) % 360
-			gradient.Offset = Vector2.new(math.sin((phase + offset) * math.pi * 2) * 0.16, 0)
+
+			-- Keep geometry completely stable. Only the colors travel through it.
+			gradient.Rotation = baseRotation
+			gradient.Offset = Vector2.zero
+			gradient.Color = self:GetThemeSequence(offset, phase)
+		end
+	end
+
+	for object, metadata in uipallet.ThemeSolidObjects do
+		if not object or not object.Parent then
+			uipallet.ThemeSolidObjects[object] = nil
+		else
+			pcall(function()
+				object[metadata.Property] = self:GetThemeColor(metadata.Offset or 0)
+			end)
 		end
 	end
 end
@@ -611,19 +654,7 @@ vape.Libraries = {
 vape.HUDAccentObjects = setmetatable({}, {__mode = 'k'})
 
 function vape:GetGUIColorRGB()
-	if self:IsGradientThemeActive() then
-		return self:GetThemeColor(0)
-	end
-
-	local guiColor = self.GUIColor
-	if type(guiColor) == 'table'
-		and type(guiColor.Hue) == 'number'
-		and type(guiColor.Sat) == 'number'
-		and type(guiColor.Value) == 'number' then
-		return Color3.fromHSV(guiColor.Hue, guiColor.Sat, guiColor.Value)
-	end
-
-	return Color3.fromRGB(103, 235, 193)
+	return self:GetThemeColor(0)
 end
 
 function vape:RegisterHUDAccent(object, property)
@@ -648,6 +679,9 @@ function vape:RegisterHUDAccent(object, property)
 	pcall(function()
 		object[property] = self:GetGUIColorRGB()
 	end)
+	if not object:IsA('GuiObject') then
+		self:RegisterThemeSolid(object, property, 0)
+	end
 
 	object.Destroying:Once(function()
 		if self.HUDAccentObjects then
@@ -1817,20 +1851,15 @@ function vape:LoadGUI()
 		Name = 'Animated theme',
 		List = themeNames,
 		Function = function(value)
-			local palette = vape:GetThemeColors(value)
-			if palette then
-				uipallet.MainColor = palette[1] or Color3.fromRGB(12, 163, 232)
-				uipallet.SecondaryColor = palette[2] or palette[1] or Color3.fromRGB(12, 232, 199)
-				vape.ThemePhase = 0
-			else
-				uipallet.MainColor = Color3.fromRGB(12, 163, 232)
-				uipallet.SecondaryColor = Color3.fromRGB(12, 232, 199)
-				vape:ClearThemeGradients()
-			end
+			vape.ActiveThemeName = uipallet.Themes[value] and value or 'Water'
+			local palette = vape:GetThemeColors(vape.ActiveThemeName)
+			uipallet.MainColor = palette[1] or Color3.fromRGB(12, 163, 232)
+			uipallet.SecondaryColor = palette[2] or palette[1] or Color3.fromRGB(12, 232, 199)
+			vape.ThemePhase = 0
 			refreshAdvancedGUI()
 			vape:UpdateGUI()
 		end,
-		Tooltip = 'Animated spatial gradients for module accents, toggles, sliders, HUD accents and the menu background. None returns to the normal GUI color/rainbow controls.'
+		Tooltip = 'Primary GUI color system. Every interface accent uses this animated theme.'
 	})
 
 	local ScaleSlider = {Object = {}, Value = 1}
@@ -1900,32 +1929,16 @@ function vape:LoadGUI()
 		Max = 3,
 		Decimal = 10,
 		Default = 1,
-		Tooltip = 'Controls how quickly animated gradient themes flow and rotate.'
+		Tooltip = 'Controls how quickly the theme colors glide through the fixed gradient.'
 	}), function()
 		return vape:IsGradientThemeActive()
 	end)
 
-	vape.RainbowSpeed = addAdvanced(guipane:CreateSlider({
-		Name = 'Rainbow speed',
-		Min = 0.1,
-		Max = 10,
-		Decimal = 10,
-		Default = 1,
-		Tooltip = 'Adjusts the speed of rainbow values'
-	}), function()
-		return not vape:IsGradientThemeActive()
-	end)
-
-	vape.RainbowUpdateSpeed = addAdvanced(guipane:CreateSlider({
-		Name = 'Rainbow update rate',
-		Min = 1,
-		Max = 144,
-		Default = 60,
-		Tooltip = 'Adjusts the update rate of rainbow values',
-		Suffix = 'hz'
-	}), function()
-		return not vape:IsGradientThemeActive()
-	end)
+	-- Legacy rainbow timing is retained internally for ESP/Chams-style color
+	-- sliders that expose their own Rainbow toggle, but it is no longer a GUI theme.
+	vape.RainbowSpeed = {Value = 1}
+	vape.RainbowUpdateSpeed = {Value = 60}
+	vape.RainbowMode = {Value = 'Normal'}
 
 	addAdvanced(guipane:CreateDropdown({
 		Name = 'Search behavior',
@@ -1935,14 +1948,6 @@ function vape:LoadGUI()
 		end,
 		Tooltip = 'On demand stays hidden until / or Ctrl+F. Pinned keeps search visible. Disabled hides it completely.'
 	}))
-
-	vape.RainbowMode = addAdvanced(guipane:CreateDropdown({
-		Name = 'Rainbow Mode',
-		List = {'Normal', 'Gradient', 'Retro'},
-		Tooltip = 'Normal - Smooth color fade\nGradient - Gradient color fade\nRetro - Static color'
-	}), function()
-		return not vape:IsGradientThemeActive()
-	end)
 
 	local organizeButton = addAdvanced(guipane:CreateButton({
 		Name = 'Organize GUI',
@@ -2035,12 +2040,9 @@ function vape:LoadGUI()
 		Darker = true
 	})
 
-	vape.GUIColor = vape.Categories.Main.Settings:CreateGUISlider({
-		Name = 'GUI Theme',
-		Function = function(h, s, v)
-			vape:UpdateGUI()
-		end
-	})
+	-- No user-facing solid GUI color picker. External code can still read these
+	-- compatibility fields, but the interface itself is driven by Animated theme.
+	vape.GUIColor.Rainbow = false
 
 	vape.GUIBind = vape.Categories.Main.Settings:CreateBind({
 		Name = 'Rebind GUI',
@@ -2052,8 +2054,6 @@ function vape:LoadGUI()
 	run(function()
 		local Sort
 		local FontOption
-		local ColorSlider
-		local ColorMode
 		local Scale
 		local Shadow
 		local Gradient
@@ -2069,8 +2069,6 @@ function vape:LoadGUI()
 		local CustomText
 		local CustomTextBox
 		local CustomTextFont
-		local CustomTextColor
-		local CustomTextColorSlider
 		local Labels = {}
 		local info = TweenInfo.new(0.3, Enum.EasingStyle.Exponential)
 
@@ -2108,22 +2106,7 @@ function vape:LoadGUI()
 				vape:UpdateTextGUI()
 			end
 		})
-		ColorMode = TextGUI:CreateDropdown({
-			Name = 'Color Mode',
-			List = {'Match GUI color', 'Custom color'},
-			Function = function(value)
-				ColorSlider.Object.Visible = value == 'Custom color'
-				vape:UpdateTextGUI()
-			end
-		})
-		ColorSlider = TextGUI:CreateColorSlider({
-			Name = 'Text GUI color',
-			Function = function()
-				vape:UpdateGUI()
-			end,
-			Darker = true,
-			Visible = false
-		})
+		-- Text GUI color is inherited from the active animated theme.
 		TextGUI:CreateSlider({
 			Name = 'Scale',
 			Min = 0,
@@ -2142,22 +2125,9 @@ function vape:LoadGUI()
 				vape:UpdateTextGUI()
 			end
 		})
-		Gradient = TextGUI:CreateToggle({
-			Name = 'Gradient',
-			Tooltip = 'Renders a gradient',
-			Function = function(callback)
-				GradientV4.Object.Visible = callback
-				vape:UpdateTextGUI()
-			end
-		})
-		GradientV4 = TextGUI:CreateToggle({
-			Name = 'V4 Gradient',
-			Function = function()
-				vape:UpdateTextGUI()
-			end,
-			Darker = true,
-			Visible = false
-		})
+		Gradient = {Enabled = true}
+		GradientV4 = {Enabled = true, Object = {Visible = false}}
+
 		Animations = TextGUI:CreateToggle({
 			Name = 'Animations',
 			Tooltip = 'Use animations on text gui',
@@ -2229,8 +2199,6 @@ function vape:LoadGUI()
 			Function = function(enabled)
 				CustomTextBox.Object.Visible = enabled
 				CustomTextFont.Object.Visible = enabled
-				CustomTextColor.Object.Visible = enabled
-				CustomTextColorSlider.Object.Visible = CustomTextColor.Enabled and enabled
 				vape:UpdateTextGUI()
 			end
 		})
@@ -2251,23 +2219,8 @@ function vape:LoadGUI()
 			Darker = true,
 			Visible = false
 		})
-		CustomTextColor = TextGUI:CreateToggle({
-			Name = 'Set custom text color',
-			Function = function(enabled)
-				CustomTextColorSlider.Object.Visible = enabled
-				vape:UpdateGUI()
-			end,
-			Darker = true,
-			Visible = false
-		})
-		CustomTextColorSlider = TextGUI:CreateColorSlider({
-			Name = 'Color of custom text',
-			Function = function(afterload)
-				vape:UpdateGUI()
-			end,
-			Darker = true,
-			Visible = false
-		})
+		-- Custom text also follows the active animated theme.
+
 
 
 		--[[
@@ -2539,26 +2492,22 @@ function vape:LoadGUI()
 		end
 
 		function TextGUI:UpdateColor(hue, sat, val, default)
-			LogoGradient.Color = ColorSequence.new({
-				ColorSequenceKeypoint.new(0, Color3.fromHSV(hue, sat, val)),
-				ColorSequenceKeypoint.new(1, Gradient.Enabled and Color3.fromHSV(vape:Color((hue - 0.075) % 1)) or Color3.fromHSV(hue, sat, val))
-			})
-			LogoGradient2.Color = Gradient.Enabled and GradientV4.Enabled and LogoGradient.Color or ColorSequence.new({
-				ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-				ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1))
-			})
-			LabelCustom.TextColor3 = CustomTextColor.Enabled and Color3.fromHSV(CustomTextColorSlider.Hue, CustomTextColorSlider.Sat, CustomTextColorSlider.Value) or LogoGradient.Color.Keypoints[2].Value
+			-- Existing logo gradients are registered directly so they animate with the
+			-- named theme instead of synthesizing a second solid/rainbow color system.
+			vape:RegisterThemeGradient(LogoGradient, 0, 90)
+			vape:RegisterThemeGradient(LogoGradient2, 0.08, 90)
+			vape:ApplyThemeGradient(LabelCustom, 'TextColor3', 0.12, CustomText.Enabled, 0)
 
-			local isCustom = ColorMode.Value == 'Custom color' and Color3.fromHSV(ColorSlider.Hue, ColorSlider.Sat, ColorSlider.Value) or nil
 			for index, label in Labels do
-				label.Text.TextColor3 = isCustom or ((vape.GUIColor.Rainbow and not vape:IsGradientThemeActive()) and Color3.fromHSV(vape:Color((hue - ((Gradient.Enabled and index + 2 or index) * 0.025)) % 1)) or LogoGradient.Color.Keypoints[2].Value)
+				local offset = ((index - 1) * 0.035) % 1
+				vape:ApplyThemeGradient(label.Text, 'TextColor3', offset, true, 0)
 
 				if label.Color then
-					label.Color.BackgroundColor3 = label.Text.TextColor3
+					vape:ApplyThemeGradient(label.Color, 'BackgroundColor3', offset, true, 0)
 				end
 
 				if BackgroundTint.Enabled and label.Background then
-					label.Background.BackgroundColor3 = color.Dark(label.Text.TextColor3, 0.75)
+					label.Background.BackgroundColor3 = color.Dark(vape:GetThemeColor(offset), 0.75)
 				end
 			end
 		end
@@ -2580,9 +2529,6 @@ function vape:LoadGUI()
 			Value = 0.5,
 			Object = {Visible = {}}
 		}
-		local BorderColor
-		local BKGColor
-		local CustomColor
 		local DisplayName
 
 		TargetInfoOverlay = vape:CreateOverlay({
@@ -2713,49 +2659,26 @@ function vape:LoadGUI()
 			end,
 			Darker = true
 		})
-		CustomColor = TargetInfoOverlay:CreateToggle({
-			Name = 'Custom Color',
-			Function = function(callback)
-				BKGColor.Object.Visible = callback
-				if callback then
-					Holder.BackgroundColor3 = Color3.fromHSV(BKGColor.Hue, BKGColor.Sat, BKGColor.Value)
-					Headshot.BackgroundColor3 = Color3.fromHSV(BKGColor.Hue, BKGColor.Sat, math.max(BKGColor.Value - 0.1, 0.075))
-					HealthBKG.BackgroundColor3 = Headshot.BackgroundColor3
-				else
-					Holder.BackgroundColor3 = color.Dark(uipallet.Main, 0.1)
-					Headshot.BackgroundColor3 = uipallet.Main
-					HealthBKG.BackgroundColor3 = uipallet.Main
-				end
-			end
-		})
-		BKGColor = TargetInfoOverlay:CreateColorSlider({
-			Name = 'Color',
-			Function = function(hue, sat, val)
-				if CustomColor.Enabled then
-					Holder.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
-					Headshot.BackgroundColor3 = Color3.fromHSV(hue, sat, math.max(val - 0.1, 0))
-					HealthBKG.BackgroundColor3 = Headshot.BackgroundColor3
-				end
-			end,
-			Darker = true,
-			Visible = false
-		})
+		-- Target HUD surfaces inherit the active animated theme.
+
 		TargetInfoOverlay:CreateToggle({
 			Name = 'Border',
 			Function = function(callback)
 				Stroke.Enabled = callback
-				BorderColor.Object.Visible = callback
+				if callback then
+					vape:RegisterThemeSolid(Stroke, 'Color', 0.16)
+				else
+					vape:UnregisterThemeSolid(Stroke)
+				end
 			end
 		})
-		BorderColor = TargetInfoOverlay:CreateColorSlider({
-			Name = 'Border Color',
-			Function = function(hue, sat, val, opacity)
-				Stroke.Color = Color3.fromHSV(hue, sat, val)
-				Stroke.Transparency = 1 - opacity
-			end,
-			Darker = true,
-			Visible = false
-		})
+
+		-- The card itself uses the theme continuously; health keeps its semantic
+		-- red/green coloring so it remains readable at a glance.
+		vape:ApplyThemeGradient(Holder, 'BackgroundColor3', 0.02, true, 0)
+		vape:RegisterThemeSolid(Headshot, 'BackgroundColor3', 0.10)
+		vape:ApplyThemeGradient(HealthBKG, 'BackgroundColor3', 0.10, true, 0)
+
 
 		function targetinfo:Update()
 			local entitylib = vape.Libraries
@@ -2838,24 +2761,40 @@ function vape:LoadGUI()
 	end))
 
 	vape:Clean(task.spawn(function()
+		local gradientAccumulator = 0
 		repeat
-			local delta = task.wait(1 / 30)
+			local delta = runService.RenderStepped:Wait()
 			if vape:IsGradientThemeActive() then
 				local reduced = vape.ReducedMotion and vape.ReducedMotion.Enabled
 				if not reduced then
-					vape.ThemePhase = ((vape.ThemePhase or 0) + (delta * 0.18 * (vape.ThemeSpeed and vape.ThemeSpeed.Value or 1))) % 1
+					-- One full palette pass takes ~13 seconds at 1x. Slow enough to look
+					-- premium, while the slider can still speed it up for louder themes.
+					vape.ThemePhase = ((vape.ThemePhase or 0) + (delta * 0.075 * (vape.ThemeSpeed and vape.ThemeSpeed.Value or 1))) % 1
+				end
+
+				local overlayActive = false
+				if vape.Overlays and vape.Overlays.Options then
+					for _, overlay in vape.Overlays.Options do
+						if overlay.Object and overlay.Object.Visible then
+							overlayActive = true
+							break
+						end
+					end
 				end
 
 				local visualActive = clickgui.Visible
 					or (vape.Legit and vape.Legit.Window and vape.Legit.Window.Visible)
 					or (TextGUI and TextGUI.Button and TextGUI.Button.Enabled)
+					or overlayActive
 					or next(vape.HUDAccentObjects) ~= nil
 
-				if visualActive then
+				gradientAccumulator += delta
+				if visualActive and gradientAccumulator >= (1 / 60) then
+					gradientAccumulator %= (1 / 60)
 					vape:UpdateThemeGradients()
-					vape:UpdateGUI()
 				end
 			elseif next(uipallet.ThemeObjects) ~= nil then
+				gradientAccumulator = 0
 				vape:ClearThemeGradients()
 			end
 		until false
@@ -5317,12 +5256,13 @@ components = {
 		statusstroke.Parent = statuspill
 		local statusdot = Instance.new('Frame')
 		statusdot.AnchorPoint = Vector2.new(0.5, 0.5)
-		statusdot.BackgroundColor3 = Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value)
+		statusdot.BackgroundColor3 = vape:GetThemeColor(0)
 		statusdot.BorderSizePixel = 0
 		statusdot.Position = UDim2.fromOffset(9, 9)
 		statusdot.Size = UDim2.fromOffset(4, 4)
 		statusdot.Parent = statuspill
 		addCorner(statusdot, UDim.new(1, 0))
+		vape:ApplyThemeGradient(statusdot, 'BackgroundColor3', 0.04, true, 0)
 		local statusscale = Instance.new('UIScale')
 		statusscale.Parent = statusdot
 		local statustext = Instance.new('TextLabel')
@@ -5580,13 +5520,17 @@ components = {
 					Position = UDim2.new(1, self.Enabled and -14 or -20, 0, 16)
 				})
 
-				local activeColor = Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value)
-				tween:Tween(button, uiMotionFast, {
-					TextColor3 = self.Enabled and activeColor or uipallet.Text,
-					BackgroundColor3 = color.Light(uipallet.Main, 0.02)
-				})
-				if icon then
-					tween:Tween(icon, uiMotionFast, {ImageColor3 = self.Enabled and activeColor or uipallet.Text})
+				tween:Tween(button, uiMotionFast, {BackgroundColor3 = color.Light(uipallet.Main, 0.02)})
+				if self.Enabled then
+					vape:RegisterThemeSolid(button, 'TextColor3', 0.02)
+					if icon then vape:RegisterThemeSolid(icon, 'ImageColor3', 0.08) end
+				else
+					vape:UnregisterThemeSolid(button)
+					button.TextColor3 = uipallet.Text
+					if icon then
+						vape:UnregisterThemeSolid(icon)
+						icon.ImageColor3 = uipallet.Text
+					end
 				end
 
 				if self.Enabled then
@@ -6167,12 +6111,16 @@ components = {
 		end
 
 		function component:Toggle()
-			local isRainbow = not vape:IsGradientThemeActive() and vape.GUIColor.Rainbow and vape.RainbowMode.Value ~= 'Retro'
 			self.Enabled = not self.Enabled
-
-			tween:Tween(holder, uipallet.Tween, {
-				BackgroundColor3 = self.Enabled and (isRainbow and Color3.fromHSV(vape:Color((vape.GUIColor.Hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value)) or (isHover and color.Light(uipallet.Main, 0.37) or color.Light(uipallet.Main, 0.14))
-			})
+			if self.Enabled then
+				tween:Cancel(holder)
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, true, 0)
+			else
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, false, 0)
+				tween:Tween(holder, uipallet.Tween, {
+					BackgroundColor3 = isHover and color.Light(uipallet.Main, 0.37) or color.Light(uipallet.Main, 0.14)
+				})
+			end
 
 			tween:Tween(knob, uiMotionPop, {
 				Position = UDim2.fromOffset(self.Enabled and 12 or 2, 2)
@@ -6397,9 +6345,13 @@ components = {
 				BackgroundColor3 = self.Enabled and color.Light(uipallet.Main, 0.05) or color.Light(uipallet.Main, 0.02)
 			})
 
-			tween:Tween(holder, uiMotionFast, {
-				BackgroundColor3 = self.Enabled and Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value) or color.Light(uipallet.Main, 0.14)
-			})
+			if self.Enabled then
+				tween:Cancel(holder)
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', (self.Index or 0) * 0.075, true, 0)
+			else
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', (self.Index or 0) * 0.075, false, 0)
+				tween:Tween(holder, uiMotionFast, {BackgroundColor3 = color.Light(uipallet.Main, 0.14)})
+			end
 
 			tween:Tween(knob, uipallet.Tween, {
 				Position = UDim2.fromOffset(self.Enabled and 12 or 2, 2)
@@ -7216,9 +7168,14 @@ components = {
 		local function animatePin(pop)
 			pinRevision += 1
 			local revision = pinRevision
+			if component.Pinned then
+				vape:RegisterThemeSolid(pin, 'ImageColor3', 0.12)
+			else
+				vape:UnregisterThemeSolid(pin)
+			end
 			tween:Tween(pin, uiMotion, {
 				Rotation = component.Pinned and 0 or (pinHovered and -15 or -30),
-				ImageColor3 = component.Pinned and vape:GetGUIColorRGB() or (pinHovered and uipallet.Text or color.Dark(uipallet.Text, 0.43))
+				ImageColor3 = component.Pinned and vape:GetThemeColor(0.12) or (pinHovered and uipallet.Text or color.Dark(uipallet.Text, 0.43))
 			})
 			if pop and not (vape.ReducedMotion and vape.ReducedMotion.Enabled) then
 				tween:Tween(pinScale, uiMotionFast, {Scale = 1.24})
@@ -7859,6 +7816,7 @@ components = {
 						selection.Name = 'SearchSelection'
 						selection.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 						selection.Color = vape:GetGUIColorRGB()
+						vape:RegisterThemeSolid(selection, 'Color', 0.06)
 						selection.Thickness = 1
 						selection.Transparency = 0.18
 						selection.Enabled = false
@@ -7870,6 +7828,7 @@ components = {
 						star.Text = vape.Favorites[name] and '★' or '☆'
 						star.TextSize = 20
 						star.TextColor3 = vape.Favorites[name] and vape:GetGUIColorRGB() or uipallet.Text
+						if vape.Favorites[name] then vape:RegisterThemeSolid(star, 'TextColor3', 0.10) end
 						star.ZIndex = 22
 						star.Parent = button
 						addTooltip(star, 'Add or remove favorite')
@@ -8148,7 +8107,7 @@ components = {
 		holder.Size = UDim2.new(1, -20, 0, 2)
 		holder.Parent = slider
 		local fill = Instance.new('Frame')
-		fill.BackgroundColor3 = Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value)
+		fill.BackgroundColor3 = vape:GetThemeColor(0)
 		fill.BorderSizePixel = 0
 		fill.Size = UDim2.fromScale(math.clamp((component.Value - props.Min) / props.Max, 0.04, 0.96), 1)
 		fill.Parent = holder
@@ -8161,7 +8120,7 @@ components = {
 		knobholder.Parent = fill
 		local knob = Instance.new('Frame')
 		knob.AnchorPoint = Vector2.new(0.5, 0.5)
-		knob.BackgroundColor3 = Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value)
+		knob.BackgroundColor3 = vape:GetThemeColor(0)
 		knob.Position = UDim2.fromScale(0.5, 0.5)
 		knob.Size = UDim2.fromOffset(14, 14)
 		knob.Parent = knobholder
@@ -8529,7 +8488,12 @@ components = {
 			targetswindow.Visible = not targetswindow.Visible
 			tween:Cancel(holder)
 
-			holder.BackgroundColor3 = targetswindow.Visible and Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value) or color.Light(uipallet.Main, 0.37)
+			if targetswindow.Visible then
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, true, 0)
+			else
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, false, 0)
+				holder.BackgroundColor3 = color.Light(uipallet.Main, 0.37)
+			end
 		end)
 
 		targets.MouseEnter:Connect(function()
@@ -8596,10 +8560,12 @@ components = {
 
 		function component:Toggle()
 			self.Enabled = not self.Enabled
-
-			tween:Tween(holder, uipallet.Tween, {
-				BackgroundColor3 = self.Enabled and Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value) or uipallet.Main
-			})
+			if self.Enabled then
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', 0.08, true, 0)
+			else
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', 0.08, false, 0)
+				holder.BackgroundColor3 = uipallet.Main
+			end
 
 			tween:Tween(icon, uipallet.Tween, {
 				ImageColor3 = self.Enabled and Color3.new(1, 1, 1) or color.Light(uipallet.Main, 0.37)
@@ -8612,7 +8578,7 @@ components = {
 		targetsbutton.MouseEnter:Connect(function()
 			if not component.Enabled then
 				tween:Tween(holder, uipallet.Tween, {
-					BackgroundColor3 = Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value - 0.25)
+					BackgroundColor3 = color.Dark(vape:GetThemeColor(0.08), 0.25)
 				})
 
 				tween:Tween(icon, uipallet.Tween, {
@@ -9035,7 +9001,12 @@ components = {
 			textlistwindow.Visible = not textlistwindow.Visible
 
 			tween:Cancel(holder)
-			holder.BackgroundColor3 = textlistwindow.Visible and Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value) or color.Light(uipallet.Main, 0.37)
+			if textlistwindow.Visible then
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, true, 0)
+			else
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, false, 0)
+				holder.BackgroundColor3 = color.Light(uipallet.Main, 0.37)
+			end
 		end)
 
 		textlist.MouseEnter:Connect(function()
@@ -9141,12 +9112,16 @@ components = {
 		end
 
 		function component:Toggle()
-			local isRainbow = not vape:IsGradientThemeActive() and vape.GUIColor.Rainbow and vape.RainbowMode.Value ~= 'Retro'
 			self.Enabled = not self.Enabled
-
-			tween:Tween(holder, uipallet.Tween, {
-				BackgroundColor3 = self.Enabled and (isRainbow and Color3.fromHSV(vape:Color((vape.GUIColor.Hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value)) or (isHover and color.Light(uipallet.Main, 0.37) or color.Light(uipallet.Main, 0.14))
-			})
+			if self.Enabled then
+				tween:Cancel(holder)
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, true, 0)
+			else
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, false, 0)
+				tween:Tween(holder, uipallet.Tween, {
+					BackgroundColor3 = isHover and color.Light(uipallet.Main, 0.37) or color.Light(uipallet.Main, 0.14)
+				})
+			end
 
 			tween:Tween(knob, uipallet.Tween, {
 				Position = UDim2.fromOffset(self.Enabled and 12 or 2, 2)
@@ -9252,7 +9227,7 @@ components = {
 		holder.Size = UDim2.new(1, -20, 0, 2)
 		holder.Parent = twoslider
 		local fill = Instance.new('Frame')
-		fill.BackgroundColor3 = Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value)
+		fill.BackgroundColor3 = vape:GetThemeColor(0)
 		fill.BorderSizePixel = 0
 		fill.Position = UDim2.fromScale(math.clamp(component.ValueMin / props.Max, 0.04, 0.96), 0)
 		fill.Size = UDim2.fromScale(math.clamp(math.clamp(component.ValueMax / props.Max, 0, 1), 0.04, 0.96) - fill.Position.X.Scale, 1)
@@ -9268,7 +9243,7 @@ components = {
 		knobknob.AnchorPoint = Vector2.new(0.5, 0.5)
 		knobknob.BackgroundTransparency = 1
 		knobknob.Image = getvapeasset('newvape/assets/new/range.png')
-		knobknob.ImageColor3 = Color3.fromHSV(vape.GUIColor.Hue, vape.GUIColor.Sat, vape.GUIColor.Value)
+		knobknob.ImageColor3 = vape:GetThemeColor(0)
 		knobknob.Position = UDim2.fromScale(0.5, 0.5)
 		knobknob.Size = UDim2.fromOffset(9, 16)
 		knobknob.Parent = knob
