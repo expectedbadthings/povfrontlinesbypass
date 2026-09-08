@@ -1689,6 +1689,8 @@ function vape:LoadGUI()
 		local activeNotification
 		local queueWorker = false
 		local notificationEpoch = 0
+		local contentRevision = 0
+		local contentState = 'Idle'
 		local dismissEpoch = 0
 		local fpsAverage = 60
 		local statsAccumulator = 0
@@ -1770,21 +1772,30 @@ function vape:LoadGUI()
 			end
 		end
 
-		local function setGroup(group, visible)
-			if not group then return end
-			group.Visible = true
-			local info = currentMotion()
-			if info then
-				local motion = tween:Tween(group, info, {GroupTransparency = visible and 0 or 1}, 'island-content')
-				if not visible and motion then
-					motion.Completed:Once(function()
-						if group.Parent and group.GroupTransparency >= 0.98 then group.Visible = false end
-					end)
-				end
-			else
-				group.GroupTransparency = visible and 0 or 1
-				group.Visible = visible
+		-- Strict single-state content switcher. Idle and notification content are
+		-- never visible at the same time, so stale/cancelled tweens cannot leave
+		-- two text layouts stacked on top of each other.
+		local function setContentState(state)
+			contentRevision += 1
+			local revision = contentRevision
+			contentState = state
+
+			if idleGroup then tween:Cancel(idleGroup, 'island-content') end
+			if notificationGroup then tween:Cancel(notificationGroup, 'island-content') end
+
+			local incoming = state == 'Notification' and notificationGroup or idleGroup
+			local outgoing = state == 'Notification' and idleGroup or notificationGroup
+			if outgoing then
+				outgoing.Visible = false
+				outgoing.GroupTransparency = 1
 			end
+			if incoming then
+				incoming.Visible = true
+				incoming.GroupTransparency = 1
+				local motion = animate(incoming, {GroupTransparency = 0}, 'island-content')
+				if not motion and revision == contentRevision then incoming.GroupTransparency = 0 end
+			end
+			return revision
 		end
 
 		local function semanticColor(notificationType)
@@ -1825,10 +1836,10 @@ function vape:LoadGUI()
 		local function presentIdle()
 			activeNotification = nil
 			updateIdleText()
-			setGroup(notificationGroup, false)
-			setGroup(idleGroup, true)
+			setContentState('Idle')
 			resizeIsland(baseWidth and baseWidth.Value or 310, idleHeight and idleHeight.Value or 46)
 			if progressTrack then progressTrack.Visible = false end
+			if progressFill then tween:Cancel(progressFill) end
 			if queueLabel then queueLabel.Visible = false end
 			if cardStroke then vape:RegisterThemeSolid(cardStroke, 'Color', 0.1) end
 		end
@@ -1856,8 +1867,7 @@ function vape:LoadGUI()
 				vape:UnregisterThemeSolid(cardStroke)
 				cardStroke.Color = typeColor
 			end
-			setGroup(idleGroup, false)
-			setGroup(notificationGroup, true)
+			local stateRevision = setContentState('Notification')
 			resizeIsland(getTargetWidth(notification), notificationHeight and notificationHeight.Value or 72)
 			local duration = math.max(0.15, (notification.Duration or 3) * (durationScale and durationScale.Value or 1))
 			progressTrack.Visible = showProgress == nil or showProgress.Enabled
@@ -1867,9 +1877,10 @@ function vape:LoadGUI()
 			if progressTrack.Visible then
 				tween:Tween(progressFill, TweenInfo.new(duration, Enum.EasingStyle.Linear), {Size = UDim2.fromScale(0, 1)})
 			end
-			return duration
+			return duration, stateRevision
 		end
 
+		local startQueueWorker
 		local function queueNotification(notification)
 			local mode = queueMode and queueMode.Value or 'Queue'
 			local limit = queueLimit and math.max(1, math.floor(queueLimit.Value)) or 5
@@ -1890,21 +1901,46 @@ function vape:LoadGUI()
 				queueLabel.Visible = #queue > 0
 			end
 
+			startQueueWorker()
+		end
+
+		startQueueWorker = function()
 			if queueWorker then return end
+			if not DynamicIsland or not DynamicIsland.Button.Enabled or #queue == 0 then return end
 			queueWorker = true
 			task.spawn(function()
-				while DynamicIsland and DynamicIsland.Button.Enabled and #queue > 0 do
+				while DynamicIsland and DynamicIsland.Button.Enabled do
 					local item = table.remove(queue, 1)
+					if not item then break end
 					local epoch = notificationEpoch
 					local dismiss = dismissEpoch
-					local duration = presentNotification(item)
+					local duration, stateRevision = presentNotification(item)
 					local deadline = os.clock() + duration
-					repeat task.wait(0.035) until os.clock() >= deadline or epoch ~= notificationEpoch or dismiss ~= dismissEpoch or not DynamicIsland.Button.Enabled
+					repeat
+						task.wait(0.035)
+					until os.clock() >= deadline
+						or epoch ~= notificationEpoch
+						or dismiss ~= dismissEpoch
+						or stateRevision ~= contentRevision
+						or not DynamicIsland.Button.Enabled
 					if not DynamicIsland.Button.Enabled then break end
 				end
-				if not DynamicIsland.Button.Enabled then table.clear(queue) end
+
+				if not DynamicIsland or not DynamicIsland.Button.Enabled then
+					table.clear(queue)
+					queueWorker = false
+					return
+				end
+
 				queueWorker = false
-				presentIdle()
+				-- A notification can arrive between the final empty-queue check and
+				-- worker teardown. Restart immediately instead of stranding it until
+				-- some later notification happens to wake the queue back up.
+				if #queue > 0 then
+					task.defer(startQueueWorker)
+				else
+					presentIdle()
+				end
 			end)
 		end
 
@@ -1947,6 +1983,7 @@ function vape:LoadGUI()
 		card = Instance.new('ImageButton')
 		card.Name = 'VapeDynamicIsland'
 		card.AutoButtonColor = false
+		card.ClipsDescendants = true
 		card.BackgroundColor3 = Color3.fromRGB(20, 22, 29)
 		card.BorderSizePixel = 0
 		card.Image = getvapeasset('newvape/assets/new/notification.png')
@@ -2167,7 +2204,20 @@ function vape:LoadGUI()
 		patternSpeed = DynamicIsland:CreateSlider({Name = 'Pattern speed', Min = 0, Max = 60, Default = 18, Decimal = 1, Suffix = 'px/s', Darker = true, Function = function() end})
 		accentLine = DynamicIsland:CreateToggle({Name = 'Theme accent line', Default = true, Function = updateAccentVisibility})
 		showProgress = DynamicIsland:CreateToggle({Name = 'Notification progress', Default = true})
-		showNotificationIcon = DynamicIsland:CreateToggle({Name = 'Notification icons', Default = true})
+		showNotificationIcon = DynamicIsland:CreateToggle({Name = 'Notification icons', Default = true, Function = function()
+			if activeNotification then
+				local iconsVisible = showNotificationIcon.Enabled
+				if notiIconShadow then notiIconShadow.Visible = iconsVisible end
+				if notiTitle then
+					notiTitle.Position = UDim2.fromOffset(iconsVisible and 62 or 14, 10)
+					notiTitle.Size = UDim2.new(1, iconsVisible and -136 or -88, 0, 20)
+				end
+				if notiBody then
+					notiBody.Position = UDim2.fromOffset(iconsVisible and 62 or 14, 32)
+					notiBody.Size = UDim2.new(1, iconsVisible and -82 or -28, 0, 23)
+				end
+			end
+		end})
 		clickDismiss = DynamicIsland:CreateToggle({Name = 'Click to dismiss', Default = true})
 		showLogo = DynamicIsland:CreateToggle({Name = 'Vape logo', Default = true, Function = updateLogoVisibility})
 		showV4 = DynamicIsland:CreateToggle({Name = 'V4 badge', Default = true, Darker = true, Function = updateLogoVisibility})
