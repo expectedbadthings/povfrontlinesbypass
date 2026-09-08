@@ -408,7 +408,10 @@ uipallet = {
 		Wood = {{Color3.fromRGB(79, 109, 81), Color3.fromRGB(170, 139, 87), Color3.fromRGB(240, 235, 206)}, 5}
 	},
 	ThemeObjects = {},
-	ThemeSolidObjects = setmetatable({}, {__mode = 'k'})
+	ThemeSolidObjects = setmetatable({}, {__mode = 'k'}),
+	-- Enabled module rows use one shared screen-space theme packet instead of
+	-- owning individual UIGradients. Each row samples the same animated field.
+	ModuleThemeObjects = setmetatable({}, {__mode = 'k'})
 }
 
 local themecolors = {
@@ -613,6 +616,53 @@ function vape:UnregisterThemeSolid(object)
 	uipallet.ThemeSolidObjects[object] = nil
 end
 
+-- Shared module theme packet ---------------------------------------------------
+-- Roblox UIGradient is local to each GuiObject, so giving every module row its
+-- own gradient makes the same theme restart inside every 40px button. That reads
+-- like a bevel/3D shine. Modules instead sample one diagonal screen-space color
+-- field. Every enabled row is flat on its own, but all rows together form one
+-- continuous animated theme across the whole screen.
+function vape:GetModuleThemePacketColor(object)
+	local colors = self:GetThemeColors()
+	if not colors then return uipallet.MainColor end
+
+	local screenSize = scaledgui and scaledgui.AbsoluteSize or Vector2.new(1920, 1080)
+	local sizeX = math.max(screenSize.X, 1)
+	local sizeY = math.max(screenSize.Y, 1)
+	local position = object and object.AbsolutePosition or Vector2.zero
+	local objectSize = object and object.AbsoluteSize or Vector2.zero
+	local centerX = position.X + (objectSize.X * 0.5)
+	local centerY = position.Y + (objectSize.Y * 0.5)
+	local normalizedX = math.clamp(centerX / sizeX, 0, 1)
+	local normalizedY = math.clamp(centerY / sizeY, 0, 1)
+
+	-- One top-left -> bottom-right field. Keep the span below a full palette loop
+	-- so opposite corners do not wrap back to the exact same color.
+	local diagonal = ((normalizedX + normalizedY) * 0.5) * 0.72
+	return sampleThemeColor(colors, (self.ThemePhase or 0) + diagonal)
+end
+
+function vape:RegisterModuleThemeObject(object)
+	if typeof(object) ~= 'Instance' or not object:IsA('GuiObject') then return object end
+	uipallet.ModuleThemeObjects[object] = true
+	object.BackgroundColor3 = self:GetModuleThemePacketColor(object)
+	return object
+end
+
+function vape:UnregisterModuleThemeObject(object)
+	uipallet.ModuleThemeObjects[object] = nil
+end
+
+function vape:UpdateModuleThemePacket()
+	for object in uipallet.ModuleThemeObjects do
+		if not object or not object.Parent then
+			uipallet.ModuleThemeObjects[object] = nil
+		else
+			object.BackgroundColor3 = self:GetModuleThemePacketColor(object)
+		end
+	end
+end
+
 function vape:ClearThemeGradients()
 	for gradient in uipallet.ThemeObjects do
 		if gradient and gradient.Parent then
@@ -653,6 +703,8 @@ function vape:UpdateThemeGradients()
 			end)
 		end
 	end
+
+	self:UpdateModuleThemePacket()
 end
 -- Animated named gradient themes end --------------------------------------------
 
@@ -6846,11 +6898,8 @@ components = {
 		themeBackground.Name = 'ThemeBackground'
 		themeBackground.Size = UDim2.fromScale(1, 1)
 		themeBackground.Parent = button
-		local gradient = Instance.new('UIGradient')
-		gradient.Enabled = false
-		-- Diagonal corner-to-corner module theme instead of the old vertical sweep.
-		gradient.Rotation = 45
-		gradient.Parent = themeBackground
+		-- No per-module UIGradient here. Enabled rows sample the one shared
+		-- screen-space ModuleThemePacket, which keeps the row visually flat.
 		local moduleTitle = Instance.new('TextLabel')
 		moduleTitle.BackgroundTransparency = 1
 		moduleTitle.FontFace = uipallet.Font
@@ -6969,16 +7018,15 @@ components = {
 			local idleText = active and uipallet.Text or color.Dark(uipallet.Text, 0.16)
 
 			if enabled then
-				-- Theme only the dedicated background so the text can remain readable.
-				themeBackground.BackgroundColor3 = Color3.new(1, 1, 1)
-				vape:RegisterThemeGradient(gradient, component.Index * 0.045, 45)
+				-- Flat row color sampled from the single screen-wide animated theme packet.
+				vape:RegisterModuleThemeObject(themeBackground)
 				moduleTitle.TextColor3 = Color3.new(1, 1, 1)
 				moduleTitle.TextStrokeColor3 = Color3.new(0, 0, 0)
 				moduleTitle.TextStrokeTransparency = 0.48
 				component.Bind:SetColor(moduleTitle.TextColor3)
 				dots.ImageColor3 = moduleTitle.TextColor3
 			else
-				vape:UnregisterThemeGradient(gradient)
+				vape:UnregisterModuleThemeObject(themeBackground)
 				moduleTitle.TextStrokeTransparency = 1
 				if animate then
 					tween:Tween(themeBackground, uiMotionFast, {BackgroundColor3 = idleBackground})
