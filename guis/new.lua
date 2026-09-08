@@ -67,13 +67,17 @@ local function loadJson(path)
 	return success and type(data) == 'table' and data or nil
 end
 
--- Search terms are literal; #terms match category names.
-local function matchesModuleSearch(name, category, query)
-	name, category = name:lower(), tostring(category or ''):lower()
+-- Search terms are literal; #terms match category names and @terms are state filters.
+-- Plain terms search both module names and their tooltips so you can search by purpose too.
+local function matchesModuleSearch(name, category, description, query)
+	name = tostring(name or ''):lower()
+	category = tostring(category or ''):lower()
+	description = tostring(description or ''):lower()
+	local searchable = name..' '..description
 	for term in query:lower():gmatch('%S+') do
 		if term:sub(1, 1) == '#' then
 			if #term > 1 and not category:find(term:sub(2), 1, true) then return false end
-		elseif not name:find(term, 1, true) then
+		elseif term:sub(1, 1) ~= '@' and not searchable:find(term, 1, true) then
 			return false
 		end
 	end
@@ -84,6 +88,25 @@ local favoriteData = loadJson('newvape/profiles/favorites.json') or {}
 vape.Favorites = {}
 for name, selected in pairs(favoriteData) do
 	if type(name) == 'string' and selected == true then vape.Favorites[name] = true end
+end
+
+-- Keep the Recent search filter useful between sessions.
+local recentData = loadJson('newvape/profiles/recent.json') or {}
+for _, name in ipairs(recentData) do
+	if type(name) == 'string' and not table.find(vape.RecentModules, name) then
+		table.insert(vape.RecentModules, name)
+		if #vape.RecentModules >= 16 then break end
+	end
+end
+
+local function matchesModuleState(module, name, query)
+	for term in query:lower():gmatch('%S+') do
+		if (term == '@on' or term == '@enabled') and not module.Enabled then return false end
+		if (term == '@off' or term == '@disabled') and module.Enabled then return false end
+		if (term == '@fav' or term == '@favorite' or term == '@favorites') and not vape.Favorites[name] then return false end
+		if term == '@recent' and not table.find(vape.RecentModules, name) then return false end
+	end
+	return true
 end
 function vape:ToggleFavorite(name)
 	local previous = self.Favorites[name]
@@ -104,6 +127,9 @@ function vape:RecordRecent(name)
 	if current then table.remove(self.RecentModules, current) end
 	table.insert(self.RecentModules, 1, name)
 	while #self.RecentModules > 16 do table.remove(self.RecentModules) end
+	pcall(function()
+		writefile('newvape/profiles/recent.json', httpService:JSONEncode(self.RecentModules))
+	end)
 	if self.SearchBar and self.SearchBar.Filter == 'Recent' then self.SearchBar:Refresh() end
 end
 local color = {}
@@ -317,12 +343,78 @@ function tween:CancelAll()
 	end
 end
 uipallet = {
-	Main = Color3.fromRGB(26, 25, 26),
-	Text = Color3.fromRGB(200, 200, 200),
+	Main = Color3.fromRGB(23, 26, 33),
+	MainColor = Color3.fromRGB(12, 163, 232),
+	SecondaryColor = Color3.fromRGB(12, 232, 199),
+	Text = Color3.new(1, 1, 1),
 	Font = Font.fromEnum(Enum.Font.Arial),
 	FontSemiBold = Font.fromEnum(Enum.Font.Arial, Enum.FontWeight.SemiBold),
-	Tween = TweenInfo.new(0.16, Enum.EasingStyle.Linear)
+	Tween = TweenInfo.new(0.16, Enum.EasingStyle.Linear),
+	Themes = {
+		Aubergine = {{Color3.fromRGB(170, 7, 107), Color3.fromRGB(97, 4, 95)}, 1, 8},
+		Aqua = {{Color3.fromRGB(185, 250, 255), Color3.fromRGB(79, 199, 200)}, 6},
+		Banana = {{Color3.fromRGB(253, 236, 177), Color3.fromRGB(255, 255, 255)}, 3},
+		Blend = {{Color3.fromRGB(71, 148, 253), Color3.fromRGB(71, 253, 160)}, 4, 6},
+		Blossom = {{Color3.fromRGB(226, 208, 249), Color3.fromRGB(49, 119, 115)}, 9, 10},
+		Bubblegum = {{Color3.fromRGB(243, 145, 216), Color3.fromRGB(152, 165, 243)}, 8, 9},
+		['Candy Cane'] = {{Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 255, 255)}, 1},
+		Cherry = {{Color3.fromRGB(187, 55, 125), Color3.fromRGB(251, 211, 233)}, 1, 8, 9},
+		Christmas = {{Color3.fromRGB(255, 64, 64), Color3.fromRGB(255, 255, 255), Color3.fromRGB(64, 255, 64)}, 1, 4},
+		Coral = {{Color3.fromRGB(244, 168, 150), Color3.fromRGB(52, 133, 151)}, 2, 7, 9},
+		Creida = {{Color3.fromRGB(156, 164, 224), Color3.fromRGB(54, 57, 78)}, 10},
+		['Creida Two'] = {{Color3.fromRGB(154, 202, 235), Color3.fromRGB(88, 130, 161)}, 10},
+		['Digital Horizon'] = {{Color3.fromRGB(95, 195, 228), Color3.fromRGB(229, 93, 135)}, 1, 6, 9},
+		Express = {{Color3.fromRGB(173, 83, 137), Color3.fromRGB(60, 16, 83)}, 8, 9},
+		Gothic = {{Color3.fromRGB(31, 30, 30), Color3.fromRGB(196, 190, 190)}, 10},
+		Halogen = {{Color3.fromRGB(255, 65, 108), Color3.fromRGB(255, 75, 43)}, 1, 2},
+		Hyper = {{Color3.fromRGB(236, 110, 173), Color3.fromRGB(52, 148, 230)}, 6, 7, 9},
+		Legacy = {{Color3.fromRGB(112, 206, 255), Color3.fromRGB(112, 206, 255)}, 6, 7},
+		['Lime Water'] = {{Color3.fromRGB(18, 255, 247), Color3.fromRGB(179, 255, 171)}, 4, 6},
+		Lush = {{Color3.fromRGB(168, 224, 99), Color3.fromRGB(86, 171, 47)}, 4, 5},
+		Magic = {{Color3.fromRGB(74, 0, 224), Color3.fromRGB(142, 45, 226)}, 7, 8},
+		May = {{Color3.fromRGB(170, 7, 107), Color3.fromRGB(238, 79, 238)}, 8, 9},
+		['Orange Juice'] = {{Color3.fromRGB(252, 74, 26), Color3.fromRGB(247, 183, 51)}, 2, 3},
+		Pastel = {{Color3.fromRGB(243, 155, 178), Color3.fromRGB(207, 196, 243)}, 9},
+		Peony = {{Color3.fromRGB(226, 208, 249), Color3.fromRGB(207, 171, 255)}, 9, 10},
+		Pumpkin = {{Color3.fromRGB(241, 166, 98), Color3.fromRGB(255, 216, 169), Color3.fromRGB(227, 139, 42)}, 2},
+		Purple = {{Color3.fromRGB(82, 67, 145), Color3.fromRGB(117, 95, 207)}, 8},
+		Rainbow = {{Color3.new(1, 1, 1), Color3.new(1, 1, 1)}, 10},
+		Rue = {{Color3.fromRGB(234, 118, 176), Color3.fromRGB(31, 30, 30)}, 9},
+		Satin = {{Color3.fromRGB(215, 60, 67), Color3.fromRGB(140, 23, 39)}, 1},
+		Shadow = {{Color3.fromRGB(97, 131, 255), Color3.fromRGB(206, 212, 255)}, 6},
+		['Snowy Sky'] = {{Color3.fromRGB(1, 171, 179), Color3.fromRGB(234, 234, 234), Color3.fromRGB(18, 232, 232)}, 6, 10},
+		['Steel Fade'] = {{Color3.fromRGB(66, 134, 244), Color3.fromRGB(55, 59, 68)}, 7, 10},
+		Sundae = {{Color3.fromRGB(206, 74, 126), Color3.fromRGB(122, 44, 77)}, 1, 8, 9},
+		Sunkist = {{Color3.fromRGB(242, 201, 76), Color3.fromRGB(242, 153, 74)}, 2, 3},
+		Water = {{Color3.fromRGB(12, 232, 199), Color3.fromRGB(12, 163, 232)}, 6, 7},
+		Winter = {{Color3.new(1, 1, 1), Color3.new(1, 1, 1)}, 10},
+		Wood = {{Color3.fromRGB(79, 109, 81), Color3.fromRGB(170, 139, 87), Color3.fromRGB(240, 235, 206)}, 5}
+	},
+	ThemeObjects = {}
 }
+
+local themecolors = {
+	Color3.fromRGB(248, 57, 57),
+	Color3.fromRGB(250, 128, 55),
+	Color3.fromRGB(252, 255, 53),
+	Color3.fromRGB(128, 255, 50),
+	Color3.fromRGB(50, 128, 50),
+	Color3.fromRGB(50, 200, 255),
+	Color3.fromRGB(50, 105, 200),
+	Color3.fromRGB(128, 52, 255),
+	Color3.fromRGB(255, 128, 255),
+	Color3.fromRGB(100, 100, 110)
+}
+
+local themeNames = {'None'}
+for themeName in uipallet.Themes do
+	table.insert(themeNames, themeName)
+end
+table.sort(themeNames, function(a, b)
+	if a == 'None' then return b ~= 'None' end
+	if b == 'None' then return false end
+	return a:lower() < b:lower()
+end)
 
 do
 	local data = isfile('newvape/profiles/color.txt') and loadJson('newvape/profiles/color.txt')
@@ -339,6 +431,171 @@ do
 	fontsize.Font = uipallet.Font
 end
 
+-- Animated named gradient themes ------------------------------------------------
+vape.ThemePhase = 0
+
+local function getThemePalette(name)
+	local theme = uipallet.Themes[name]
+	if not theme then return nil end
+
+	-- The supplied Rainbow preset uses white placeholders. Expand it using the
+	-- supplied theme color wheel so Rainbow is actually multicolor.
+	if name == 'Rainbow' then
+		local rainbow = {}
+		for index = 1, 9 do
+			table.insert(rainbow, themecolors[index])
+		end
+		return rainbow
+	end
+
+	return theme[1]
+end
+
+local function sampleThemeColor(colors, alpha)
+	if not colors or #colors == 0 then
+		return Color3.fromRGB(12, 163, 232)
+	end
+	if #colors == 1 then
+		return colors[1]
+	end
+
+	alpha = alpha % 1
+	local scaled = alpha * #colors
+	local base = math.floor(scaled)
+	local first = (base % #colors) + 1
+	local second = (first % #colors) + 1
+	return colors[first]:Lerp(colors[second], scaled - base)
+end
+
+function vape:IsGradientThemeActive()
+	return self.GradientTheme
+		and self.GradientTheme.Value
+		and uipallet.Themes[self.GradientTheme.Value] ~= nil
+end
+
+function vape:GetThemeColors(name)
+	return getThemePalette(name or (self.GradientTheme and self.GradientTheme.Value))
+end
+
+function vape:GetThemeColor(offset)
+	local colors = self:GetThemeColors()
+	if not colors then
+		return Color3.fromHSV(self.GUIColor.Hue, self.GUIColor.Sat, self.GUIColor.Value)
+	end
+	return sampleThemeColor(colors, (self.ThemePhase or 0) + (offset or 0))
+end
+
+function vape:GetThemeSequence(offset)
+	local colors = self:GetThemeColors()
+	if not colors then
+		return ColorSequence.new(Color3.fromHSV(self.GUIColor.Hue, self.GUIColor.Sat, self.GUIColor.Value))
+	end
+
+	local steps = math.clamp(#colors, 1, 18)
+	local keypoints = {}
+	for index = 0, steps do
+		local position = index / steps
+		table.insert(keypoints, ColorSequenceKeypoint.new(
+			position,
+			sampleThemeColor(colors, position + (offset or 0))
+		))
+	end
+	return ColorSequence.new(keypoints)
+end
+
+function vape:RegisterThemeGradient(gradient, offset, rotation)
+	if typeof(gradient) ~= 'Instance' or not gradient:IsA('UIGradient') then return nil end
+	if not self:IsGradientThemeActive() then
+		gradient.Enabled = false
+		uipallet.ThemeObjects[gradient] = nil
+		return gradient
+	end
+
+	local metadata = uipallet.ThemeObjects[gradient]
+	if type(metadata) ~= 'table' then
+		metadata = {}
+		uipallet.ThemeObjects[gradient] = metadata
+	end
+
+	local newOffset = offset or metadata.Offset or 0
+	local newRotation = rotation or metadata.Rotation or gradient.Rotation or 0
+	local themeName = self.GradientTheme.Value
+	local refresh = metadata.Theme ~= themeName or metadata.Offset ~= newOffset
+
+	metadata.Offset = newOffset
+	metadata.Rotation = newRotation
+	metadata.Theme = themeName
+
+	gradient.Enabled = true
+	if refresh then
+		gradient.Color = self:GetThemeSequence(newOffset)
+	end
+	return gradient
+end
+
+function vape:UnregisterThemeGradient(gradient)
+	if typeof(gradient) == 'Instance' and gradient:IsA('UIGradient') then
+		gradient.Enabled = false
+		gradient.Offset = Vector2.zero
+	end
+	uipallet.ThemeObjects[gradient] = nil
+end
+
+function vape:ApplyThemeGradient(object, property, offset, enabled, rotation)
+	if typeof(object) ~= 'Instance' or not object:IsA('GuiObject') then return false end
+	local gradient = object:FindFirstChild('AnimatedThemeGradient')
+	local active = enabled ~= false and self:IsGradientThemeActive()
+
+	if not active then
+		if gradient then self:UnregisterThemeGradient(gradient) end
+		return false
+	end
+
+	if not gradient then
+		gradient = Instance.new('UIGradient')
+		gradient.Name = 'AnimatedThemeGradient'
+		gradient.Parent = object
+	end
+
+	property = property or 'BackgroundColor3'
+	pcall(function()
+		object[property] = Color3.new(1, 1, 1)
+	end)
+	self:RegisterThemeGradient(gradient, offset or 0, rotation or 0)
+	return true
+end
+
+function vape:ClearThemeGradients()
+	for gradient in uipallet.ThemeObjects do
+		if gradient and gradient.Parent then
+			gradient.Enabled = false
+			gradient.Offset = Vector2.zero
+		end
+	end
+	table.clear(uipallet.ThemeObjects)
+end
+
+function vape:UpdateThemeGradients()
+	if not self:IsGradientThemeActive() then return end
+	local phase = self.ThemePhase or 0
+	local themeName = self.GradientTheme.Value
+	for gradient, metadata in uipallet.ThemeObjects do
+		if not gradient or not gradient.Parent then
+			uipallet.ThemeObjects[gradient] = nil
+		else
+			local offset = type(metadata) == 'table' and (metadata.Offset or 0) or 0
+			local baseRotation = type(metadata) == 'table' and (metadata.Rotation or 0) or 0
+			if type(metadata) == 'table' and metadata.Theme ~= themeName then
+				metadata.Theme = themeName
+				gradient.Color = self:GetThemeSequence(offset)
+			end
+			gradient.Rotation = (baseRotation + (phase * 360)) % 360
+			gradient.Offset = Vector2.new(math.sin((phase + offset) * math.pi * 2) * 0.16, 0)
+		end
+	end
+end
+-- Animated named gradient themes end --------------------------------------------
+
 vape.Libraries = {
 	color = color,
 	getfontbounds = getfontbounds,
@@ -354,6 +611,10 @@ vape.Libraries = {
 vape.HUDAccentObjects = setmetatable({}, {__mode = 'k'})
 
 function vape:GetGUIColorRGB()
+	if self:IsGradientThemeActive() then
+		return self:GetThemeColor(0)
+	end
+
 	local guiColor = self.GUIColor
 	if type(guiColor) == 'table'
 		and type(guiColor.Hue) == 'number'
@@ -521,6 +782,30 @@ local function addCloseButton(parent, mini, offset)
 	return close
 end
 
+local function clampWindowToViewport(object)
+	if not object or not object.Parent or not gui or not scale then return end
+	pcall(function()
+		local currentScale = math.max(scale.Scale, 0.01)
+		local viewport = gui.AbsoluteSize / currentScale
+		local objectSize = object.AbsoluteSize / currentScale
+		local padding = 8
+		local maxX = math.max(padding, viewport.X - math.min(objectSize.X, math.max(1, viewport.X - (padding * 2))) - padding)
+		local maxY = math.max(padding, viewport.Y - math.min(objectSize.Y, math.max(1, viewport.Y - (padding * 2))) - padding)
+		object.Position = UDim2.fromOffset(
+			math.clamp(object.Position.X.Offset, padding, maxX),
+			math.clamp(object.Position.Y.Offset, padding, maxY)
+		)
+	end)
+end
+
+local function clampAllCategoryWindows()
+	for _, category in vape.Categories do
+		if category.Object and category.Type ~= 'Overlay' then
+			clampWindowToViewport(category.Object)
+		end
+	end
+end
+
 local function addDragHandler(gui, window)
 	gui.InputBegan:Connect(function(input)
 		if window and not window.Visible then return end
@@ -551,6 +836,7 @@ local function addDragHandler(gui, window)
 				if input.UserInputState == Enum.UserInputState.End then
 					moveConnection:Disconnect()
 					releaseConnection:Disconnect()
+					clampWindowToViewport(gui)
 				end
 			end)
 		end
@@ -1096,10 +1382,29 @@ function vape:LoadGUI()
 	shortcutHint.TextSize = 12
 	shortcutHint.TextTruncate = Enum.TextTruncate.AtEnd
 	shortcutHint.Parent = clickgui
+	local sessionHintRevision = 0
 	function vape:UpdateSessionHint()
 		local shortcuts = inputService.TouchEnabled and 'Search / Save in Settings'
 			or '/ or Ctrl+F Search / Ctrl+S Save / Esc Back'
 		shortcutHint.Text = 'Profile: '..self.Profile..'   |   '..(self.LastSaved and ('Saved '..self.LastSaved) or 'Autosave ready')..'   |   '..shortcuts
+	end
+	function vape:ShowSessionHint()
+		self:UpdateSessionHint()
+		sessionHintRevision += 1
+		local revision = sessionHintRevision
+		shortcutHint.Visible = true
+		shortcutHint.TextTransparency = 0.35
+		task.delay(4, function()
+			if revision ~= sessionHintRevision or not shortcutHint.Parent then return end
+			if self.ReducedMotion and self.ReducedMotion.Enabled then
+				shortcutHint.Visible = false
+				return
+			end
+			tween:Tween(shortcutHint, uiMotion, {TextTransparency = 1})
+			task.delay(0.2, function()
+				if revision == sessionHintRevision and shortcutHint.Parent then shortcutHint.Visible = false end
+			end)
+		end)
 	end
 	vape:UpdateSessionHint()
 	local modal = Instance.new('TextButton')
@@ -1463,10 +1768,23 @@ function vape:LoadGUI()
 	]]
 
 	local guipane = vape.Categories.Main.Settings:CreateSettingsPane({Name = 'GUI'})
-	vape.EffectUpdateRate = guipane:CreateSlider({
-		Name = 'FRONTLINES effect FPS', Min = 20, Max = 60, Default = 30,
-		Tooltip = 'Update rate for FRONTLINES cosmetic effects. Lower values reduce visual processing cost.'
-	})
+	local advancedGUIVisible = false
+	local advancedGUIOptions = {}
+
+	local function addAdvanced(option, visibleCheck)
+		advancedGUIOptions[#advancedGUIOptions + 1] = {Option = option, VisibleCheck = visibleCheck}
+		if option and option.Object then option.Object.Visible = false end
+		return option
+	end
+
+	local function refreshAdvancedGUI()
+		for _, entry in ipairs(advancedGUIOptions) do
+			local visible = advancedGUIVisible and (not entry.VisibleCheck or entry.VisibleCheck())
+			if entry.Option and entry.Option.Object then entry.Option.Object.Visible = visible end
+		end
+	end
+
+	-- Core appearance controls stay visible. Everything niche lives behind one button.
 	vape.ReducedMotion = guipane:CreateToggle({
 		Name = 'Reduced motion',
 		Tooltip = 'Stops decorative background motion and loading-screen animations. Applies to the next launch too.'
@@ -1485,13 +1803,6 @@ function vape:LoadGUI()
 		Default = true,
 		Tooltip = 'Blur the background of the GUI'
 	})
-
-	guipane:CreateToggle({
-		Name = 'GUI bind indicator',
-		Default = true,
-		Tooltip = "Displays a message indicating your GUI upon injecting.\nI.E. 'Press RSHIFT to open GUI'"
-	})
-
 	guipane:CreateToggle({
 		Name = 'Show tooltips',
 		Function = function(enabled)
@@ -1499,25 +1810,61 @@ function vape:LoadGUI()
 			toolblur.Enabled = enabled
 		end,
 		Default = true,
-		Tooltip = 'Toggles visibility of these'
+		Tooltip = 'Show module/setting help when hovering controls'
 	})
 
-	vape.SessionHint = guipane:CreateToggle({
-		Name = 'Show session hint',
-		Function = function(enabled)
-			shortcutHint.Visible = enabled
+	vape.GradientTheme = guipane:CreateDropdown({
+		Name = 'Animated theme',
+		List = themeNames,
+		Function = function(value)
+			local palette = vape:GetThemeColors(value)
+			if palette then
+				uipallet.MainColor = palette[1] or Color3.fromRGB(12, 163, 232)
+				uipallet.SecondaryColor = palette[2] or palette[1] or Color3.fromRGB(12, 232, 199)
+				vape.ThemePhase = 0
+			else
+				uipallet.MainColor = Color3.fromRGB(12, 163, 232)
+				uipallet.SecondaryColor = Color3.fromRGB(12, 232, 199)
+				vape:ClearThemeGradients()
+			end
+			refreshAdvancedGUI()
+			vape:UpdateGUI()
 		end,
-		Default = true,
-		Tooltip = 'Shows the small profile/save/shortcut strip along the bottom of the menu.'
+		Tooltip = 'Animated spatial gradients for module accents, toggles, sliders, HUD accents and the menu background. None returns to the normal GUI color/rainbow controls.'
 	})
 
-	vape.SingleModuleSettings = guipane:CreateToggle({
-		Name = 'Single settings panel',
+	local ScaleSlider = {Object = {}, Value = 1}
+	vape.Scale = guipane:CreateToggle({
+		Name = 'Auto rescale',
 		Default = true,
-		Tooltip = 'Opening one module settings panel automatically collapses the previous panel in that category.'
+		Function = function(callback)
+			if callback then
+				--scale.Scale = math.max(gui.AbsoluteSize.X / 1920, 0.6)
+			else
+				scale.Scale = ScaleSlider.Value
+			end
+			refreshAdvancedGUI()
+			task.defer(clampAllCategoryWindows)
+		end,
+		Tooltip = 'Automatically rescales the gui using the screens resolution'
 	})
 
-	guipane:CreateToggle({
+	-- These are now clean defaults instead of dedicated GUI rows.
+	vape.SingleModuleSettings = {Enabled = true}
+	vape.SessionHint = {Enabled = false}
+
+	vape.EffectUpdateRate = addAdvanced(guipane:CreateSlider({
+		Name = 'FRONTLINES effect FPS', Min = 20, Max = 60, Default = 30,
+		Tooltip = 'Update rate for FRONTLINES cosmetic effects. Lower values reduce visual processing cost.'
+	}))
+
+	addAdvanced(guipane:CreateToggle({
+		Name = 'GUI bind indicator',
+		Default = true,
+		Tooltip = "Displays a message indicating your GUI upon injecting.\nI.E. 'Press RSHIFT to open GUI'"
+	}))
+
+	addAdvanced(guipane:CreateToggle({
 		Name = 'Show legit mode',
 		Function = function(enabled)
 			clickgui.Search.Legit.Visible = enabled
@@ -1527,24 +1874,9 @@ function vape:LoadGUI()
 		end,
 		Default = true,
 		Tooltip = 'Shows the button to switch to the legit mod menu'
-	})
+	}))
 
-	local ScaleSlider = {Object = {}, Value = 1}
-	vape.Scale = guipane:CreateToggle({
-		Name = 'Auto rescale',
-		Default = true,
-		Function = function(callback)
-			ScaleSlider.Object.Visible = not callback
-			if callback then
-				--scale.Scale = math.max(gui.AbsoluteSize.X / 1920, 0.6)
-			else
-				scale.Scale = ScaleSlider.Value
-			end
-		end,
-		Tooltip = 'Automatically rescales the gui using the screens resolution'
-	})
-
-	ScaleSlider = guipane:CreateSlider({
+	ScaleSlider = addAdvanced(guipane:CreateSlider({
 		Name = 'Scale',
 		Min = 0.1,
 		Max = 2,
@@ -1552,86 +1884,68 @@ function vape:LoadGUI()
 		Function = function(val, final)
 			if final and not vape.Scale.Enabled then
 				scale.Scale = val
+				task.defer(clampAllCategoryWindows)
 			end
 		end,
 		Default = 1,
 		Darker = true,
 		Visible = false
-	})
+	}), function()
+		return vape.Scale and not vape.Scale.Enabled
+	end)
 
-	vape.RainbowSpeed = guipane:CreateSlider({
+	vape.ThemeSpeed = addAdvanced(guipane:CreateSlider({
+		Name = 'Theme animation speed',
+		Min = 0.1,
+		Max = 3,
+		Decimal = 10,
+		Default = 1,
+		Tooltip = 'Controls how quickly animated gradient themes flow and rotate.'
+	}), function()
+		return vape:IsGradientThemeActive()
+	end)
+
+	vape.RainbowSpeed = addAdvanced(guipane:CreateSlider({
 		Name = 'Rainbow speed',
 		Min = 0.1,
 		Max = 10,
 		Decimal = 10,
 		Default = 1,
 		Tooltip = 'Adjusts the speed of rainbow values'
-	})
+	}), function()
+		return not vape:IsGradientThemeActive()
+	end)
 
-	vape.RainbowUpdateSpeed = guipane:CreateSlider({
+	vape.RainbowUpdateSpeed = addAdvanced(guipane:CreateSlider({
 		Name = 'Rainbow update rate',
 		Min = 1,
 		Max = 144,
 		Default = 60,
 		Tooltip = 'Adjusts the update rate of rainbow values',
 		Suffix = 'hz'
-	})
+	}), function()
+		return not vape:IsGradientThemeActive()
+	end)
 
-	--[[guipane:CreateDropdown({
-		Name = 'GUI Theme',
-		List = inputService.TouchEnabled and {'new', 'old'} or {'new', 'old', 'rise'},
-		Function = function(val, mouse)
-			if mouse then
-				writefile('newvape/profiles/gui.txt', val)
-				shared.vapereload = true
-				if shared.VapeDeveloper then
-					loadstring(readfile('newvape/loader.lua'), 'loader')()
-				else
-					assert(loadstring(shared.VapeRuntime and shared.VapeRuntime.Read('newvape/loader.lua') or readfile('newvape/loader.lua'), 'loader'))()
-				end
-			end
-		end,
-		Tooltip = 'new - The newest vape theme to since v4.05\nold - The vape theme pre v4.05\nrise - Rise 6.0'
-	})]]
-
-	guipane:CreateDropdown({
+	addAdvanced(guipane:CreateDropdown({
 		Name = 'Search behavior',
 		List = inputService.TouchEnabled and {'Pinned', 'On demand', 'Disabled'} or {'On demand', 'Pinned', 'Disabled'},
 		Function = function(value)
 			vape.SearchBar:SetMode(value)
 		end,
 		Tooltip = 'On demand stays hidden until / or Ctrl+F. Pinned keeps search visible. Disabled hides it completely.'
-	})
+	}))
 
-	vape.RainbowMode = guipane:CreateDropdown({
+	vape.RainbowMode = addAdvanced(guipane:CreateDropdown({
 		Name = 'Rainbow Mode',
 		List = {'Normal', 'Gradient', 'Retro'},
 		Tooltip = 'Normal - Smooth color fade\nGradient - Gradient color fade\nRetro - Static color'
-	})
+	}), function()
+		return not vape:IsGradientThemeActive()
+	end)
 
-	guipane:CreateButton({
-		Name = 'Collapse module settings',
-		Function = function()
-			for _, category in vape.Categories do
-				local expanded = category.ExpandedModule
-				if expanded and expanded.SetExpanded then expanded:SetExpanded(false) end
-			end
-		end,
-		Tooltip = 'Closes any currently expanded module settings panels without disabling the modules.'
-	})
-
-	guipane:CreateButton({
-		Name = 'Reset GUI positions',
-		Function = function()
-			for _, category in vape.Categories do
-				category.Object.Position = UDim2.fromOffset(6, 42)
-			end
-		end,
-		Tooltip = 'This will reset your GUI back to the default'
-	})
-
-	guipane:CreateButton({
-		Name = 'Sort GUI',
+	local organizeButton = addAdvanced(guipane:CreateButton({
+		Name = 'Organize GUI',
 		Function = function()
 			local priority = {
 				GUICategory = 1,
@@ -1644,18 +1958,13 @@ function vape:LoadGUI()
 				FriendsCategory = 8,
 				ProfilesCategory = 9
 			}
-
 			local categories = {}
 			for _, category in vape.Categories do
-				if category.Type ~= 'Overlay' then
-					table.insert(categories, category)
-				end
+				if category.Type ~= 'Overlay' then table.insert(categories, category) end
 			end
-
 			table.sort(categories, function(a, b)
 				return (priority[a.Object.Name] or 99) < (priority[b.Object.Name] or 99)
 			end)
-
 			local index = 0
 			for _, category in categories do
 				if category.Object.Visible then
@@ -1663,9 +1972,35 @@ function vape:LoadGUI()
 					index += 1
 				end
 			end
+			task.defer(clampAllCategoryWindows)
 		end,
-		Tooltip = 'Sorts GUI by category order'
+		Tooltip = 'Neatly reflows visible category windows and keeps them on-screen.'
+	}))
+
+	addAdvanced(guipane:CreateButton({
+		Name = 'Reset GUI positions',
+		Function = function()
+			for _, category in vape.Categories do
+				category.Object.Position = UDim2.fromOffset(6, 42)
+			end
+			task.defer(clampAllCategoryWindows)
+		end,
+		Tooltip = 'Reset category positions back to the default starting point.'
+	}))
+
+	local advancedButton
+	advancedButton = guipane:CreateButton({
+		Name = 'More GUI settings',
+		Function = function()
+			advancedGUIVisible = not advancedGUIVisible
+			refreshAdvancedGUI()
+			if advancedButton and advancedButton.SetText then
+				advancedButton:SetText(advancedGUIVisible and 'Hide advanced settings' or 'More GUI settings')
+			end
+		end,
+		Tooltip = 'Show the less frequently used performance, legacy rainbow, search and layout controls.'
 	})
+	refreshAdvancedGUI()
 
 	--[[
 		Notification Settings
@@ -2216,7 +2551,7 @@ function vape:LoadGUI()
 
 			local isCustom = ColorMode.Value == 'Custom color' and Color3.fromHSV(ColorSlider.Hue, ColorSlider.Sat, ColorSlider.Value) or nil
 			for index, label in Labels do
-				label.Text.TextColor3 = isCustom or (vape.GUIColor.Rainbow and Color3.fromHSV(vape:Color((hue - ((Gradient.Enabled and index + 2 or index) * 0.025)) % 1)) or LogoGradient.Color.Keypoints[2].Value)
+				label.Text.TextColor3 = isCustom or ((vape.GUIColor.Rainbow and not vape:IsGradientThemeActive()) and Color3.fromHSV(vape:Color((hue - ((Gradient.Enabled and index + 2 or index) * 0.025)) % 1)) or LogoGradient.Color.Keypoints[2].Value)
 
 				if label.Color then
 					label.Color.BackgroundColor3 = label.Text.TextColor3
@@ -2502,6 +2837,30 @@ function vape:LoadGUI()
 		until false
 	end))
 
+	vape:Clean(task.spawn(function()
+		repeat
+			local delta = task.wait(1 / 30)
+			if vape:IsGradientThemeActive() then
+				local reduced = vape.ReducedMotion and vape.ReducedMotion.Enabled
+				if not reduced then
+					vape.ThemePhase = ((vape.ThemePhase or 0) + (delta * 0.18 * (vape.ThemeSpeed and vape.ThemeSpeed.Value or 1))) % 1
+				end
+
+				local visualActive = clickgui.Visible
+					or (vape.Legit and vape.Legit.Window and vape.Legit.Window.Visible)
+					or (TextGUI and TextGUI.Button and TextGUI.Button.Enabled)
+					or next(vape.HUDAccentObjects) ~= nil
+
+				if visualActive then
+					vape:UpdateThemeGradients()
+					vape:UpdateGUI()
+				end
+			elseif next(uipallet.ThemeObjects) ~= nil then
+				vape:ClearThemeGradients()
+			end
+		until false
+	end))
+
 	local cursorConnection
 	vape:Clean(clickgui:GetPropertyChangedSignal('Visible'):Connect(function()
 		vape:UpdateGUI()
@@ -2562,6 +2921,7 @@ function vape:LoadGUI()
 			obj.Visible = false
 			obj.Visible = true
 		end
+		task.defer(clampAllCategoryWindows)
 	end))
 
 	vape:Clean(vape.GUIBind.Triggered:Connect(function()
@@ -2581,11 +2941,23 @@ function vape:LoadGUI()
 
 		clickgui.Visible = not clickgui.Visible
 		vape:BlurCheck()
-		vape:UpdateSessionHint()
 		if clickgui.Visible then
 			vape.SearchBar:Refresh()
+			vape:ShowSessionHint()
+			task.defer(clampAllCategoryWindows)
 		elseif vape.SearchBar then
 			vape.SearchBar:Close(false)
+			if vape.ActiveSettingsPane and vape.ActiveSettingsPane.Object and vape.ActiveSettingsPane.Object.Visible then
+				vape.ActiveSettingsPane:SetVisible(false)
+			end
+			local mainSettings = vape.Categories.Main and vape.Categories.Main.Settings
+			if mainSettings and mainSettings.Object and mainSettings.Object.Visible then
+				mainSettings:SetVisible(false)
+			end
+			for _, category in vape.Categories do
+				local expanded = category.ExpandedModule
+				if expanded and expanded.SetExpanded then expanded:SetExpanded(false) end
+			end
 		end
 		if not clickgui.Visible and vape.SaveOnClose.Enabled and vape.Loaded then
 			local ok, err = pcall(vape.Save, vape)
@@ -2616,6 +2988,22 @@ function vape:LoadGUI()
 					search:Close(false)
 					return
 				elseif not focused then
+					if vape.ActiveSettingsPane and vape.ActiveSettingsPane.Object and vape.ActiveSettingsPane.Object.Visible then
+						vape.ActiveSettingsPane:SetVisible(false)
+						return
+					end
+					local mainSettings = vape.Categories.Main and vape.Categories.Main.Settings
+					if mainSettings and mainSettings.Object and mainSettings.Object.Visible then
+						mainSettings:SetVisible(false)
+						return
+					end
+					for _, category in vape.Categories do
+						local expanded = category.ExpandedModule
+						if expanded and expanded.SetExpanded then
+							expanded:SetExpanded(false)
+							return
+						end
+					end
 					vape.GUIBind.Triggered:Fire()
 					return
 				end
@@ -2855,32 +3243,40 @@ function vape:UpdateGUI()
 end
 
 function vape:UpdateGUIQueue(hue, sat, val)
+	local themeActive = vape:IsGradientThemeActive()
+	local hudAccent = themeActive and vape:GetThemeColor(0) or Color3.fromHSV(hue, sat, val)
+	if themeActive then
+		hue, sat, val = hudAccent:ToHSV()
+	end
+
 	if TextGUI.Button.Enabled then
 		TextGUI:UpdateColor(hue, sat, val, default)
 	end
 
-	local hudAccent = Color3.fromHSV(hue, sat, val)
-
 	if topographyBackground and topographyBackground.Parent then
-		topographyBackground.ImageColor3 = Color3.fromHSV(
-			hue,
-			math.min(sat * 0.62, 0.78),
-			math.max(val, 0.78)
-		)
+		if not vape:ApplyThemeGradient(topographyBackground, 'ImageColor3', 0, true, 35) then
+			topographyBackground.ImageColor3 = Color3.fromHSV(
+				hue,
+				math.min(sat * 0.62, 0.78),
+				math.max(val, 0.78)
+			)
+		end
 	end
 
 	for object, property in vape.HUDAccentObjects do
 		if object and object.Parent then
-			pcall(function()
-				object[property] = hudAccent
-			end)
+			if not vape:ApplyThemeGradient(object, property, 0, true, 0) then
+				pcall(function()
+					object[property] = hudAccent
+				end)
+			end
 		else
 			vape.HUDAccentObjects[object] = nil
 		end
 	end
 
 	if not clickgui.Visible and not vape.Legit.Window.Visible then return end
-	local isRainbow = vape.GUIColor.Rainbow and vape.RainbowMode.Value ~= 'Retro'
+	local isRainbow = not themeActive and vape.GUIColor.Rainbow and vape.RainbowMode.Value ~= 'Retro'
 	for name, component in vape.Categories do
 		component:Color(hue, sat, val, isRainbow)
 	end
@@ -3221,6 +3617,10 @@ components = {
 		return component
 	end,
 	Button = function(props, children, api)
+		local component = {
+			Name = props.Name,
+			Type = 'Button'
+		}
 		local button = Instance.new('TextButton')
 		button.AutoButtonColor = false
 		button.BackgroundColor3 = color.Dark(children.BackgroundColor3, props.Darker and 0.02 or 0)
@@ -3228,6 +3628,7 @@ components = {
 		button.Size = UDim2.new(1, 0, 0, 31)
 		button.Text = ''
 		button.Parent = children
+		component.Object = button
 		addTooltip(button, props.Tooltip)
 		local holder = Instance.new('Frame')
 		holder.BackgroundColor3 = color.Light(uipallet.Main, 0.05)
@@ -3260,6 +3661,12 @@ components = {
 		end)
 
 		button.MouseButton1Click:Connect(props.Function)
+
+		function component:SetText(value)
+			title.Text = value
+		end
+
+		return component
 	end,
 	Category = function(props, children, api)
 		local component = {
@@ -3949,7 +4356,7 @@ components = {
 
 			if self.Selected then
 				self.Selected.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color(hue % 1)) or Color3.fromHSV(hue, sat, val)
-				self.Selected.Title.TextColor3 = vape.GUIColor.Rainbow and Color3.new(0.19, 0.19, 0.19) or vape:TextColor(hue, sat, val)
+				self.Selected.Title.TextColor3 = (vape.GUIColor.Rainbow and not vape:IsGradientThemeActive()) and Color3.new(0.19, 0.19, 0.19) or vape:TextColor(hue, sat, val)
 				self.Selected.Dots.Dots.ImageColor3 = self.Selected.Title.TextColor3
 				self.Selected.Bind.Icon.ImageColor3 = self.Selected.Title.TextColor3
 				self.Selected.Bind.TextLabel.TextColor3 = self.Selected.Title.TextColor3
@@ -4712,12 +5119,23 @@ components = {
 				dropdownOpen = true
 				dropdownAnimation += 1
 				tween:Tween(arrow, uiMotionPop, {Rotation = 270})
-				dropdownchildren = Instance.new('Frame')
+
+				local optionCount = math.max(#props.List - 1, 0)
+				local visibleCount = math.min(optionCount, 8)
+				dropdownchildren = Instance.new('ScrollingFrame')
+				dropdownchildren.Active = true
 				dropdownchildren.BackgroundTransparency = 1
+				dropdownchildren.BorderSizePixel = 0
+				dropdownchildren.CanvasSize = UDim2.fromOffset(0, optionCount * 26)
+				dropdownchildren.ClipsDescendants = true
 				dropdownchildren.Position = UDim2.fromOffset(0, 27)
-				dropdownchildren.Size = UDim2.new(1, 0, 0, (#props.List - 1) * 26)
+				dropdownchildren.ScrollBarImageColor3 = color.Dark(uipallet.Text, 0.16)
+				dropdownchildren.ScrollBarImageTransparency = optionCount > visibleCount and 0.35 or 1
+				dropdownchildren.ScrollBarThickness = optionCount > visibleCount and 2 or 0
+				dropdownchildren.ScrollingDirection = Enum.ScrollingDirection.Y
+				dropdownchildren.Size = UDim2.new(1, 0, 0, visibleCount * 26)
 				dropdownchildren.Parent = button
-				tween:Tween(dropdown, uiMotion, {Size = UDim2.new(1, 0, 0, 43 + (#props.List - 1) * 26)})
+				tween:Tween(dropdown, uiMotion, {Size = UDim2.new(1, 0, 0, 43 + visibleCount * 26)})
 
 				local index = 0
 				for _, v in props.List do
@@ -4739,7 +5157,7 @@ components = {
 					entry.Parent = dropdownchildren
 
 					local finalPosition = UDim2.fromOffset(0, index * 26)
-					task.delay(index * 0.018, function()
+					task.delay(math.min(index, 7) * 0.018, function()
 						if entry.Parent and dropdownOpen then
 							tween:Tween(entry, uiMotion, {
 								Position = finalPosition,
@@ -4969,8 +5387,12 @@ components = {
 
 		function component:Color(hue, sat, val, isRainbow)
 			local accentColor = Color3.fromHSV(hue, sat, val)
-			v4logo.ImageColor3 = accentColor
-			statusdot.BackgroundColor3 = accentColor
+			if not vape:ApplyThemeGradient(v4logo, 'ImageColor3', 0, true, 0) then
+				v4logo.ImageColor3 = accentColor
+			end
+			if not vape:ApplyThemeGradient(statusdot, 'BackgroundColor3', 0.08, true, 0) then
+				statusdot.BackgroundColor3 = accentColor
+			end
 
 			for _, button in self.Buttons do
 				if button.Enabled then
@@ -5736,12 +6158,16 @@ components = {
 		function component:Color(hue, sat, val, isRainbow)
 			if self.Enabled then
 				tween:Cancel(holder)
-				holder.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(hue, sat, val)
+				if not vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, true, 0) then
+					holder.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(hue, sat, val)
+				end
+			else
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, false, 0)
 			end
 		end
 
 		function component:Toggle()
-			local isRainbow = vape.GUIColor.Rainbow and vape.RainbowMode.Value ~= 'Retro'
+			local isRainbow = not vape:IsGradientThemeActive() and vape.GUIColor.Rainbow and vape.RainbowMode.Value ~= 'Retro'
 			self.Enabled = not self.Enabled
 
 			tween:Tween(holder, uipallet.Tween, {
@@ -5921,7 +6347,11 @@ components = {
 		function component:Color(hue, sat, val, isRainbow)
 			if self.Enabled then
 				tween:Cancel(holder)
-				holder.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+				if not vape:ApplyThemeGradient(holder, 'BackgroundColor3', (self.Index or 0) * 0.075, true, 0) then
+					holder.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+				end
+			else
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', (self.Index or 0) * 0.075, false, 0)
 			end
 
 			for _, component in self.Options do
@@ -6302,6 +6732,7 @@ components = {
 			Index = getTableSize(vape.Modules),
 			Name = props.Name,
 			Options = {},
+			Tooltip = props.Tooltip or '',
 			Visible = true
 		}
 
@@ -6416,16 +6847,24 @@ components = {
 		component.SetExpanded = setModuleExpanded
 		function component:Color(hue, sat, val, isRainbow)
 			if self.Enabled then
-				button.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.025)) % 1)) or Color3.fromHSV(hue, sat, val)
-				button.TextColor3 = vape.GUIColor.Rainbow and Color3.new(0.19, 0.19, 0.19) or vape:TextColor(hue, sat, val)
-				button.UIGradient.Enabled = isRainbow and vape.RainbowMode.Value == 'Gradient'
+				local themeActive = vape:IsGradientThemeActive()
+				button.TextColor3 = (vape.GUIColor.Rainbow and not themeActive) and Color3.new(0.19, 0.19, 0.19) or vape:TextColor(hue, sat, val)
 
-				if button.UIGradient.Enabled then
+				if themeActive then
 					button.BackgroundColor3 = Color3.new(1, 1, 1)
-					button.UIGradient.Color = ColorSequence.new({
-						ColorSequenceKeypoint.new(0, Color3.fromHSV(vape:Color((hue - (self.Index * 0.025)) % 1))),
-						ColorSequenceKeypoint.new(1, Color3.fromHSV(vape:Color((hue - ((self.Index + 1) * 0.025)) % 1)))
-					})
+					vape:RegisterThemeGradient(button.UIGradient, self.Index * 0.045, 90)
+				else
+					vape:UnregisterThemeGradient(button.UIGradient)
+					button.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.025)) % 1)) or Color3.fromHSV(hue, sat, val)
+					button.UIGradient.Enabled = isRainbow and vape.RainbowMode.Value == 'Gradient'
+
+					if button.UIGradient.Enabled then
+						button.BackgroundColor3 = Color3.new(1, 1, 1)
+						button.UIGradient.Color = ColorSequence.new({
+							ColorSequenceKeypoint.new(0, Color3.fromHSV(vape:Color((hue - (self.Index * 0.025)) % 1))),
+							ColorSequenceKeypoint.new(1, Color3.fromHSV(vape:Color((hue - ((self.Index + 1) * 0.025)) % 1)))
+						})
+					end
 				end
 
 				self.Bind:SetColor(self.Object.TextColor3)
@@ -7191,7 +7630,7 @@ components = {
 		box.BackgroundTransparency = 1
 		box.ClearTextOnFocus = false
 		box.FontFace = uipallet.Font
-		box.PlaceholderText = 'Search modules...'
+		box.PlaceholderText = 'Search name or purpose...'
 		box.PlaceholderColor3 = color.Dark(uipallet.Text, 0.35)
 		box.Position = UDim2.fromOffset(50, 0)
 		box.Size = UDim2.new(1, -92, 0, 37)
@@ -7283,7 +7722,7 @@ components = {
 		resultCount.FontFace = uipallet.Font
 		resultCount.TextSize = 10
 		resultCount.TextXAlignment = Enum.TextXAlignment.Left
-		resultCount.Text = 'Type to search • ↑↓ + Enter'
+		resultCount.Text = 'Search name/purpose • #category • @on/@fav'
 		resultCount.ZIndex = 21
 		resultCount.Parent = search
 		local revision = 0
@@ -7381,7 +7820,7 @@ components = {
 
 				local query = box.Text:lower():match('^%s*(.-)%s*$')
 				if query == '' and self.Filter == 'All' then
-					resultCount.Text = 'Type to search • ↑↓ + Enter'
+					resultCount.Text = 'Search name/purpose • #category • @on/@fav'
 					return
 				end
 
@@ -7404,7 +7843,8 @@ components = {
 				local matches = 0
 				for _, name in ipairs(names) do
 					local module = vape.Modules[name]
-					if matchesModuleSearch(name, module.Category, query)
+					if matchesModuleSearch(name, module.Category, module.Tooltip, query)
+						and matchesModuleState(module, name, query)
 						and (self.Filter ~= 'Enabled' or module.Enabled)
 						and (self.Filter ~= 'Favorites' or vape.Favorites[name]) then
 						matches += 1
@@ -7526,6 +7966,13 @@ components = {
 		function component:SetVisible(state)
 			paneTransition += 1
 			local transition = paneTransition
+			if not props.Main then
+				if state then
+					vape.ActiveSettingsPane = component
+				elseif vape.ActiveSettingsPane == component then
+					vape.ActiveSettingsPane = nil
+				end
+			end
 			if state then
 				pane.Position = UDim2.fromOffset(10, 0)
 				pane.Visible = true
@@ -7723,8 +8170,12 @@ components = {
 		props.Decimal = props.Decimal or 1
 
 		function component:Color(hue, sat, val, isRainbow)
-			fill.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(hue, sat, val)
-			knob.BackgroundColor3 = fill.BackgroundColor3
+			if vape:ApplyThemeGradient(fill, 'BackgroundColor3', self.Index * 0.075, true, 0) then
+				knob.BackgroundColor3 = vape:GetThemeColor(self.Index * 0.075)
+			else
+				fill.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(hue, sat, val)
+				knob.BackgroundColor3 = fill.BackgroundColor3
+			end
 		end
 
 		function component:Load(data)
@@ -7912,27 +8363,45 @@ components = {
 
 		function component:Color(hue, sat, val, isRainbow)
 			if targetswindow.Visible then
-				holder.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(hue, sat, val)
+				if not vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, true, 0) then
+					holder.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(hue, sat, val)
+				end
 			end
 
 			if self.Players.Enabled then
 				tween:Cancel(self.Players.Object.Frame)
-				self.Players.Object.Frame.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+				if not vape:ApplyThemeGradient(self.Players.Object.Frame, 'BackgroundColor3', 0.02, true, 0) then
+					self.Players.Object.Frame.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+				end
+			else
+				vape:ApplyThemeGradient(self.Players.Object.Frame, 'BackgroundColor3', 0.02, false, 0)
 			end
 
 			if self.NPCs.Enabled then
 				tween:Cancel(self.NPCs.Object.Frame)
-				self.NPCs.Object.Frame.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+				if not vape:ApplyThemeGradient(self.NPCs.Object.Frame, 'BackgroundColor3', 0.08, true, 0) then
+					self.NPCs.Object.Frame.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+				end
+			else
+				vape:ApplyThemeGradient(self.NPCs.Object.Frame, 'BackgroundColor3', 0.08, false, 0)
 			end
 
 			if self.Invisible.Enabled then
 				tween:Cancel(self.Invisible.Object.Holder)
-				self.Invisible.Object.Holder.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+				if not vape:ApplyThemeGradient(self.Invisible.Object.Holder, 'BackgroundColor3', 0.14, true, 0) then
+					self.Invisible.Object.Holder.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+				end
+			else
+				vape:ApplyThemeGradient(self.Invisible.Object.Holder, 'BackgroundColor3', 0.14, false, 0)
 			end
 
 			if self.Walls.Enabled then
 				tween:Cancel(self.Walls.Object.Holder)
-				self.Walls.Object.Holder.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+				if not vape:ApplyThemeGradient(self.Walls.Object.Holder, 'BackgroundColor3', 0.2, true, 0) then
+					self.Walls.Object.Holder.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+				end
+			else
+				vape:ApplyThemeGradient(self.Walls.Object.Holder, 'BackgroundColor3', 0.2, false, 0)
 			end
 		end
 
@@ -8382,7 +8851,9 @@ components = {
 
 		function component:Color(hue, sat, val, isRainbow)
 			if textlistwindow.Visible then
-				holder.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(hue, sat, val)
+				if not vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, true, 0) then
+					holder.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(hue, sat, val)
+				end
 			end
 		end
 
@@ -8641,7 +9112,11 @@ components = {
 		function component:Color(hue, sat, val, isRainbow)
 			if self.Enabled then
 				tween:Cancel(holder)
-				holder.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(hue, sat, val)
+				if not vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, true, 0) then
+					holder.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(hue, sat, val)
+				end
+			else
+				vape:ApplyThemeGradient(holder, 'BackgroundColor3', self.Index * 0.075, false, 0)
 			end
 		end
 
@@ -8666,7 +9141,7 @@ components = {
 		end
 
 		function component:Toggle()
-			local isRainbow = vape.GUIColor.Rainbow and vape.RainbowMode.Value ~= 'Retro'
+			local isRainbow = not vape:IsGradientThemeActive() and vape.GUIColor.Rainbow and vape.RainbowMode.Value ~= 'Retro'
 			self.Enabled = not self.Enabled
 
 			tween:Tween(holder, uipallet.Tween, {
@@ -8814,9 +9289,15 @@ components = {
 		local random = Random.new()
 
 		function component:Color(hue, sat, val, isRainbow)
-			fill.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(hue, sat, val)
-			knobknob.ImageColor3 = fill.BackgroundColor3
-			knobmaxknob.ImageColor3 = fill.BackgroundColor3
+			if vape:ApplyThemeGradient(fill, 'BackgroundColor3', self.Index * 0.075, true, 0) then
+				local accent = vape:GetThemeColor(self.Index * 0.075)
+				knobknob.ImageColor3 = accent
+				knobmaxknob.ImageColor3 = accent
+			else
+				fill.BackgroundColor3 = isRainbow and Color3.fromHSV(vape:Color((hue - (self.Index * 0.075)) % 1)) or Color3.fromHSV(hue, sat, val)
+				knobknob.ImageColor3 = fill.BackgroundColor3
+				knobmaxknob.ImageColor3 = fill.BackgroundColor3
+			end
 		end
 
 		function component:GetRandomValue()
