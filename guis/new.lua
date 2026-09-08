@@ -66,6 +66,36 @@ local function loadJson(path)
 	return success and type(data) == 'table' and data or nil
 end
 
+-- Search terms are literal; #terms match category names.
+local function matchesModuleSearch(name, category, query)
+	name, category = name:lower(), tostring(category or ''):lower()
+	for term in query:lower():gmatch('%S+') do
+		if term:sub(1, 1) == '#' then
+			if #term > 1 and not category:find(term:sub(2), 1, true) then return false end
+		elseif not name:find(term, 1, true) then
+			return false
+		end
+	end
+	return true
+end
+
+local favoriteData = loadJson('newvape/profiles/favorites.json') or {}
+vape.Favorites = {}
+for name, selected in pairs(favoriteData) do
+	if type(name) == 'string' and selected == true then vape.Favorites[name] = true end
+end
+function vape:ToggleFavorite(name)
+	local previous = self.Favorites[name]
+	self.Favorites[name] = not previous or nil
+	local ok, err = pcall(function()
+		writefile('newvape/profiles/favorites.json', httpService:JSONEncode(self.Favorites))
+	end)
+	if not ok then
+		self.Favorites[name] = previous
+		self:CreateNotification('Favorites', 'Could not save: '..tostring(err), 4, 'alert')
+	end
+	if self.SearchBar then self.SearchBar:Refresh() end
+end
 local color = {}
 local uipallet = {}
 do
@@ -230,47 +260,52 @@ do
 	end
 end
 
-local tween = setmetatable({}, {
-	__index = function()
-		return {}
+local tween = {tweens = {}}
+
+-- Replace per-object motion safely, including rapid cancellation/reversal.
+function tween:Tween(obj, info, goal, group)
+	group = group or 'tweens'
+	self[group] = self[group] or {}
+	local active = self[group]
+	local previous = active[obj]
+	if previous then
+		active[obj] = nil
+		previous:Cancel()
 	end
-})
-
-do
-	function tween:Tween(obj, info, goal, index)
-		index = self[index or 'tweens']
-		if index[obj] then
-			index[obj]:Cancel()
-			index[obj] = nil
-		end
-
-		if obj.Parent and (obj:IsA('UIStroke') or obj.Visible) then
-			index[obj] = tweenService:Create(obj, info, goal)
-			index[obj].Completed:Once(function()
-				if index then
-					index[obj] = nil
-					index = nil
-				end
-			end)
-
-			index[obj]:Play()
-		else
-			for prop, value in goal do
-				obj[prop] = value
-			end
-		end
+	local visible = obj.Parent ~= nil
+	local ancestor = obj
+	while visible and ancestor do
+		if ancestor:IsA('GuiObject') and not ancestor.Visible then visible = false end
+		if ancestor:IsA('ScreenGui') and not ancestor.Enabled then visible = false end
+		ancestor = ancestor.Parent
 	end
-
-	function tween:Cancel(obj, index)
-		index = self[index or 'tweens']
-
-		if index[obj] then
-			index[obj]:Cancel()
-			index[obj] = nil
+	if not visible or (vape.ReducedMotion and vape.ReducedMotion.Enabled) then
+		for prop, value in goal do obj[prop] = value end
+		return
+	end
+	local motion = tweenService:Create(obj, info, goal)
+	active[obj] = motion
+	motion.Completed:Once(function()
+		if active[obj] == motion then active[obj] = nil end
+	end)
+	motion:Play()
+	return motion
+end
+function tween:Cancel(obj, group)
+	local active = self[group or 'tweens']
+	if active and active[obj] then
+		local motion = active[obj]
+		active[obj] = nil
+		motion:Cancel()
+	end
+end
+function tween:CancelAll()
+	for _, active in pairs(self) do
+		if type(active) == 'table' then
+			for obj, motion in pairs(active) do active[obj] = nil; motion:Cancel() end
 		end
 	end
 end
-
 uipallet = {
 	Main = Color3.fromRGB(26, 25, 26),
 	Text = Color3.fromRGB(200, 200, 200),
@@ -439,9 +474,9 @@ end
 
 -- Shared motion curves for the ClickGUI. Kept short enough to feel responsive,
 -- but eased so dropdowns/windows no longer snap between states.
-local uiMotionFast = TweenInfo.new(0.14, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-local uiMotion = TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-local uiMotionPop = TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local uiMotionFast = TweenInfo.new(0.12, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+local uiMotion = TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+local uiMotionPop = TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
 -- Topography removed. GUI background is blur-only.
 
@@ -710,7 +745,7 @@ function vape:BlurCheck()
 		guiBlurEffect.Enabled = true
 		guiBlurTween = tweenService:Create(
 			guiBlurEffect,
-			TweenInfo.new(0.14, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+			TweenInfo.new(0.12, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
 			{Size = 16}
 		)
 		guiBlurTween:Play()
@@ -935,6 +970,8 @@ function vape:Load(skipgui, profile)
 	end
 
 	self.Loaded = canSave
+	self.LastSaved = nil
+	if self.UpdateSessionHint then self:UpdateSessionHint() end
 
 	if inputService.TouchEnabled and not skipgui then
 		local button = Instance.new('TextButton')
@@ -1049,6 +1086,12 @@ function vape:LoadGUI()
 	shortcutHint.TextSize = 12
 	shortcutHint.TextTruncate = Enum.TextTruncate.AtEnd
 	shortcutHint.Parent = clickgui
+	function vape:UpdateSessionHint()
+		local shortcuts = inputService.TouchEnabled and 'Search above / Save in Settings'
+			or 'Ctrl+F Search / Ctrl+S Save / Esc Close'
+		shortcutHint.Text = 'Profile: '..self.Profile..'   |   '..(self.LastSaved and ('Saved '..self.LastSaved) or 'Autosave ready')..'   |   '..shortcuts
+	end
+	vape:UpdateSessionHint()
 	local modal = Instance.new('TextButton')
 	modal.BackgroundTransparency = 1
 	modal.Modal = true
@@ -1295,6 +1338,36 @@ function vape:LoadGUI()
 		Function = function() vape:QuickSave() end,
 		Tooltip = 'Save your current settings immediately. Shortcut: Ctrl + S while the menu is open.'
 	})
+	vape.SaveOnClose = general:CreateToggle({
+		Name = 'Save when closing menu',
+		Default = true,
+		Tooltip = 'Save settings when the menu closes, in addition to periodic autosave'
+	})
+	general:CreateButton({
+		Name = 'Back up current profile',
+		Function = function()
+			if not vape.Loaded then return end
+			local ok, result = pcall(function()
+				vape:Save()
+				pcall(makefolder, 'newvape/profiles/backups')
+				local path = 'newvape/profiles/backups/'..tostring(os.time())..'-'..httpService:GenerateGUID(false):sub(1, 8)..'.json'
+				local snapshot = {
+					Format = 1, Name = vape.Profile, GameId = game.GameId, PlaceId = vape.Place,
+					GUI = httpService:JSONDecode(readfile('newvape/profiles/'..game.GameId..'.gui.txt')),
+					Profile = httpService:JSONDecode(readfile('newvape/profiles/'..vape.Profile..vape.Place..'.txt')),
+					Favorites = vape.Favorites
+				}
+				writefile(path, httpService:JSONEncode(snapshot))
+				return path
+			end)
+			if ok then
+				vape:CreateNotification('Profile backup', 'Saved to '..result, 6)
+			else
+				vape:CreateNotification('Profile backup', tostring(result), 6, 'alert')
+			end
+		end,
+		Tooltip = 'Save a dated snapshot of this profile, GUI settings and favorites under profiles/backups'
+	})
 	general:CreateButton({
 		Name = 'Reset current profile',
 		Function = function()
@@ -1366,6 +1439,10 @@ function vape:LoadGUI()
 	]]
 	
 	local guipane = vape.Categories.Main.Settings:CreateSettingsPane({Name = 'GUI'})
+	vape.EffectUpdateRate = guipane:CreateSlider({
+		Name = 'FRONTLINES effect FPS', Min = 20, Max = 60, Default = 30,
+		Tooltip = 'Update rate for FRONTLINES cosmetic effects. Lower values reduce visual processing cost.'
+	})
 	vape.ReducedMotion = guipane:CreateToggle({
 		Name = 'Reduced motion',
 		Tooltip = 'Stops decorative background motion and loading-screen animations. Applies to the next launch too.'
@@ -2455,6 +2532,13 @@ function vape:LoadGUI()
 	
 		clickgui.Visible = not clickgui.Visible
 		vape:BlurCheck()
+		vape:UpdateSessionHint()
+		if clickgui.Visible then
+			vape.SearchBar:Refresh()
+		elseif vape.SaveOnClose.Enabled and vape.Loaded then
+			local ok, err = pcall(vape.Save, vape)
+			if not ok then vape:CreateNotification('Profile', 'Save failed: '..tostring(err), 4, 'alert') end
+		end
 	end))
 	
 	vape:Clean(inputService.InputBegan:Connect(function(input)
@@ -2594,6 +2678,8 @@ function vape:Save(newProfile)
 
 	writeProfile('newvape/profiles/'..game.GameId..'.gui.txt', httpService:JSONEncode(guiData))
 	writeProfile('newvape/profiles/'..self.Profile..self.Place..'.txt', httpService:JSONEncode(mainData))
+	self.LastSaved = os.date('%H:%M')
+	if self.UpdateSessionHint then self:UpdateSessionHint() end
 end
 
 function vape:SaveOptions(obj)
@@ -2630,6 +2716,7 @@ function vape:SortCategories()
 end
 
 function vape:Uninject()
+	tween:CancelAll()
 	self:Save()
 	self.Loaded = nil
 
@@ -2676,6 +2763,7 @@ function vape:Uninject()
 		guiBlurEffect = nil
 	end
 
+	tween:CancelAll()
 	gui:ClearAllChildren()
 	gui:Destroy()
 	table.clear(self.Connections)
@@ -5018,9 +5106,9 @@ components = {
 				if self.Enabled then
 					props.Window.Visible = true
 					windowScale.Scale = 0.965
-					tweenService:Create(windowScale, uiMotionPop, {Scale = 1}):Play()
+					tween:Tween(windowScale, uiMotionPop, {Scale = 1})
 				else
-					tweenService:Create(windowScale, uiMotionFast, {Scale = 0.97}):Play()
+					tween:Tween(windowScale, uiMotionFast, {Scale = 0.97})
 					task.delay(0.14, function()
 						if transition == windowTransition and not component.Enabled then
 							props.Window.Visible = false
@@ -6045,7 +6133,7 @@ components = {
 			window.Visible = true
 			vape:BlurCheck()
 			tween:Tween(window, uiMotion, {Position = target})
-			tweenService:Create(windowScale, uiMotionPop, {Scale = 1}):Play()
+			tween:Tween(windowScale, uiMotionPop, {Scale = 1})
 		end
 
 		function component:Hide(returnToClickGui)
@@ -6053,7 +6141,7 @@ components = {
 			local transition = legitTransition
 			local target = window.Position
 			tween:Tween(window, uiMotionFast, {Position = target + UDim2.fromOffset(0, 10)})
-			tweenService:Create(windowScale, uiMotionFast, {Scale = 0.97}):Play()
+			tween:Tween(windowScale, uiMotionFast, {Scale = 0.97})
 
 			task.delay(0.14, function()
 				if transition == legitTransition then
@@ -6337,6 +6425,7 @@ components = {
 			end
 		
 			self.Enabled = not self.Enabled
+			if clickgui.Visible and vape.SearchBar and vape.Loaded then vape.SearchBar:Refresh() end
 			divider.Visible = self.Enabled
 			gradient.Enabled = self.Enabled
 			tween:Tween(button, uiMotionFast, {
@@ -6594,12 +6683,38 @@ components = {
 		local pin = Instance.new('ImageButton')
 		pin.Name = 'Pin'
 		pin.Size = UDim2.fromOffset(14, 14)
-		pin.Position = UDim2.new(1, -37, 0, 14)
+		pin.AnchorPoint = Vector2.new(0.5, 0.5)
+		pin.Position = UDim2.new(1, -30, 0, 21)
+		pin.Rotation = -30
 		pin.BackgroundTransparency = 1
 		pin.AutoButtonColor = false
 		pin.Image = getvapeasset('newvape/assets/new/pin.png')
 		pin.ImageColor3 = color.Dark(uipallet.Text, 0.43)
 		pin.Parent = window
+		local pinScale = Instance.new('UIScale')
+		pinScale.Parent = pin
+		local pinRevision, pinHovered = 0, false
+		local function animatePin(pop)
+			pinRevision += 1
+			local revision = pinRevision
+			tween:Tween(pin, uiMotion, {
+				Rotation = component.Pinned and 0 or (pinHovered and -15 or -30),
+				ImageColor3 = component.Pinned and vape:GetGUIColorRGB() or (pinHovered and uipallet.Text or color.Dark(uipallet.Text, 0.43))
+			})
+			if pop and not (vape.ReducedMotion and vape.ReducedMotion.Enabled) then
+				tween:Tween(pinScale, uiMotionFast, {Scale = 1.24})
+				task.delay(0.12, function()
+					if pin.Parent and revision == pinRevision then
+						tween:Tween(pinScale, uiMotion, {Scale = pinHovered and 1.1 or 1})
+					end
+				end)
+			else
+				tween:Tween(pinScale, uiMotionFast, {Scale = pinHovered and 1.1 or 1})
+			end
+		end
+		pin.MouseEnter:Connect(function() pinHovered = true; animatePin(false) end)
+		pin.MouseLeave:Connect(function() pinHovered = false; animatePin(false) end)
+		addTooltip(pin, 'Pin this overlay to keep it visible after closing the menu')
 		local dotsbutton = Instance.new('TextButton')
 		dotsbutton.Name = 'Dots'
 		dotsbutton.Size = UDim2.fromOffset(17, 40)
@@ -6648,20 +6763,26 @@ components = {
 			end
 		end
 		
+		local expandRevision = 0
 		function component:Expand(visCheck)
 			if visCheck and not blur.Enabled then return end
-		
+			expandRevision += 1
+			local revision = expandRevision
 			self.Expanded = not self.Expanded
-			children.Visible = self.Expanded
-			dots.ImageColor3 = self.Expanded and uipallet.Text or color.Light(uipallet.Main, 0.37)
-		
-			if self.Expanded then
-				window.Size = UDim2.fromOffset(window.Size.X.Offset, math.min(41 + windowlist.AbsoluteContentSize.Y / scale.Scale, 601))
-			else
-				window.Size = UDim2.fromOffset(window.Size.X.Offset, 41)
+			if self.Expanded then children.Visible = true end
+			tween:Tween(dots, uiMotionFast, {
+				Rotation = self.Expanded and 90 or 0,
+				ImageColor3 = self.Expanded and uipallet.Text or color.Light(uipallet.Main, 0.37)
+			})
+			tween:Tween(window, uiMotion, {Size = UDim2.fromOffset(window.Size.X.Offset,
+				self.Expanded and math.min(41 + windowlist.AbsoluteContentSize.Y / scale.Scale, 601) or 41)})
+			if not self.Expanded then
+				if vape.ReducedMotion and vape.ReducedMotion.Enabled then children.Visible = false end
+				task.delay(0.18, function()
+					if window.Parent and revision == expandRevision and not component.Expanded then children.Visible = false end
+				end)
 			end
 		end
-		
 		function component:Load(data)
 			vape:LoadOptions(self, data.Options)
 		
@@ -6681,7 +6802,7 @@ components = {
 		
 		function component:Pin()
 			self.Pinned = not self.Pinned
-			pin.ImageColor3 = self.Pinned and uipallet.Text or color.Dark(uipallet.Text, 0.43)
+			animatePin(vape.Loaded == true)
 		end
 		
 		function component:Save(data)
@@ -6697,11 +6818,12 @@ components = {
 		end
 		
 		function component:Update()
+			tween:Cancel(window)
 			window.Visible = self.Button.Enabled and (clickgui.Visible or self.Pinned)
-			if self.Expanded then
-				self:Expand()
-			end
-		
+			expandRevision += 1
+			self.Expanded = false
+			children.Visible = false
+			dots.Rotation = 0
 			if clickgui.Visible then
 				window.Size = UDim2.fromOffset(window.Size.X.Offset, 41)
 				window.BackgroundTransparency = 0
@@ -6925,7 +7047,8 @@ components = {
 	end,
 	SearchBar = function(props, children, api)
 		local component = {
-			Type = 'SearchBar'
+			Type = 'SearchBar',
+			Filter = 'All'
 		}
 		
 		local function listenProperty(src, dest, prop, obj)
@@ -6944,7 +7067,7 @@ components = {
 		search.BackgroundColor3 = color.Dark(uipallet.Main, 0.02)
 		search.Name = 'Search'
 		search.Position = UDim2.new(0.5, 0, 0, 13)
-		search.Size = UDim2.fromOffset(280, 37)
+		search.Size = UDim2.fromOffset(280, 92)
 		search.Parent = clickgui
 		component.Object = search
 		addBlur(search)
@@ -6989,16 +7112,16 @@ components = {
 		children.BackgroundTransparency = 1
 		children.BorderSizePixel = 0
 		children.CanvasSize = UDim2.new()
-		children.Position = UDim2.fromOffset(0, 34)
+		children.Position = UDim2.fromOffset(0, 92)
 		children.ScrollBarThickness = 2
 		children.ScrollBarImageTransparency = 0.75
-		children.Size = UDim2.new(1, 0, 1, -37)
+		children.Size = UDim2.new(1, 0, 1, -92)
 		children.Parent = search
 		local divider = Instance.new('Frame')
 		divider.BackgroundColor3 = Color3.new(1, 1, 1)
 		divider.BackgroundTransparency = 0.928
 		divider.BorderSizePixel = 0
-		divider.Position = UDim2.fromOffset(0, 33)
+		divider.Position = UDim2.fromOffset(0, 91)
 		divider.Size = UDim2.new(1, 0, 0, 1)
 		divider.Visible = false
 		divider.Parent = search
@@ -7032,8 +7155,39 @@ components = {
 		empty.Text = 'No matching modules'
 		empty.Visible = false
 		empty.Parent = children
+		local filterButtons = {}
+		for index, name in ipairs({'All', 'Enabled', 'Favorites'}) do
+			local button = Instance.new('TextButton')
+			button.Position = UDim2.fromOffset(8 + (index - 1) * 89, 40)
+			button.Size = UDim2.fromOffset(86, 24)
+			button.FontFace = uipallet.Font
+			button.TextSize = 11
+			button.Text = name
+			button.BorderSizePixel = 0
+			button.TextColor3 = uipallet.Text
+			button.Parent = search
+			addCorner(button, UDim.new(0, 5))
+			filterButtons[name] = button
+			button.Activated:Connect(function()
+				component.Filter = name
+				component:Refresh()
+			end)
+		end
+		local resultCount = Instance.new('TextLabel')
+		resultCount.Position = UDim2.fromOffset(10, 67)
+		resultCount.Size = UDim2.new(1, -20, 0, 20)
+		resultCount.BackgroundTransparency = 1
+		resultCount.TextColor3 = color.Dark(uipallet.Text, 0.25)
+		resultCount.FontFace = uipallet.Font
+		resultCount.TextSize = 10
+		resultCount.TextXAlignment = Enum.TextXAlignment.Left
+		resultCount.Text = 'Search by name or #category'
+		resultCount.Parent = search
 		local revision = 0
-		box:GetPropertyChangedSignal('Text'):Connect(function()
+		function component:Refresh()
+			for name, button in pairs(filterButtons) do
+				button.BackgroundColor3 = name == self.Filter and color.Light(uipallet.Main, 0.1) or uipallet.Main
+			end
 			revision += 1
 			local current = revision
 			clear.Visible = box.Text ~= ''
@@ -7049,7 +7203,10 @@ components = {
 				end
 			
 				local query = box.Text:lower():match('^%s*(.-)%s*$')
-				if query == '' then return end
+				if query == '' and self.Filter == 'All' then
+					resultCount.Text = 'Search by name or #category'
+					return
+				end
 				local names = {}
 				for name in vape.Modules do names[#names + 1] = name end
 				table.sort(names)
@@ -7057,11 +7214,24 @@ components = {
 			
 				for _, name in ipairs(names) do
 					local module = vape.Modules[name]
-					if name:lower():find(query, 1, true) then
+					if matchesModuleSearch(name, module.Category, query)
+						and (self.Filter ~= 'Enabled' or module.Enabled)
+						and (self.Filter ~= 'Favorites' or vape.Favorites[name]) then
 						matches += 1
 						local button = module.Object:Clone()
 						button.LayoutOrder = matches
 						button.Bind:Destroy()
+						button.Dots.Visible = false
+						local star = Instance.new('TextButton')
+						star.Position = UDim2.new(1, -34, 0, 0)
+						star.Size = UDim2.fromOffset(34, 40)
+						star.BackgroundTransparency = 1
+						star.Text = vape.Favorites[name] and '★' or '☆'
+						star.TextSize = 20
+						star.TextColor3 = vape.Favorites[name] and vape:GetGUIColorRGB() or uipallet.Text
+						star.Parent = button
+						addTooltip(star, 'Add or remove favorite')
+						star.Activated:Connect(function() vape:ToggleFavorite(name) end)
 			
 						button.MouseButton1Click:Connect(function()
 							module:Toggle()
@@ -7090,14 +7260,17 @@ components = {
 			
 						listenProperty(module.Object.UIGradient, button.UIGradient, 'Color', button)
 						listenProperty(module.Object.UIGradient, button.UIGradient, 'Enabled', button)
-						listenProperty(module.Object.Dots.Dots, button.Dots.Dots, 'ImageColor3', button)
 			
 						button.Parent = children
 					end
 				end
+				resultCount.Text = tostring(matches)..(matches == 1 and ' module' or ' modules')..' / Star to favorite'
+				empty.Text = self.Filter == 'Favorites' and 'Star modules to save them here' or 'No matching modules'
 				empty.Visible = matches == 0
 			end)
-		end)
+		end
+		box:GetPropertyChangedSignal('Text'):Connect(function() component:Refresh() end)
+		component:Refresh()
 		
 		children:GetPropertyChangedSignal('CanvasPosition'):Connect(function()
 			divider.Visible = children.CanvasPosition.Y > 10 and children.Visible
@@ -7113,7 +7286,7 @@ components = {
 			end
 		
 			children.CanvasSize = UDim2.fromOffset(0, windowlist.AbsoluteContentSize.Y / scale.Scale)
-			search.Size = UDim2.fromOffset(280, math.min(37 + windowlist.AbsoluteContentSize.Y / scale.Scale, 437))
+			search.Size = UDim2.fromOffset(280, math.min(92 + windowlist.AbsoluteContentSize.Y / scale.Scale, 492))
 		end)
 		
 		return component

@@ -3,6 +3,7 @@ return function(vape)
  local runService = game:GetService('RunService')
  local debris = game:GetService('Debris')
  local effects = {}
+ local animator, startAnimator
  local api = {Modes = {'Astral Bloom', 'Supernova', 'Prism Break', 'Aurora', 'Starfall', 'Sakura', 'Love Burst', 'Kitty Pop'}}
  local supported = {}
  for _, name in api.Modes do supported[name] = true end
@@ -53,6 +54,7 @@ return function(vape)
  local function remove(index)
   effects[index].Group:Destroy()
   table.remove(effects, index)
+  if #effects == 0 and animator then animator:Disconnect(); animator = nil end
  end
  function api:Play(mode, folder, position, size, lifetime, a, b, quality, kill)
   if not supported[mode] then return false end
@@ -120,18 +122,28 @@ return function(vape)
   end
   -- Run initial positions before Roblox renders any of the new parts.
   for _, update in updates do update(0) end
-  table.insert(effects, {Group = group, Age = 0, Life = life, Updates = updates})
+  table.insert(effects, {Group = group, Started = os.clock(), Life = life, Updates = updates})
+  startAnimator()
   debris:AddItem(group, life + 0.2)
   return true
  end
- vape:Clean(runService.RenderStepped:Connect(function(dt)
-  for i = #effects, 1, -1 do
-   local effect = effects[i]
-   effect.Age += dt
-   if not effect.Group.Parent or effect.Age >= effect.Life then remove(i)
-   else for _, update in effect.Updates do update(effect.Age / effect.Life) end end
-  end
- end))
+ startAnimator = function()
+  if animator then return end
+  local elapsed = 0
+  animator = runService.Heartbeat:Connect(function(dt)
+   elapsed += dt
+   local rate = vape.EffectUpdateRate and vape.EffectUpdateRate.Value or 30
+   if elapsed < 1 / math.clamp(rate, 20, 60) then return end
+   elapsed = 0
+   local now = os.clock()
+   for i = #effects, 1, -1 do
+    local effect = effects[i]
+    local age = now - effect.Started
+    if not effect.Group.Parent or age >= effect.Life then remove(i)
+    else for _, update in effect.Updates do update(age / effect.Life) end end
+   end
+  end)
+ end
  vape:Clean(function() for i = #effects, 1, -1 do remove(i) end end)
  return api
 end
