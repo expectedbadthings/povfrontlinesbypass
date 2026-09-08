@@ -1,4 +1,4 @@
--- ILLUSIONHD_FRONTLINES_BLUR_ONLY_V2
+-- Vape interface: restrained surfaces, shared accents, event-driven controls.
 local vape = {
 	ActiveBinds = {},
 	Categories = {},
@@ -122,14 +122,31 @@ function vape:ToggleFavorite(name)
 	return ok
 end
 
+local recentDirty = false
+local recentWritePending = false
+function vape:FlushRecent()
+	if not recentDirty then return end
+	local ok = pcall(function()
+		writefile('newvape/profiles/recent.json', httpService:JSONEncode(self.RecentModules))
+	end)
+	if ok then recentDirty = false end
+end
+
 function vape:RecordRecent(name)
+	if self.Loaded ~= true then return end
 	local current = table.find(self.RecentModules, name)
+	if current == 1 then return end
 	if current then table.remove(self.RecentModules, current) end
 	table.insert(self.RecentModules, 1, name)
 	while #self.RecentModules > 16 do table.remove(self.RecentModules) end
-	pcall(function()
-		writefile('newvape/profiles/recent.json', httpService:JSONEncode(self.RecentModules))
-	end)
+	recentDirty = true
+	if not recentWritePending then
+		recentWritePending = true
+		task.delay(0.5, function()
+			recentWritePending = false
+			if vape.Loaded ~= nil then vape:FlushRecent() end
+		end)
+	end
 	if self.SearchBar and self.SearchBar.Filter == 'Recent' then self.SearchBar:Refresh() end
 end
 local color = {}
@@ -360,7 +377,7 @@ function tween:CancelAll()
 	end
 end
 uipallet = {
-	Main = Color3.fromRGB(23, 26, 33),
+	Main = Color3.fromRGB(25, 25, 25),
 	MainColor = Color3.fromRGB(12, 163, 232),
 	SecondaryColor = Color3.fromRGB(12, 232, 199),
 	Text = Color3.new(1, 1, 1),
@@ -368,6 +385,7 @@ uipallet = {
 	FontSemiBold = Font.fromEnum(Enum.Font.Arial, Enum.FontWeight.SemiBold),
 	Tween = TweenInfo.new(0.16, Enum.EasingStyle.Linear),
 	Themes = {
+		Vape = {{Color3.fromRGB(5, 166, 126), Color3.fromRGB(5, 166, 126)}, 4, 6},
 		Aubergine = {{Color3.fromRGB(170, 7, 107), Color3.fromRGB(97, 4, 95)}, 1, 8},
 		Aqua = {{Color3.fromRGB(185, 250, 255), Color3.fromRGB(79, 199, 200)}, 6},
 		Banana = {{Color3.fromRGB(253, 236, 177), Color3.fromRGB(255, 255, 255)}, 3},
@@ -427,15 +445,15 @@ local themecolors = {
 	Color3.fromRGB(100, 100, 110)
 }
 
-local themeNames = {'Digital Horizon'}
+local themeNames = {'Vape'}
 for themeName in uipallet.Themes do
-	if themeName ~= 'Digital Horizon' then
+	if themeName ~= 'Vape' then
 		table.insert(themeNames, themeName)
 	end
 end
 table.sort(themeNames, function(a, b)
-	if a == 'Digital Horizon' then return b ~= 'Digital Horizon' end
-	if b == 'Digital Horizon' then return false end
+	if a == 'Vape' then return b ~= 'Vape' end
+	if b == 'Vape' then return false end
 	return a:lower() < b:lower()
 end)
 
@@ -457,7 +475,7 @@ end
 -- Animated named gradient themes ------------------------------------------------
 -- GUI accents are theme-only now. The legacy HSV GUI color remains only as a
 -- compatibility shim for external modules; it is no longer user-facing.
-vape.ActiveThemeName = 'Digital Horizon'
+vape.ActiveThemeName = 'Vape'
 vape.ThemePhase = 0
 
 local function getThemePalette(name)
@@ -499,12 +517,12 @@ local function sampleThemeColor(colors, alpha)
 end
 
 function vape:IsGradientThemeActive()
-	local name = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Digital Horizon'
+	local name = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Vape'
 	return uipallet.Themes[name] ~= nil
 end
 
 function vape:GetThemeColors(name)
-	return getThemePalette(name or self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Digital Horizon')
+	return getThemePalette(name or self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Vape')
 end
 
 function vape:GetThemeColor(offset)
@@ -520,6 +538,8 @@ function vape:GetThemeSequence(offset, phase)
 	if not colors then
 		return ColorSequence.new(Color3.fromHSV(self.GUIColor.Hue, self.GUIColor.Sat, self.GUIColor.Value))
 	end
+
+	if self.ActiveThemeName == 'Vape' then return ColorSequence.new(colors[1]) end
 
 	-- More samples = a genuinely smooth travelling gradient. Animation happens by
 	-- moving the sampled palette through a stationary UIGradient, not by spinning it.
@@ -552,7 +572,7 @@ function vape:RegisterThemeGradient(gradient, offset, rotation)
 
 	local newOffset = offset or metadata.Offset or 0
 	local newRotation = rotation or metadata.Rotation or gradient.Rotation or 0
-	local themeName = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Digital Horizon'
+	local themeName = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Vape'
 	local refresh = metadata.Theme ~= themeName or metadata.Offset ~= newOffset
 
 	metadata.Offset = newOffset
@@ -676,7 +696,7 @@ end
 function vape:UpdateThemeGradients()
 	if not self:IsGradientThemeActive() then return end
 	local phase = self.ThemePhase or 0
-	local themeName = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Digital Horizon'
+	local themeName = self.ActiveThemeName or (self.GradientTheme and self.GradientTheme.Value) or 'Vape'
 	for gradient, metadata in uipallet.ThemeObjects do
 		if not gradient or not gradient.Parent then
 			uipallet.ThemeObjects[gradient] = nil
@@ -912,6 +932,7 @@ end
 local function addDragHandler(gui, window)
 	gui.InputBegan:Connect(function(input)
 		if window and not window.Visible then return end
+		if vape.LockLayout and vape.LockLayout.Enabled then return end
 
 		if
 			(input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch)
@@ -924,6 +945,8 @@ local function addDragHandler(gui, window)
 
 			local releaseConnection
 			local moveConnection = inputService.InputChanged:Connect(function(newInput)
+				if vape.LockLayout and vape.LockLayout.Enabled then return end
+				if input.UserInputType == Enum.UserInputType.Touch and newInput ~= input then return end
 				if newInput.UserInputType == (input.UserInputType == Enum.UserInputType.MouseButton1 and Enum.UserInputType.MouseMovement or Enum.UserInputType.Touch) then
 					local position = newInput.Position
 					if inputService:IsKeyDown(Enum.KeyCode.LeftShift) then
@@ -1177,10 +1200,147 @@ function vape:CreateCategoryList(props)
 	return components.CategoryList(props)
 end
 
+-- Session actions keep their own state; they never enter saved module options.
+function vape:BulkDisable()
+	if not self.Loaded or self.SwitchingProfile then return end
+	local snapshot = {Profile = self.Profile, Modules = {}}
+	local failed = 0
+	for name, module in self.Modules do
+		if module.Enabled then
+			local ok = pcall(module.Toggle, module, true)
+			if not module.Enabled then snapshot.Modules[name] = module end
+			if not ok or module.Enabled then failed += 1 end
+		end
+	end
+	local count = getTableSize(snapshot.Modules)
+	if count > 0 then self.BulkUndo = snapshot end
+	self:CreateNotification('Modules', count..' disabled. Undo is available in General.'..(failed > 0 and (' '..failed..' failed.') or ''), 4, failed > 0 and 'warning' or 'info')
+end
+
+function vape:UndoBulkDisable()
+	local snapshot = self.BulkUndo
+	if not self.Loaded or self.SwitchingProfile then return end
+	if not snapshot or snapshot.Profile ~= self.Profile then
+		self:CreateNotification('Modules', 'Nothing to undo in this profile.', 3)
+		return
+	end
+	local restored, failed = 0, 0
+	for name, original in snapshot.Modules do
+		local module = self.Modules[name]
+		if module ~= original or module.Enabled then
+			snapshot.Modules[name] = nil
+		elseif module.Bind and module.Bind.Hold then
+			-- A hold binding must be activated by physically holding its key.
+			snapshot.Modules[name] = nil
+		else
+			local ok = pcall(module.Toggle, module, true)
+			if ok and module.Enabled then
+				restored += 1
+				snapshot.Modules[name] = nil
+			else
+				failed += 1
+			end
+		end
+	end
+	if not next(snapshot.Modules) then self.BulkUndo = nil end
+	self:CreateNotification('Modules', restored..' restored.'..(failed > 0 and (' '..failed..' failed; undo can retry.') or ''), 3, failed > 0 and 'warning' or 'info')
+end
+
+function vape:SwitchProfile(name)
+	if not self.Loaded or self.SwitchingProfile or name == self.Profile then return false end
+	if type(name) ~= 'string' or not self.Categories.Profiles:GetValue(name) then return false end
+	local path = 'newvape/profiles/'..name..self.Place..'.txt'
+	local target = isfile(path) and loadJson(path) or nil
+	if isfile(path) and (not target or type(target.Modules) ~= 'table' or type(target.Categories) ~= 'table' or type(target.Legit) ~= 'table') then
+		self:CreateNotification('Profiles', 'Cannot switch: target profile is invalid.', 5, 'alert')
+		return false
+	end
+	local previous = self.Profile
+	self.SwitchingProfile = true
+	self.ProfileSwitchThread = coroutine.running()
+	local saved, err = pcall(self.Save, self)
+	if not saved then
+		self.SwitchingProfile = false
+		self.ProfileSwitchThread = nil
+		self:CreateNotification('Profiles', 'Current profile could not be saved: '..tostring(err), 5, 'alert')
+		return false
+	end
+	local ok, failure = pcall(function()
+		if not target then
+			-- Newly added profiles start as a copy of the current setup.
+			self.Profile = name
+			self:Save()
+		else
+			for _, entry in {{self.Modules, target.Modules}, {self.Legit.Modules, target.Legit}} do
+				for moduleName, module in entry[1] do
+					if module.Enabled and not entry[2][moduleName] then module:Toggle(true) end
+				end
+			end
+		end
+		self:Load(true, name)
+		assert(self.Loaded and self.Profile == name, 'Profile did not finish loading')
+		self:Save()
+	end)
+	if ok then
+		self.PreviousProfile = previous
+		self.BulkUndo = nil
+	else
+		local recovered = pcall(self.Load, self, true, previous)
+		if recovered and self.Loaded then pcall(self.Save, self) end
+		self:CreateNotification('Profiles', 'Switch failed: '..tostring(failure)..(recovered and self.Loaded and '. Previous profile restored.' or '. Reload the client before saving.'), 8, 'alert')
+		if not recovered then self.Loaded = false end
+	end
+	self.SwitchingProfile = false
+	self.ProfileSwitchThread = nil
+	self.Categories.Profiles:ChangeValue()
+	return ok
+end
+
+function vape:CycleProfile(direction)
+	local names = {}
+	for _, profile in self.Categories.Profiles.List do table.insert(names, profile.Name) end
+	table.sort(names)
+	if #names > 1 then self:SwitchProfile(names[((table.find(names, self.Profile) or 1) - 1 + direction) % #names + 1]) end
+end
+
+function vape:GetKeybindRows(activeOnly)
+	local rows = {}
+	for name, module in self.Modules do
+		local bind = module.Bind
+		if bind and bind.Keys and #bind.Keys > 0 and (not activeOnly or module.Enabled) then
+			table.insert(rows, {Name = name, Keys = table.concat(bind.Keys, ' + '), Enabled = module.Enabled, Hold = bind.Hold == true})
+		end
+	end
+	table.sort(rows, function(a, b)
+		if a.Enabled ~= b.Enabled then return a.Enabled end
+		return a.Name:lower() < b.Name:lower()
+	end)
+	return rows
+end
+
+local notificationRecent = {}
+function vape:AllowNotification(title, text, kind, now)
+	kind = kind or 'info'
+	if self.NotificationMode and self.NotificationMode.Value == 'Warnings only' and kind ~= 'warning' and kind ~= 'alert' then return false end
+	local cooldown = self.NotificationCooldown and self.NotificationCooldown.Value or 0
+	if cooldown <= 0 then return true end
+	for key, timestamp in notificationRecent do
+		if now - timestamp >= cooldown then notificationRecent[key] = nil end
+	end
+	local key = tostring(kind)..'\0'..title..'\0'..text
+	if notificationRecent[key] then return false end
+	if getTableSize(notificationRecent) >= 64 then table.clear(notificationRecent) end
+	notificationRecent[key] = now
+	return true
+end
+
 function vape:CreateNotification(title, text, duration, type)
 	if not self.Notifications.Enabled then
 		return
 	end
+	title, text = tostring(title or 'Vape'), tostring(text or '')
+	if not self:AllowNotification(title, text, type, os.clock()) then return end
+	duration = math.clamp((tonumber(duration) or 3) * (self.NotificationDuration and self.NotificationDuration.Value or 1), 0.5, 30)
 
 	-- When the Dynamic Island is enabled + visible, it becomes Vape's notification
 	-- surface instead of spawning a second disconnected toast stack. Turning the
@@ -1189,16 +1349,20 @@ function vape:CreateNotification(title, text, duration, type)
 	local merge = self.DynamicIslandMergeNotifications
 	if island and island.Button and island.Button.Enabled and merge and merge.Enabled
 		and self.QueueDynamicIslandNotification and (island.Pinned or (clickgui and clickgui.Visible)) then
-		self:QueueDynamicIslandNotification(title, text, duration, type)
+		self:QueueDynamicIslandNotification(title, text, duration, type, true)
 		return
 	end
 
 	task.delay(0, function()
+		if self.Loaded == nil or not notifications.Parent then return end
 		if self.ThreadFix then
 			setthreadidentity(8)
 		end
 
-		local index = #notifications:GetChildren() + 1
+		local existing = notifications:GetChildren()
+		local limit = self.NotificationLimit and self.NotificationLimit.Value or 4
+		while #existing >= limit do table.remove(existing, 1):Destroy() end
+		local index = #existing + 1
 		local notification = Instance.new('ImageLabel')
 		notification.BackgroundTransparency = 1
 		notification.Position = UDim2.new(1, 0, 1, -(29 + (78 * index)))
@@ -1235,6 +1399,16 @@ function vape:CreateNotification(title, text, duration, type)
 		label.TextYAlignment = Enum.TextYAlignment.Top
 		label.ZIndex = 5
 		label.Parent = notification
+		local dismiss = Instance.new('TextButton')
+		dismiss.BackgroundTransparency = 1
+		dismiss.Position = UDim2.new(1, -24, 0, 3)
+		dismiss.Size = UDim2.fromOffset(22, 22)
+		dismiss.Text = '×'
+		dismiss.TextSize = 18
+		dismiss.TextColor3 = uipallet.Text
+		dismiss.ZIndex = 6
+		dismiss.Parent = notification
+		dismiss.Activated:Connect(function() notification:Destroy() end)
 		local textshadow = label:Clone()
 		textshadow.FontFace = uipallet.Font
 		textshadow.Position = UDim2.fromOffset(47, 44)
@@ -1273,6 +1447,7 @@ function vape:CreateNotification(title, text, duration, type)
 		end
 
 		task.delay(duration, function()
+			if not notification.Parent then return end
 			if tween.Tween then
 				tween:Tween(notification, TweenInfo.new(0.4, Enum.EasingStyle.Exponential), {
 					AnchorPoint = Vector2.new(0, 0)
@@ -1457,7 +1632,8 @@ function vape:LoadGUI()
 	topographyBackground.BackgroundTransparency = 1
 	topographyBackground.Image = 'rbxassetid://2151741365'
 	topographyBackground.ImageColor3 = vape:GetThemeColor(0.08)
-	topographyBackground.ImageTransparency = 0.62
+	topographyBackground.ImageTransparency = 0.9
+	topographyBackground.Visible = false
 	topographyBackground.Position = UDim2.fromOffset(-180, -180)
 	topographyBackground.ScaleType = Enum.ScaleType.Tile
 	topographyBackground.Size = UDim2.new(1, 360, 1, 360)
@@ -1465,20 +1641,7 @@ function vape:LoadGUI()
 	topographyBackground.ZIndex = 0
 	topographyBackground.Parent = clickgui
 
-	-- Very subtle background drift; no rotation, no duplicate layers.
-	local driftElapsed = 0
-	local topologyDrift = runService.Heartbeat:Connect(function(dt)
-		if not clickgui.Visible or not topographyBackground or not topographyBackground.Parent or not topographyBackground.Visible or (vape.ReducedMotion and vape.ReducedMotion.Enabled) then return end
-		driftElapsed = driftElapsed + dt
-		if driftElapsed < 1 / 30 then return end
-		driftElapsed = driftElapsed % (1 / 30)
-		local now = os.clock()
-		topographyBackground.Position = UDim2.fromOffset(
-			-180 + math.sin(now * 0.12) * 24,
-			-180 + math.cos(now * 0.10) * 18
-		)
-	end)
-	vape:Clean(topologyDrift)
+	-- Optional static texture; no background animation loop.
 	local shortcutHint = Instance.new('TextLabel')
 	shortcutHint.BackgroundTransparency = 1
 	shortcutHint.FontFace = uipallet.Font
@@ -1682,34 +1845,27 @@ function vape:LoadGUI()
 	]]
 	local DynamicIsland
 	do
-		-- This intentionally uses Vape's real overlay + notification language:
-		-- standard Overlay chrome while editing, notification slice art, Vape's
-		-- own noti icons, vapelogomini/V4 and the actual guivape repeating tile.
+		-- Compact watermark with optional notification expansion.
 		local queue = {}
 		local activeNotification
 		local queueWorker = false
 		local notificationEpoch = 0
-		local contentRevision = 0
-		local contentState = 'Idle'
 		local dismissEpoch = 0
 		local fpsAverage = 60
 		local statsAccumulator = 0
-		local patternAccumulator = 0
 		local idleCount = 0
 		local lastClock = ''
 
-		local mergeNotifications, autoWidth, showPattern, animatePattern, showProgress
+		local mergeNotifications, autoWidth, showProgress
 		local showLogo, showV4, showProfile, showModules, showFPS, showClock
 		local showNotificationIcon, clickDismiss, baseWidth, maxWidth, idleHeight, notificationHeight
-		local patternOpacity, patternSpeed, durationScale, queueLimit, queueMode, islandMotion, idleClickAction
-		local patternDirection, accentLine
+		local durationScale, queueLimit, queueMode, islandMotion, idleClickAction
+		local accentLine
 
-		local card, cardStroke, patternClip, idleGroup, notificationGroup
+		local card, cardStroke, idleGroup, notificationGroup
 		local idleLogo, idleV4, idleDivider, idleTitle, idleMeta
 		local notiIconShadow, notiIcon, notiTitle, notiBody, notiLogo, queueLabel
 		local progressTrack, progressFill, accent
-		local patternRows = {}
-		local patternTiles = {}
 
 		local function getEnabledCount()
 			local count = 0
@@ -1772,30 +1928,21 @@ function vape:LoadGUI()
 			end
 		end
 
-		-- Strict single-state content switcher. Idle and notification content are
-		-- never visible at the same time, so stale/cancelled tweens cannot leave
-		-- two text layouts stacked on top of each other.
-		local function setContentState(state)
-			contentRevision += 1
-			local revision = contentRevision
-			contentState = state
-
-			if idleGroup then tween:Cancel(idleGroup, 'island-content') end
-			if notificationGroup then tween:Cancel(notificationGroup, 'island-content') end
-
-			local incoming = state == 'Notification' and notificationGroup or idleGroup
-			local outgoing = state == 'Notification' and idleGroup or notificationGroup
-			if outgoing then
-				outgoing.Visible = false
-				outgoing.GroupTransparency = 1
+		local function setGroup(group, visible)
+			if not group then return end
+			group.Visible = true
+			local info = currentMotion()
+			if info then
+				local motion = tween:Tween(group, info, {GroupTransparency = visible and 0 or 1}, 'island-content')
+				if not visible and motion then
+					motion.Completed:Once(function()
+						if group.Parent and group.GroupTransparency >= 0.98 then group.Visible = false end
+					end)
+				end
+			else
+				group.GroupTransparency = visible and 0 or 1
+				group.Visible = visible
 			end
-			if incoming then
-				incoming.Visible = true
-				incoming.GroupTransparency = 1
-				local motion = animate(incoming, {GroupTransparency = 0}, 'island-content')
-				if not motion and revision == contentRevision then incoming.GroupTransparency = 0 end
-			end
-			return revision
 		end
 
 		local function semanticColor(notificationType)
@@ -1806,27 +1953,28 @@ function vape:LoadGUI()
 
 		local function updateIdleText()
 			if not idleTitle or not idleMeta then return end
-			idleCount = getEnabledCount()
-			lastClock = formatClock()
+			if showModules and showModules.Enabled then idleCount = getEnabledCount() end
+			if showClock and showClock.Enabled then lastClock = formatClock() end
 			local profile = tostring(vape.Profile or 'default')
-			idleTitle.Text = (showProfile and showProfile.Enabled) and profile or 'Vape client'
+			local title = (showProfile and showProfile.Enabled) and profile or 'Vape '..vape.Version
+			if idleTitle.Text ~= title then idleTitle.Text = title end
 			local bits = {}
 			if showModules and showModules.Enabled then table.insert(bits, tostring(idleCount)..' modules') end
 			if showFPS and showFPS.Enabled then table.insert(bits, tostring(math.floor(fpsAverage + 0.5))..' FPS') end
 			if showClock and showClock.Enabled then table.insert(bits, lastClock) end
-			idleMeta.Text = #bits > 0 and table.concat(bits, '  •  ') or 'Ready'
+			local metadata = table.concat(bits, '  ·  ')
+			if idleMeta.Text ~= metadata then idleMeta.Text = metadata end
 		end
 
 		local function updateLogoVisibility()
 			if idleLogo then idleLogo.Visible = showLogo == nil or showLogo.Enabled end
 			if idleV4 then idleV4.Visible = (showLogo == nil or showLogo.Enabled) and (showV4 == nil or showV4.Enabled) end
 			if idleDivider then idleDivider.Visible = showLogo == nil or showLogo.Enabled end
-			if idleTitle then idleTitle.Position = UDim2.fromOffset((showLogo == nil or showLogo.Enabled) and 104 or 14, 7) end
-			if idleMeta then idleMeta.Position = UDim2.fromOffset((showLogo == nil or showLogo.Enabled) and 104 or 14, 23) end
-		end
-
-		local function updatePatternVisibility()
-			if patternClip then patternClip.Visible = showPattern == nil or showPattern.Enabled end
+			if idleTitle then idleTitle.Position = UDim2.fromOffset((showLogo == nil or showLogo.Enabled) and 114 or 14, 7) end
+			local inset = (showLogo == nil or showLogo.Enabled) and 126 or 28
+			if idleTitle then idleTitle.Size = UDim2.new(1, -inset, 0, 18) end
+			if idleMeta then idleMeta.Size = UDim2.new(1, -inset, 0, 16) end
+			if idleMeta then idleMeta.Position = UDim2.fromOffset((showLogo == nil or showLogo.Enabled) and 114 or 14, 23) end
 		end
 
 		local function updateAccentVisibility()
@@ -1836,12 +1984,12 @@ function vape:LoadGUI()
 		local function presentIdle()
 			activeNotification = nil
 			updateIdleText()
-			setContentState('Idle')
+			setGroup(notificationGroup, false)
+			setGroup(idleGroup, true)
 			resizeIsland(baseWidth and baseWidth.Value or 310, idleHeight and idleHeight.Value or 46)
 			if progressTrack then progressTrack.Visible = false end
-			if progressFill then tween:Cancel(progressFill) end
 			if queueLabel then queueLabel.Visible = false end
-			if cardStroke then vape:RegisterThemeSolid(cardStroke, 'Color', 0.1) end
+			if cardStroke then cardStroke.Color = color.Light(uipallet.Main, 0.16) end
 		end
 
 		local function presentNotification(notification)
@@ -1849,7 +1997,7 @@ function vape:LoadGUI()
 			local ntype = notification.Type or 'info'
 			if ntype ~= 'info' and ntype ~= 'warning' and ntype ~= 'alert' then ntype = 'info' end
 			local typeColor = semanticColor(ntype)
-			notiTitle.Text = "<stroke joins='round' thickness='0.3' transparency='0.5'>"..tostring(notification.Title or 'Vape')..'</stroke>'
+			notiTitle.Text = tostring(notification.Title or 'Vape')
 			notiTitle.TextColor3 = ntype == 'info' and uipallet.Text or typeColor
 			notiBody.Text = tostring(notification.Text or '')
 			notiIconShadow.Image = getvapeasset('newvape/assets/new/noti_'..ntype..'.png')
@@ -1867,7 +2015,8 @@ function vape:LoadGUI()
 				vape:UnregisterThemeSolid(cardStroke)
 				cardStroke.Color = typeColor
 			end
-			local stateRevision = setContentState('Notification')
+			setGroup(idleGroup, false)
+			setGroup(notificationGroup, true)
 			resizeIsland(getTargetWidth(notification), notificationHeight and notificationHeight.Value or 72)
 			local duration = math.max(0.15, (notification.Duration or 3) * (durationScale and durationScale.Value or 1))
 			progressTrack.Visible = showProgress == nil or showProgress.Enabled
@@ -1877,10 +2026,9 @@ function vape:LoadGUI()
 			if progressTrack.Visible then
 				tween:Tween(progressFill, TweenInfo.new(duration, Enum.EasingStyle.Linear), {Size = UDim2.fromScale(0, 1)})
 			end
-			return duration, stateRevision
+			return duration
 		end
 
-		local startQueueWorker
 		local function queueNotification(notification)
 			local mode = queueMode and queueMode.Value or 'Queue'
 			local limit = queueLimit and math.max(1, math.floor(queueLimit.Value)) or 5
@@ -1901,51 +2049,37 @@ function vape:LoadGUI()
 				queueLabel.Visible = #queue > 0
 			end
 
-			startQueueWorker()
-		end
-
-		startQueueWorker = function()
 			if queueWorker then return end
-			if not DynamicIsland or not DynamicIsland.Button.Enabled or #queue == 0 then return end
 			queueWorker = true
-			task.spawn(function()
-				while DynamicIsland and DynamicIsland.Button.Enabled do
+			vape:Clean(task.spawn(function()
+				while DynamicIsland and DynamicIsland.Button.Enabled and #queue > 0 do
 					local item = table.remove(queue, 1)
-					if not item then break end
 					local epoch = notificationEpoch
 					local dismiss = dismissEpoch
-					local duration, stateRevision = presentNotification(item)
+					local duration = presentNotification(item)
 					local deadline = os.clock() + duration
-					repeat
-						task.wait(0.035)
-					until os.clock() >= deadline
-						or epoch ~= notificationEpoch
-						or dismiss ~= dismissEpoch
-						or stateRevision ~= contentRevision
-						or not DynamicIsland.Button.Enabled
+					repeat task.wait(0.035) until os.clock() >= deadline or epoch ~= notificationEpoch or dismiss ~= dismissEpoch or not DynamicIsland.Button.Enabled
 					if not DynamicIsland.Button.Enabled then break end
 				end
-
-				if not DynamicIsland or not DynamicIsland.Button.Enabled then
-					table.clear(queue)
-					queueWorker = false
-					return
-				end
-
+				if not DynamicIsland.Button.Enabled then table.clear(queue) end
 				queueWorker = false
-				-- A notification can arrive between the final empty-queue check and
-				-- worker teardown. Restart immediately instead of stranding it until
-				-- some later notification happens to wake the queue back up.
-				if #queue > 0 then
-					task.defer(startQueueWorker)
-				else
-					presentIdle()
-				end
-			end)
+				presentIdle()
+			end))
 		end
 
-		function vape:QueueDynamicIslandNotification(title, body, duration, notificationType)
+		function vape:DismissIslandNotifications()
+			table.clear(queue)
+			dismissEpoch += 1
+			if progressFill then tween:Cancel(progressFill) end
+			presentIdle()
+		end
+
+		function vape:QueueDynamicIslandNotification(title, body, duration, notificationType, checked)
 			if not DynamicIsland or not DynamicIsland.Button.Enabled then return false end
+			if not checked then
+				if not self.Notifications.Enabled or not self:AllowNotification(tostring(title or 'Vape'), tostring(body or ''), notificationType, os.clock()) then return false end
+				duration = math.clamp((tonumber(duration) or 3) * (self.NotificationDuration and self.NotificationDuration.Value or 1), 0.5, 30)
+			end
 			queueNotification({
 				Title = tostring(title or 'Vape'),
 				Text = tostring(body or ''),
@@ -1983,72 +2117,23 @@ function vape:LoadGUI()
 		card = Instance.new('ImageButton')
 		card.Name = 'VapeDynamicIsland'
 		card.AutoButtonColor = false
-		card.ClipsDescendants = true
-		card.BackgroundColor3 = Color3.fromRGB(20, 22, 29)
+		card.BackgroundColor3 = uipallet.Main
+		card.BackgroundTransparency = 0.08
 		card.BorderSizePixel = 0
-		card.Image = getvapeasset('newvape/assets/new/notification.png')
+		card.Image = ''
 		card.ImageColor3 = Color3.new(1, 1, 1)
 		card.ScaleType = Enum.ScaleType.Slice
 		card.SliceCenter = Rect.new(7, 7, 9, 9)
 		card.Size = UDim2.new(1, 0, 0, 46)
 		card.Parent = DynamicIsland.Children
-		addCorner(card, UDim.new(0, 8))
+		addCorner(card, UDim.new(0, 4))
 		cardStroke = Instance.new('UIStroke')
 		cardStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		cardStroke.Transparency = 0.58
+		cardStroke.Transparency = 0.82
 		cardStroke.Thickness = 1
 		cardStroke.Parent = card
-		vape:RegisterThemeSolid(cardStroke, 'Color', 0.1)
+		cardStroke.Color = color.Light(uipallet.Main, 0.16)
 		addBlur(card, true, true)
-
-		local darkLayer = Instance.new('Frame')
-		darkLayer.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
-		darkLayer.BackgroundTransparency = 1
-		darkLayer.BorderSizePixel = 0
-		darkLayer.Size = UDim2.fromScale(1, 1)
-		darkLayer.ZIndex = 1
-		darkLayer.Parent = card
-		addCorner(darkLayer, UDim.new(0, 8))
-
-		patternClip = Instance.new('Frame')
-		patternClip.BackgroundTransparency = 1
-		patternClip.ClipsDescendants = true
-		patternClip.Position = UDim2.fromOffset(4, 4)
-		patternClip.Size = UDim2.new(1, -8, 1, -8)
-		patternClip.ZIndex = 3
-		patternClip.Parent = card
-		addCorner(patternClip, UDim.new(0, 8))
-		for row = 0, 4 do
-			local rowFrame = Instance.new('Frame')
-			rowFrame.BackgroundTransparency = 1
-			rowFrame.BorderSizePixel = 0
-			rowFrame.Size = UDim2.new(1, 124, 0, 18)
-			rowFrame.Position = UDim2.fromOffset(-62, row * 18 - 5)
-			rowFrame.Parent = patternClip
-			table.insert(patternRows, rowFrame)
-			for tile = 0, 11 do
-				local image = Instance.new('ImageLabel')
-				image.BackgroundTransparency = 1
-				image.Image = getvapeasset('newvape/assets/new/guivape.png')
-				image.ImageColor3 = Color3.fromRGB(205, 210, 223)
-				image.ImageTransparency = 0.92
-				image.Size = UDim2.fromOffset(62, 18)
-				image.ZIndex = 3
-				image.Position = UDim2.fromOffset(tile * 62, 0)
-				image.Parent = rowFrame
-				table.insert(patternTiles, image)
-			end
-		end
-
-		local contentShade = Instance.new('Frame')
-		contentShade.BackgroundColor3 = Color3.fromRGB(17, 19, 25)
-		contentShade.BackgroundTransparency = 0.46
-		contentShade.BorderSizePixel = 0
-		contentShade.Position = UDim2.fromOffset(3, 3)
-		contentShade.Size = UDim2.new(1, -6, 1, -6)
-		contentShade.ZIndex = 2
-		contentShade.Parent = card
-		addCorner(contentShade, UDim.new(0, 8))
 
 		idleGroup = Instance.new('CanvasGroup')
 		idleGroup.BackgroundTransparency = 1
@@ -2184,8 +2269,8 @@ function vape:LoadGUI()
 		accent.AnchorPoint = Vector2.new(0, 1)
 		accent.BackgroundColor3 = Color3.new(1, 1, 1)
 		accent.BorderSizePixel = 0
-		accent.Position = UDim2.new(0, 8, 1, -1)
-		accent.Size = UDim2.new(1, -16, 0, 1)
+		accent.Position = UDim2.new(0, 4, 0, 2)
+		accent.Size = UDim2.new(1, -8, 0, 2)
 		accent.ZIndex = 5
 		accent.Parent = card
 		local accentGradient = Instance.new('UIGradient')
@@ -2194,37 +2279,19 @@ function vape:LoadGUI()
 
 		-- Island customization lives in the overlay's own settings, not the already
 		-- crowded GUI tab.
-		mergeNotifications = DynamicIsland:CreateToggle({Name = 'Merge notifications', Default = true, Tooltip = 'Route Vape notifications through the island while it is visible.'})
+		mergeNotifications = DynamicIsland:CreateToggle({Name = 'Merge notifications', Default = false, Tooltip = 'Route Vape notifications through the island while it is visible.'})
 		vape.DynamicIslandMergeNotifications = mergeNotifications
 		autoWidth = DynamicIsland:CreateToggle({Name = 'Dynamic notification width', Default = true, Tooltip = 'Expand horizontally to fit notification content.'})
-		showPattern = DynamicIsland:CreateToggle({Name = 'VAPE pattern', Default = true, Function = updatePatternVisibility})
-		animatePattern = DynamicIsland:CreateToggle({Name = 'Animate pattern', Default = true, Darker = true})
-		patternDirection = DynamicIsland:CreateDropdown({Name = 'Pattern flow', List = {'Opposed', 'Left', 'Right'}, Default = 'Opposed', Darker = true})
-		patternOpacity = DynamicIsland:CreateSlider({Name = 'Pattern visibility', Min = 0, Max = 30, Default = 8, Decimal = 1, Suffix = '%', Darker = true, Function = function() end})
-		patternSpeed = DynamicIsland:CreateSlider({Name = 'Pattern speed', Min = 0, Max = 60, Default = 18, Decimal = 1, Suffix = 'px/s', Darker = true, Function = function() end})
 		accentLine = DynamicIsland:CreateToggle({Name = 'Theme accent line', Default = true, Function = updateAccentVisibility})
 		showProgress = DynamicIsland:CreateToggle({Name = 'Notification progress', Default = true})
-		showNotificationIcon = DynamicIsland:CreateToggle({Name = 'Notification icons', Default = true, Function = function()
-			if activeNotification then
-				local iconsVisible = showNotificationIcon.Enabled
-				if notiIconShadow then notiIconShadow.Visible = iconsVisible end
-				if notiTitle then
-					notiTitle.Position = UDim2.fromOffset(iconsVisible and 62 or 14, 10)
-					notiTitle.Size = UDim2.new(1, iconsVisible and -136 or -88, 0, 20)
-				end
-				if notiBody then
-					notiBody.Position = UDim2.fromOffset(iconsVisible and 62 or 14, 32)
-					notiBody.Size = UDim2.new(1, iconsVisible and -82 or -28, 0, 23)
-				end
-			end
-		end})
+		showNotificationIcon = DynamicIsland:CreateToggle({Name = 'Notification icons', Default = true})
 		clickDismiss = DynamicIsland:CreateToggle({Name = 'Click to dismiss', Default = true})
 		showLogo = DynamicIsland:CreateToggle({Name = 'Vape logo', Default = true, Function = updateLogoVisibility})
 		showV4 = DynamicIsland:CreateToggle({Name = 'V4 badge', Default = true, Darker = true, Function = updateLogoVisibility})
 		showProfile = DynamicIsland:CreateToggle({Name = 'Profile name', Default = true, Function = updateIdleText})
 		showModules = DynamicIsland:CreateToggle({Name = 'Module count', Default = true, Function = updateIdleText})
 		showFPS = DynamicIsland:CreateToggle({Name = 'FPS', Default = true, Function = updateIdleText})
-		showClock = DynamicIsland:CreateToggle({Name = 'Clock', Default = true, Function = updateIdleText})
+		showClock = DynamicIsland:CreateToggle({Name = 'Clock', Default = false, Function = updateIdleText})
 		idleClickAction = DynamicIsland:CreateDropdown({Name = 'Idle click', List = {'Open GUI', 'Nothing'}, Default = 'Open GUI'})
 		queueMode = DynamicIsland:CreateDropdown({Name = 'Notification behavior', List = {'Queue', 'Latest', 'Replace'}, Default = 'Queue'})
 		queueLimit = DynamicIsland:CreateSlider({Name = 'Queue limit', Min = 1, Max = 8, Default = 5, Decimal = 1, Function = function() end})
@@ -2254,33 +2321,17 @@ function vape:LoadGUI()
 		if not DynamicIsland.Pinned then DynamicIsland:Pin() end
 		DynamicIsland:Update()
 		updateLogoVisibility()
-		updatePatternVisibility()
 		updateAccentVisibility()
 		presentIdle()
 
 		vape:Clean(runService.RenderStepped:Connect(function(delta)
-			if not DynamicIsland or not DynamicIsland.Button.Enabled or not card or not card.Parent then return end
+			if not DynamicIsland or not DynamicIsland.Button.Enabled or not card or not card.Parent or not DynamicIsland.Children.Visible
+				or not (DynamicIsland.Pinned or clickgui.Visible) then return end
 			fpsAverage += (((delta > 0 and (1 / delta) or 60) - fpsAverage) * math.min(delta * 3, 1))
 			statsAccumulator += delta
-			patternAccumulator += delta
-			if statsAccumulator >= 0.25 then
-				statsAccumulator %= 0.25
+			if statsAccumulator >= 1 then
+				statsAccumulator %= 1
 				if not activeNotification then updateIdleText() end
-			end
-			if patternAccumulator >= (1 / 30) then
-				patternAccumulator %= (1 / 30)
-				local visibleAmount = math.clamp((patternOpacity and patternOpacity.Value or 8) / 100, 0, 0.3)
-				for _, tile in patternTiles do tile.ImageTransparency = 1 - visibleAmount end
-				if showPattern == nil or showPattern.Enabled then
-					local moving = animatePattern and animatePattern.Enabled and not (vape.ReducedMotion and vape.ReducedMotion.Enabled)
-					local speed = moving and (patternSpeed and patternSpeed.Value or 18) or 0
-					local flow = patternDirection and patternDirection.Value or 'Opposed'
-					for index, row in ipairs(patternRows) do
-						local direction = flow == 'Left' and -1 or flow == 'Right' and 1 or (index % 2 == 0 and 1 or -1)
-						local x = -62 + ((os.clock() * speed * direction) % 62)
-						row.Position = UDim2.fromOffset(math.floor(x), ((index - 1) * 18) - 5)
-					end
-				end
 			end
 		end))
 	end
@@ -2373,17 +2424,22 @@ function vape:LoadGUI()
 	})
 	general:CreateButton({
 		Name = 'Disable enabled modules',
-		Function = function()
-			local count = 0
-			for _, module in vape.Modules do
-				if module.Enabled then
-					module:Toggle(true)
-					count += 1
-				end
-			end
-			vape:CreateNotification('Modules', count > 0 and ('Disabled '..count..' enabled modules') or 'Nothing was enabled', 2.5)
-		end,
+		Function = function() vape:BulkDisable() end,
 		Tooltip = 'Quickly turns off every currently enabled module without changing saved visibility or keybinds.'
+	})
+	general:CreateButton({
+		Name = 'Undo bulk disable',
+		Function = function() vape:UndoBulkDisable() end,
+		Tooltip = 'Restore the last batch disabled in this profile. Hold bindings stay off until their keys are held.'
+	})
+	general:CreateButton({Name = 'Previous profile', Function = function() vape:CycleProfile(-1) end})
+	general:CreateButton({Name = 'Next profile', Function = function() vape:CycleProfile(1) end})
+	general:CreateButton({
+		Name = 'Return to previous profile',
+		Function = function()
+			if vape.PreviousProfile then vape:SwitchProfile(vape.PreviousProfile) end
+		end,
+		Tooltip = 'Return to the setup used before the last successful switch.'
 	})
 	vape.SaveOnClose = general:CreateToggle({
 		Name = 'Save when closing menu',
@@ -2486,6 +2542,20 @@ function vape:LoadGUI()
 	]]
 
 	local guipane = vape.Categories.Main.Settings:CreateSettingsPane({Name = 'GUI'})
+	vape.LockLayout = guipane:CreateToggle({
+		Name = 'Lock layout',
+		Tooltip = 'Prevent dragging windows and overlays. Turn off to rearrange your layout.'
+	})
+	guipane:CreateButton({
+		Name = 'Collapse all windows',
+		Function = function()
+			for _, category in vape.Categories do
+				if category.ExpandedModule and category.ExpandedModule.SetExpanded then category.ExpandedModule:SetExpanded(false) end
+				if category.Expanded and category.Expand then category:Expand() end
+			end
+		end,
+		Tooltip = 'Close expanded module settings and collapse category windows without moving them.'
+	})
 	local advancedGUIVisible = false
 	local advancedGUIOptions = {}
 
@@ -2509,7 +2579,7 @@ function vape:LoadGUI()
 	})
 	guipane:CreateToggle({
 		Name = 'Menu background',
-		Default = true,
+		Default = false,
 		Function = function(enabled) topographyBackground.Visible = enabled end,
 		Tooltip = 'Show the subtle contour background behind your modules'
 	})
@@ -2535,7 +2605,7 @@ function vape:LoadGUI()
 		Name = 'Animated theme',
 		List = themeNames,
 		Function = function(value)
-			vape.ActiveThemeName = uipallet.Themes[value] and value or 'Digital Horizon'
+			vape.ActiveThemeName = uipallet.Themes[value] and value or 'Vape'
 			local palette = vape:GetThemeColors(vape.ActiveThemeName)
 			uipallet.MainColor = palette[1] or Color3.fromRGB(12, 163, 232)
 			uipallet.SecondaryColor = palette[2] or palette[1] or Color3.fromRGB(12, 232, 199)
@@ -2543,7 +2613,7 @@ function vape:LoadGUI()
 			refreshAdvancedGUI()
 			vape:UpdateGUI()
 		end,
-		Tooltip = 'Primary GUI color system. Every interface accent uses this animated theme.'
+		Tooltip = 'Primary GUI color system. Choose Vape for a solid green accent, or an animated palette.'
 	})
 
 	local ScaleSlider = {Object = {}, Value = 1}
@@ -2723,6 +2793,23 @@ function vape:LoadGUI()
 		Default = true,
 		Darker = true
 	})
+	vape.NotificationMode = notifpane:CreateDropdown({
+		Name = 'Show', List = {'All', 'Warnings only'}, Default = 'All',
+		Tooltip = 'Warnings only silences routine messages while keeping warnings and errors.'
+	})
+	vape.NotificationCooldown = notifpane:CreateSlider({
+		Name = 'Repeat cooldown', Min = 0, Max = 10, Default = 2, Suffix = 's',
+		Tooltip = 'Suppress identical messages within this interval. Zero allows all repeats.'
+	})
+	vape.NotificationDuration = notifpane:CreateSlider({Name = 'Toast duration', Min = 0.5, Max = 2, Default = 1, Decimal = 10, Suffix = 'x'})
+	vape.NotificationLimit = notifpane:CreateSlider({Name = 'Visible toast limit', Min = 1, Max = 6, Default = 4})
+	notifpane:CreateButton({
+		Name = 'Dismiss all',
+		Function = function()
+			notifications:ClearAllChildren()
+			if vape.DismissIslandNotifications then vape:DismissIslandNotifications() end
+		end
+	})
 
 	-- No user-facing solid GUI color picker. External code can still read these
 	-- compatibility fields, but the interface itself is driven by Animated theme.
@@ -2734,6 +2821,145 @@ function vape:LoadGUI()
 		NoRemove = true,
 		Tooltip = 'Change the bind of the GUI'
 	})
+
+	run(function()
+		local keybinds = vape:CreateOverlay({
+			Name = 'Keybind HUD', Icon = getvapeasset('newvape/assets/new/textgui.png'),
+			Size = UDim2.fromOffset(16, 12), Position = UDim2.fromOffset(12, 180), CategorySize = 260
+		})
+		local session
+		local frames, elapsed, fps = 0, 0, 0
+		local sessionStarted = os.clock()
+		session = vape:CreateOverlay({
+			Name = 'Session stats', Icon = getvapeasset('newvape/assets/new/textgui.png'),
+			Size = UDim2.fromOffset(16, 12), Position = UDim2.fromOffset(12, 400), CategorySize = 260,
+			Function = function(enabled)
+				if enabled then
+					frames, elapsed = 0, 0
+					session:Clean(runService.RenderStepped:Connect(function(delta)
+						if not session.Object.Visible then return end
+						frames += 1
+						elapsed += delta
+						if elapsed >= 1 then fps = math.floor(frames / elapsed + 0.5); frames, elapsed = 0, 0 end
+					end))
+				end
+			end
+		})
+		local function panel(overlay, caption)
+			local card = Instance.new('Frame')
+			card.BackgroundColor3 = uipallet.Main
+			card.BackgroundTransparency = 0.08
+			card.BorderSizePixel = 0
+			card.Size = UDim2.new(1, 0, 0, 52)
+			card.Parent = overlay.Children
+			addCorner(card, UDim.new(0, 4))
+			local line = Instance.new('Frame')
+			line.BorderSizePixel = 0
+			line.Size = UDim2.new(1, -8, 0, 2)
+			line.Position = UDim2.fromOffset(4, 0)
+			line.Parent = card
+			vape:RegisterThemeSolid(line, 'BackgroundColor3', 0.08)
+			local title = Instance.new('TextLabel')
+			title.BackgroundTransparency = 1
+			title.Position = UDim2.fromOffset(10, 4)
+			title.Size = UDim2.new(1, -20, 0, 22)
+			title.FontFace = uipallet.FontSemiBold
+			title.Text = caption
+			title.TextSize = 12
+			title.TextColor3 = uipallet.Text
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.Parent = card
+			return card
+		end
+		local keyCard = panel(keybinds, 'Keybinds')
+		local sessionCard = panel(session, 'Session')
+		local activeOnly = keybinds:CreateToggle({Name = 'Active only', Tooltip = 'Show only enabled modules with assigned keyboard binds.'})
+		local hideEmpty = keybinds:CreateToggle({Name = 'Hide when empty', Default = true})
+		local rowLimit = keybinds:CreateSlider({Name = 'Visible rows', Min = 4, Max = 20, Default = 10})
+		local rowLabels = {}
+		local keyLabels = {}
+		local function row(card, index)
+			local label = Instance.new('TextLabel')
+			label.BackgroundTransparency = 1
+			label.Position = UDim2.fromOffset(10, 26 + (index - 1) * 22)
+			label.Size = UDim2.new(1, -20, 0, 22)
+			label.FontFace = uipallet.Font
+			label.TextSize = 12
+			label.TextColor3 = color.Dark(uipallet.Text, 0.2)
+			label.TextXAlignment = Enum.TextXAlignment.Left
+			label.TextTruncate = Enum.TextTruncate.AtEnd
+			label.Parent = card
+			return label
+		end
+		local statsLabel = row(sessionCard, 1)
+		statsLabel.Size = UDim2.new(1, -20, 0, 66)
+		statsLabel.TextYAlignment = Enum.TextYAlignment.Top
+		statsLabel.TextWrapped = true
+		sessionCard.Size = UDim2.new(1, 0, 0, 96)
+		local pingEnabled = session:CreateToggle({Name = 'Show ping', Default = true})
+		session:CreateButton({Name = 'Reset session timer', Function = function() sessionStarted = os.clock() end})
+		local statsService = game:GetService('Stats')
+		vape:Clean(task.spawn(function()
+			while vape.Loaded ~= nil do
+				if keybinds.Button.Enabled and keybinds.Object.Visible then
+					local rows = vape:GetKeybindRows(activeOnly.Enabled)
+					keyCard.Visible = #rows > 0 or not hideEmpty.Enabled or clickgui.Visible
+					local count = math.min(#rows, rowLimit.Value)
+					local displayed = math.max(1, count + (#rows > count and 1 or 0))
+					for index = 1, displayed do
+						local label = rowLabels[index]
+						if not label then
+							label = row(keyCard, index)
+							rowLabels[index] = label
+							local keys = row(keyCard, index)
+							keys.Position = UDim2.new(0.52, 0, 0, 26 + (index - 1) * 22)
+							keys.Size = UDim2.new(0.48, -10, 0, 22)
+							keys.TextXAlignment = Enum.TextXAlignment.Right
+							keyLabels[index] = keys
+							addTooltip(label, 'Assigned binding', function() return label:GetAttribute('FullText') or '' end)
+							addTooltip(keys, 'Assigned binding', function() return label:GetAttribute('FullText') or '' end)
+						end
+						local item = rows[index]
+						local text, tint
+						if index > count then
+							text = #rows == 0 and 'No assigned keybinds' or '+'..(#rows - count)..' more binds'
+							tint = color.Dark(uipallet.Text, 0.35)
+							label.Size = UDim2.new(1, -20, 0, 22)
+							keyLabels[index].Visible = false
+						else
+							text = (item.Enabled and 'ON  ' or 'OFF  ')..item.Name
+							tint = item.Enabled and vape:GetThemeColor(0.08) or color.Dark(uipallet.Text, 0.3)
+							label.Size = UDim2.new(0.52, -16, 0, 22)
+							keyLabels[index].Text = item.Keys..(item.Hold and ' · hold' or '')
+							keyLabels[index].TextColor3 = tint
+							keyLabels[index].Visible = true
+						end
+						label:SetAttribute('FullText', text..(index <= count and (' ['..item.Keys..']'..(item.Hold and ' (hold)' or '')) or ''))
+						if label.Text ~= text then label.Text = text end
+						label.TextColor3 = tint
+						label.Visible = true
+					end
+					for index = displayed + 1, #rowLabels do rowLabels[index].Visible = false; keyLabels[index].Visible = false end
+					keyCard.Size = UDim2.new(1, 0, 0, 30 + displayed * 22)
+				end
+				if session.Button.Enabled and session.Object.Visible then
+					local seconds = math.floor(os.clock() - sessionStarted)
+					local ping = ''
+					if pingEnabled.Enabled then
+						local ok, value = pcall(function() return statsService.Network.ServerStatsItem['Data Ping']:GetValue() end)
+						ping = '  ·  '..(ok and type(value) == 'number' and math.floor(value + 0.5)..' ms' or 'Ping unavailable')
+					end
+					local text = string.format('%02d:%02d:%02d', seconds // 3600, seconds // 60 % 60, seconds % 60)
+						..'  ·  '..fps..' FPS'..ping..'\nProfile: '..tostring(vape.Profile)..'\nLast save: '..(vape.LastSaved or 'Not saved this session')
+					if statsLabel.Text ~= text then statsLabel.Text = text end
+				end
+				task.wait(0.5)
+			end
+		end))
+		keybinds.Button:Toggle()
+		keybinds:Pin()
+		keybinds:Update()
+	end)
 
 	run(function()
 		local Sort
@@ -2793,12 +3019,12 @@ function vape:LoadGUI()
 		-- Text GUI color is inherited from the active animated theme.
 		TextGUI:CreateSlider({
 			Name = 'Scale',
-			Min = 0,
+			Min = 0.5,
 			Max = 2,
 			Decimal = 10,
 			Default = 1,
 			Function = function(val)
-				Scale.Scale = val
+				if Scale then Scale.Scale = math.clamp(val, 0.5, 2) end
 				vape:UpdateTextGUI()
 			end
 		})
@@ -3014,7 +3240,7 @@ function vape:LoadGUI()
 				local isRight = TextGUI.Children.AbsolutePosition.X > (gui.AbsoluteSize.X / 2)
 
 				Logo.Visible = Watermark.Enabled
-				Logo.Position = isRight and UDim2.new(1 / Scale.Scale, -113, 0, 6) or UDim2.fromOffset(0, 6)
+				Logo.Position = isRight and UDim2.new(1 / Scale.Scale, -115, 0, 6) or UDim2.fromOffset(0, 6)
 				LogoShadow.Visible = Shadow.Enabled
 				LabelCustom.Text = CustomTextBox.Value
 				LabelCustom.FontFace = CustomTextFont.Value
@@ -3176,10 +3402,11 @@ function vape:LoadGUI()
 		end
 
 		function TextGUI:UpdateColor(hue, sat, val, default)
-			-- Existing logo gradients are registered directly so they animate with the
-			-- named theme instead of synthesizing a second solid/rainbow color system.
-			vape:RegisterThemeGradient(LogoGradient, 0, 90)
-			vape:RegisterThemeGradient(LogoGradient2, 0.08, 90)
+			-- Keep the wordmark neutral; only the version badge carries the accent.
+			LogoGradient.Enabled = false
+			Logo.ImageColor3 = uipallet.Text
+			LogoGradient2.Enabled = false
+			vape:RegisterThemeSolid(LogoV4, 'ImageColor3', 0.08)
 			vape:ApplyThemeGradient(LabelCustom, 'TextColor3', 0.12, CustomText.Enabled, 0)
 
 			for index, label in Labels do
@@ -3455,7 +3682,7 @@ function vape:LoadGUI()
 		repeat
 			local delta = runService.RenderStepped:Wait()
 			if vape:IsGradientThemeActive() then
-				local reduced = vape.ReducedMotion and vape.ReducedMotion.Enabled
+				local reduced = vape.ActiveThemeName == 'Vape' or (vape.ReducedMotion and vape.ReducedMotion.Enabled)
 				if not reduced then
 					-- One full palette pass takes ~13 seconds at 1x. Slow enough to look
 					-- premium, while the slider can still speed it up for louder themes.
@@ -3479,10 +3706,11 @@ function vape:LoadGUI()
 					or next(vape.HUDAccentObjects) ~= nil
 
 				gradientAccumulator += delta
-				if visualActive and gradientAccumulator >= (1 / 30) then
-					-- Theme motion is intentionally slow, so 30 visual refreshes/sec is
-					-- indistinguishable here while halving ColorSequence churn.
-					gradientAccumulator %= (1 / 30)
+				local refreshInterval = reduced and 1 or (1 / 30)
+				if visualActive and gradientAccumulator >= refreshInterval then
+					-- Animated palettes update at 30 Hz; static accents need only a
+					-- low-frequency refresh for newly visible theme objects.
+					gradientAccumulator %= refreshInterval
 					vape:UpdateThemeGradients()
 				end
 			elseif next(uipallet.ThemeObjects) ~= nil then
@@ -3730,6 +3958,7 @@ local function writeProfile(path, data)
 end
 
 function vape:Save(newProfile)
+	if self.SwitchingProfile and self.ProfileSwitchThread ~= coroutine.running() then return end
 	if not self.Loaded then
 		return
 	end
@@ -3761,6 +3990,7 @@ function vape:Save(newProfile)
 
 	writeProfile('newvape/profiles/'..game.GameId..'.gui.txt', httpService:JSONEncode(guiData))
 	writeProfile('newvape/profiles/'..self.Profile..self.Place..'.txt', httpService:JSONEncode(mainData))
+	self:FlushRecent()
 	self.LastSaved = os.date('%H:%M')
 	if self.UpdateSessionHint then self:UpdateSessionHint() end
 end
@@ -4738,9 +4968,7 @@ components = {
 			profile.Bind.Object.Position = UDim2.new(1, -30, 0, 7)
 			profile.Bind.Triggered:Connect(function(isPressed)
 				if isPressed and vape.Profile ~= value then
-					vape:Save(value)
-					vape:Load(true)
-					self:ChangeValue()
+					vape:SwitchProfile(value)
 				end
 			end)
 
@@ -4858,9 +5086,7 @@ components = {
 
 
 					obj.MouseButton1Click:Connect(function()
-						vape:Save(name.Name)
-						vape:Load(true)
-						self:ChangeValue()
+						vape:SwitchProfile(name.Name)
 					end)
 
 					obj.MouseEnter:Connect(function()
@@ -6055,48 +6281,6 @@ components = {
 		v4logo.Size = UDim2.fromOffset(23, 16)
 		v4logo.Parent = logo
 
-		-- Tiny loader-inspired status feature carried into the actual ClickGUI.
-		local statuspill = Instance.new('Frame')
-		statuspill.BackgroundColor3 = color.Light(uipallet.Main, 0.025)
-		statuspill.BackgroundTransparency = 0.12
-		statuspill.Position = UDim2.new(1, -111, 0, 10)
-		statuspill.Size = UDim2.fromOffset(52, 18)
-		statuspill.Parent = window
-		addCorner(statuspill, UDim.new(0, 4))
-		local statusstroke = Instance.new('UIStroke')
-		statusstroke.Color = color.Light(uipallet.Main, 0.08)
-		statusstroke.Transparency = 0.45
-		statusstroke.Parent = statuspill
-		local statusdot = Instance.new('Frame')
-		statusdot.AnchorPoint = Vector2.new(0.5, 0.5)
-		statusdot.BackgroundColor3 = vape:GetThemeColor(0)
-		statusdot.BorderSizePixel = 0
-		statusdot.Position = UDim2.fromOffset(9, 9)
-		statusdot.Size = UDim2.fromOffset(4, 4)
-		statusdot.Parent = statuspill
-		addCorner(statusdot, UDim.new(1, 0))
-		vape:ApplyThemeGradient(statusdot, 'BackgroundColor3', 0.04, true, 0)
-		local statusscale = Instance.new('UIScale')
-		statusscale.Parent = statusdot
-		local statustext = Instance.new('TextLabel')
-		statustext.BackgroundTransparency = 1
-		statustext.FontFace = uipallet.FontSemiBold
-		statustext.Position = UDim2.fromOffset(16, 0)
-		statustext.Size = UDim2.new(1, -18, 1, 0)
-		statustext.Text = 'READY'
-		statustext.TextColor3 = color.Dark(uipallet.Text, 0.08)
-		statustext.TextSize = 8
-		statustext.TextXAlignment = Enum.TextXAlignment.Left
-		statustext.Parent = statuspill
-		addTooltip(statuspill, 'Interface ready • procedural terrain active')
-		local pulseA = tweenService:Create(statusscale, TweenInfo.new(1.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Scale = 1.55})
-		local pulseB = tweenService:Create(statusdot, TweenInfo.new(1.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {BackgroundTransparency = 0.58})
-		pulseA:Play()
-		pulseB:Play()
-		statuspill.Destroying:Once(function()
-			pulseA:Cancel()
-			pulseB:Cancel()
-		end)
 		local children = Instance.new('Frame')
 		children.BackgroundTransparency = 1
 		children.Position = UDim2.fromOffset(0, 37)
@@ -6142,9 +6326,6 @@ components = {
 			local accentColor = Color3.fromHSV(hue, sat, val)
 			if not vape:ApplyThemeGradient(v4logo, 'ImageColor3', 0, true, 0) then
 				v4logo.ImageColor3 = accentColor
-			end
-			if not vape:ApplyThemeGradient(statusdot, 'BackgroundColor3', 0.08, true, 0) then
-				statusdot.BackgroundColor3 = accentColor
 			end
 
 			for _, button in self.Buttons do
@@ -8354,6 +8535,8 @@ components = {
 			Mode = inputService.TouchEnabled and 'Pinned' or 'On demand',
 			ResultButtons = {},
 			ResultActions = {},
+			ResultNames = {},
+			ResultLocations = {},
 			SelectedIndex = 0
 		}
 
@@ -8413,7 +8596,7 @@ components = {
 		box.BackgroundTransparency = 1
 		box.ClearTextOnFocus = false
 		box.FontFace = uipallet.Font
-		box.PlaceholderText = 'Search name or purpose...'
+		box.PlaceholderText = 'Search modules...'
 		box.PlaceholderColor3 = color.Dark(uipallet.Text, 0.35)
 		box.Position = UDim2.fromOffset(50, 0)
 		box.Size = UDim2.new(1, -92, 0, 37)
@@ -8478,8 +8661,10 @@ components = {
 		empty.Visible = false
 		empty.ZIndex = 21
 		empty.Parent = children
+		local filters = {'All', 'Enabled', 'Favorites', 'Recent'}
+		local filterKeys = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four}
 		local filterButtons = {}
-		for index, name in ipairs({'All', 'Enabled', 'Favorites', 'Recent'}) do
+		for index, name in ipairs(filters) do
 			local button = Instance.new('TextButton')
 			button.Position = UDim2.fromOffset(7 + (index - 1) * 70, 40)
 			button.Size = UDim2.fromOffset(67, 24)
@@ -8490,8 +8675,9 @@ components = {
 			button.TextColor3 = uipallet.Text
 			button.ZIndex = 21
 			button.Parent = search
-			addCorner(button, UDim.new(0, 5))
+			addCorner(button, UDim.new(0, 2))
 			filterButtons[name] = button
+			addTooltip(button, 'Ctrl+'..index..' · '..name)
 			button.Activated:Connect(function()
 				component.Filter = name
 				component:Refresh()
@@ -8505,7 +8691,8 @@ components = {
 		resultCount.FontFace = uipallet.Font
 		resultCount.TextSize = 10
 		resultCount.TextXAlignment = Enum.TextXAlignment.Left
-		resultCount.Text = 'Search name/purpose • #category • @on/@fav'
+		resultCount.TextTruncate = Enum.TextTruncate.AtEnd
+		resultCount.Text = '#category   @on   @fav   ·   ↑↓ select'
 		resultCount.ZIndex = 21
 		resultCount.Parent = search
 		local revision = 0
@@ -8591,7 +8778,10 @@ components = {
 			clear.Visible = box.Text ~= ''
 			icon.Visible = box.Text == ''
 			task.delay(0.05, function()
-				if current ~= revision or not search.Parent then return end
+				if current ~= revision or not search.Parent or not search.Visible or not clickgui.Visible then return end
+				local previousName = self.ResultNames[self.SelectedIndex]
+				local sameQuery = self.LastQuery == box.Text and self.LastFilter == self.Filter
+				self.LastQuery, self.LastFilter = box.Text, self.Filter
 				empty.Visible = false
 				children.CanvasPosition = Vector2.zero
 				for _, obj in children:GetChildren() do
@@ -8599,37 +8789,49 @@ components = {
 				end
 				table.clear(self.ResultButtons)
 				table.clear(self.ResultActions)
+				table.clear(self.ResultNames)
+				table.clear(self.ResultLocations)
 				self.SelectedIndex = 0
 
 				local query = box.Text:lower():match('^%s*(.-)%s*$')
-				if query == '' and self.Filter == 'All' then
-					resultCount.Text = 'Search name/purpose • #category • @on/@fav'
-					return
-				end
+				local suggestions = query == '' and self.Filter == 'All'
 
 				local names = {}
+				local scores = {}
+				local plain = query:match('^[^#@%s]+') or ''
+				local function matches(name)
+					local module = vape.Modules[name]
+					return module and (not suggestions or vape.Favorites[name] or table.find(vape.RecentModules, name))
+						and matchesModuleSearch(name, module.Category, module.Tooltip, query)
+						and matchesModuleState(module, name, query)
+						and (self.Filter ~= 'Enabled' or module.Enabled)
+						and (self.Filter ~= 'Favorites' or vape.Favorites[name])
+				end
 				if self.Filter == 'Recent' then
 					for _, name in ipairs(vape.RecentModules) do
-						if vape.Modules[name] then names[#names + 1] = name end
+						if matches(name) then names[#names + 1] = name end
 					end
 				else
-					for name in vape.Modules do names[#names + 1] = name end
+					for name, module in vape.Modules do
+						if matches(name) then
+							names[#names + 1] = name
+							scores[name] = (plain ~= '' and name:lower():sub(1, #plain) == plain and 8 or 0)
+								+ (vape.Favorites[name] and 2 or 0) + (module.Enabled and 1 or 0)
+						end
+					end
 					table.sort(names, function(a, b)
-						local plain = query:match('^[^#%s]+') or ''
-						local am, bm = vape.Modules[a], vape.Modules[b]
-						local ascore = (plain ~= '' and a:lower():sub(1, #plain) == plain and 8 or 0) + (vape.Favorites[a] and 2 or 0) + (am.Enabled and 1 or 0)
-						local bscore = (plain ~= '' and b:lower():sub(1, #plain) == plain and 8 or 0) + (vape.Favorites[b] and 2 or 0) + (bm.Enabled and 1 or 0)
+						local ascore, bscore = scores[a], scores[b]
 						return ascore == bscore and a:lower() < b:lower() or ascore > bscore
 					end)
 				end
 
+				if suggestions then
+					while #names > 8 do table.remove(names) end
+				end
 				local matches = 0
 				for _, name in ipairs(names) do
 					local module = vape.Modules[name]
-					if matchesModuleSearch(name, module.Category, module.Tooltip, query)
-						and matchesModuleState(module, name, query)
-						and (self.Filter ~= 'Enabled' or module.Enabled)
-						and (self.Filter ~= 'Favorites' or vape.Favorites[name]) then
+					do
 						matches += 1
 						local button = module.Object:Clone()
 						button.LayoutOrder = matches
@@ -8657,7 +8859,7 @@ components = {
 						if vape.Favorites[name] then vape:RegisterThemeSolid(star, 'TextColor3', 0.10) end
 						star.ZIndex = 22
 						star.Parent = button
-						addTooltip(star, 'Add or remove favorite')
+						addTooltip(star, 'Add or remove favorite · Ctrl+D on selected result')
 						star.Activated:Connect(function() vape:ToggleFavorite(name) end)
 
 						local function activate()
@@ -8666,7 +8868,9 @@ components = {
 						end
 						button.MouseButton1Click:Connect(activate)
 						button.MouseEnter:Connect(function() component:SetSelection(button.LayoutOrder) end)
-						button.MouseButton2Click:Connect(function()
+						local function locate()
+							local category = vape.Categories[module.Category]
+							if category and not category.Expanded and category.Expand then category:Expand() end
 							module.Object.Parent.Parent.Visible = true
 							local frame = module.Object.Parent
 							local highlight = Instance.new('Frame')
@@ -8679,22 +8883,30 @@ components = {
 							task.delay(0.5, highlight.Destroy, highlight)
 							frame.CanvasPosition = Vector2.new(0, (module.Object.LayoutOrder * 40) - (math.min(frame.CanvasSize.Y.Offset, 600) / 2))
 							if component.Mode == 'On demand' then component:Close(false) end
-						end)
+						end
+						button.MouseButton2Click:Connect(locate)
 
 						for _, prop in {'Text', 'TextColor3', 'BackgroundColor3'} do
 							listenProperty(module.Object, button, prop, button)
+						end
+						local sourceBackground = module.Object:FindFirstChild('ThemeBackground')
+						local resultBackground = button:FindFirstChild('ThemeBackground')
+						if sourceBackground and resultBackground then
+							listenProperty(sourceBackground, resultBackground, 'BackgroundColor3', button)
 						end
 						listenProperty(module.Object.UIGradient, button.UIGradient, 'Color', button)
 						listenProperty(module.Object.UIGradient, button.UIGradient, 'Enabled', button)
 						button.Parent = children
 						self.ResultButtons[#self.ResultButtons + 1] = button
 						self.ResultActions[#self.ResultActions + 1] = activate
+						self.ResultNames[#self.ResultNames + 1] = name
+						self.ResultLocations[#self.ResultLocations + 1] = locate
 					end
 				end
-				resultCount.Text = tostring(matches)..(matches == 1 and ' module' or ' modules')..' • Enter toggle • RMB locate'
-				empty.Text = self.Filter == 'Favorites' and 'Shift+RMB a module or star it here' or (self.Filter == 'Recent' and 'Toggle a module and it will show up here' or 'No matching modules')
+				resultCount.Text = (suggestions and 'Quick picks' or tostring(matches)..' results')..' · Enter toggle · Shift+Enter locate'
+				empty.Text = suggestions and 'Star a module to keep it here' or self.Filter == 'Favorites' and 'Shift+RMB a module or star it here' or (self.Filter == 'Recent' and 'Toggle a module and it will show up here' or 'No matching modules')
 				empty.Visible = matches == 0
-				if matches > 0 then self:SetSelection(1) end
+				if matches > 0 then self:SetSelection(sameQuery and table.find(self.ResultNames, previousName) or 1) end
 			end)
 		end
 
@@ -8702,13 +8914,22 @@ components = {
 		component:Refresh()
 
 		vape:Clean(inputService.InputBegan:Connect(function(input)
-			if inputService:GetFocusedTextBox() ~= box or not search.Visible then return end
-			if input.KeyCode == Enum.KeyCode.Down then
+			if inputService:GetFocusedTextBox() ~= box or not search.Visible or not clickgui.Visible then return end
+			local control = inputService:IsKeyDown(Enum.KeyCode.LeftControl) or inputService:IsKeyDown(Enum.KeyCode.RightControl)
+			local shift = inputService:IsKeyDown(Enum.KeyCode.LeftShift) or inputService:IsKeyDown(Enum.KeyCode.RightShift)
+			local filterIndex = table.find(filterKeys, input.KeyCode)
+			if control and filterIndex then
+				component.Filter = filters[filterIndex]
+				component:Refresh()
+			elseif control and input.KeyCode == Enum.KeyCode.D then
+				local name = component.ResultNames[component.SelectedIndex]
+				if name then vape:ToggleFavorite(name) end
+			elseif input.KeyCode == Enum.KeyCode.Down then
 				component:SetSelection(component.SelectedIndex + 1)
 			elseif input.KeyCode == Enum.KeyCode.Up then
 				component:SetSelection(component.SelectedIndex - 1)
 			elseif input.KeyCode == Enum.KeyCode.Return or input.KeyCode == Enum.KeyCode.KeypadEnter then
-				local action = component.ResultActions[component.SelectedIndex]
+				local action = (shift and component.ResultLocations or component.ResultActions)[component.SelectedIndex]
 				if action then action() end
 			end
 		end))
