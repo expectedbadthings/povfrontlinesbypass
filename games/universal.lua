@@ -3991,22 +3991,35 @@ run(function()
 	local Arrows
 	local Targets
 	local Color
+	local Mode
 	local Teammates
 	local Distance
 	local DistanceLimit
 	local Reference = {}
 	local Folder = Instance.new('Folder')
 	Folder.Parent = vape.gui
-	
+
+	local function setArrowColor(data, col)
+		data.Core.ImageColor3 = col
+		if data.Glow then data.Glow.ImageColor3 = col end
+		if data.GlowOuter then data.GlowOuter.ImageColor3 = col end
+	end
+
+	local function setArrowVisible(data, visible)
+		data.Core.Visible = visible
+		if data.Glow then data.Glow.Visible = visible end
+		if data.GlowOuter then data.GlowOuter.Visible = visible end
+	end
+
 	local function Added(ent)
 		if not Targets.Players.Enabled and ent.Player then return end
 		if not Targets.NPCs.Enabled and ent.NPC then return end
-		if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) and (not ent.Friend) then return end
-		if vape.ThreadFix then
-			setthreadidentity(8)
-		end
-	
+		if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
+		if vape.ThreadFix then setthreadidentity(8) end
+
+		local col = entitylib.getEntityColor(ent) or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
 		local arrow = Instance.new('ImageLabel')
+		arrow.Name = 'Core'
 		arrow.Size = UDim2.fromOffset(256, 256)
 		arrow.Position = UDim2.fromScale(0.5, 0.5)
 		arrow.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -4014,49 +4027,75 @@ run(function()
 		arrow.BorderSizePixel = 0
 		arrow.Visible = false
 		arrow.Image = getvapeasset('newvape/assets/new/arrow.png')
-		arrow.ImageColor3 = entitylib.getEntityColor(ent) or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
+		arrow.ImageColor3 = col
+		arrow.ZIndex = 3
 		arrow.Parent = Folder
-		Reference[ent] = arrow
+
+		local data = {Core = arrow}
+		if Mode.Value == 'Modern' then
+			local glow = arrow:Clone()
+			glow.Name = 'Glow'
+			glow.Size = UDim2.fromOffset(276, 276)
+			glow.ImageTransparency = 0.55
+			glow.ZIndex = 2
+			glow.Parent = Folder
+			local glowOuter = arrow:Clone()
+			glowOuter.Name = 'GlowOuter'
+			glowOuter.Size = UDim2.fromOffset(304, 304)
+			glowOuter.ImageTransparency = 0.82
+			glowOuter.ZIndex = 1
+			glowOuter.Parent = Folder
+			arrow.ImageTransparency = 0.04
+			data.Glow = glow
+			data.GlowOuter = glowOuter
+		end
+		Reference[ent] = data
 	end
-	
+
 	local function Removed(ent)
-		local v = Reference[ent]
-		if v then
-			if vape.ThreadFix then
-				setthreadidentity(8)
-			end
-	
+		local data = Reference[ent]
+		if data then
+			if vape.ThreadFix then setthreadidentity(8) end
 			Reference[ent] = nil
-			v:Destroy()
+			for _, obj in data do obj:Destroy() end
 		end
 	end
-	
+
 	local function ColorFunc(hue, sat, val)
-		local color = Color3.fromHSV(hue, sat, val)
-		for ent, EntityArrow in Reference do
-			EntityArrow.ImageColor3 = entitylib.getEntityColor(ent) or color
+		local col = Color3.fromHSV(hue, sat, val)
+		for ent, data in Reference do
+			setArrowColor(data, entitylib.getEntityColor(ent) or col)
 		end
 	end
-	
+
 	local function Loop()
-		for ent, arrow in Reference do
+		for ent, data in Reference do
 			if Distance.Enabled then
 				local distance = entitylib.isAlive and (entitylib.character.RootPart.Position - ent.RootPart.Position).Magnitude or math.huge
 				if distance < DistanceLimit.ValueMin or distance > DistanceLimit.ValueMax then
-					arrow.Visible = false
+					setArrowVisible(data, false)
 					continue
 				end
 			end
-	
+
 			local _, rootVis = gameCamera:WorldToScreenPoint(ent.RootPart.Position)
-			arrow.Visible = not rootVis
+			setArrowVisible(data, not rootVis)
 			if rootVis then continue end
-	
+
 			local dir = CFrame.lookAlong(gameCamera.CFrame.Position, gameCamera.CFrame.LookVector * Vector3.new(1, 0, 1)):PointToObjectSpace(ent.RootPart.Position)
-			arrow.Rotation = math.deg(math.atan2(dir.Z, dir.X))
+			local rotation = math.deg(math.atan2(dir.Z, dir.X))
+			data.Core.Rotation = rotation
+			if data.Glow then data.Glow.Rotation = rotation end
+			if data.GlowOuter then data.GlowOuter.Rotation = rotation end
+			if Mode.Value == 'Modern' then
+				local pulse = (math.sin(os.clock() * 4.5) + 1) * 0.5
+				data.Core.ImageTransparency = 0.02 + (pulse * 0.08)
+				data.Glow.ImageTransparency = 0.48 + (pulse * 0.12)
+				data.GlowOuter.ImageTransparency = 0.76 + (pulse * 0.12)
+			end
 		end
 	end
-	
+
 	Arrows = vape.Categories.Render:CreateModule({
 		Name = 'Arrows',
 		Function = function(callback)
@@ -4075,9 +4114,7 @@ run(function()
 				end))
 				Arrows:Clean(runService.RenderStepped:Connect(Loop))
 			else
-				for i in Reference do
-					Removed(i)
-				end
+				for i in Reference do Removed(i) end
 			end
 		end,
 		Tooltip = 'Draws arrows on screen when entities\nare out of your field of view.'
@@ -4085,36 +4122,33 @@ run(function()
 	Targets = Arrows:CreateTargets({
 		Players = true,
 		Function = function()
-			if Arrows.Enabled then
-				Arrows:Toggle()
-				Arrows:Toggle()
-			end
+			if Arrows.Enabled then Arrows:Toggle(); Arrows:Toggle() end
+		end
+	})
+	Mode = Arrows:CreateDropdown({
+		Name = 'Mode',
+		List = {'Classic', 'Modern'},
+		Function = function()
+			if Arrows.Enabled then Arrows:Toggle(); Arrows:Toggle() end
 		end
 	})
 	Color = Arrows:CreateColorSlider({
 		Name = 'Player Color',
 		Function = function(hue, sat, val)
-			if Arrows.Enabled then
-				ColorFunc(hue, sat, val)
-			end
+			if Arrows.Enabled then ColorFunc(hue, sat, val) end
 		end,
 	})
 	Teammates = Arrows:CreateToggle({
 		Name = 'Priority Only',
 		Function = function()
-			if Arrows.Enabled then
-				Arrows:Toggle()
-				Arrows:Toggle()
-			end
+			if Arrows.Enabled then Arrows:Toggle(); Arrows:Toggle() end
 		end,
 		Default = true,
 		Tooltip = 'Hides teammates & non targetable entities'
 	})
 	Distance = Arrows:CreateToggle({
 		Name = 'Distance Check',
-		Function = function(callback)
-			DistanceLimit.Object.Visible = callback
-		end
+		Function = function(callback) DistanceLimit.Object.Visible = callback end
 	})
 	DistanceLimit = Arrows:CreateTwoSlider({
 		Name = 'Player Distance',
@@ -4140,97 +4174,134 @@ run(function()
 	local Reference = {}
 	local Folder = Instance.new('Folder')
 	Folder.Parent = vape.holder
-	
+
+	local function bodyParts(ent)
+		local parts = {}
+		for _, part in ent.Character:GetChildren() do
+			if part:IsA('BasePart') and (ent.NPC or part.Name:find('Arm') or part.Name:find('Leg') or part.Name:find('Hand') or part.Name:find('Feet') or part.Name:find('Torso') or part.Name == 'Head') then
+				table.insert(parts, part)
+			end
+		end
+		return parts
+	end
+
+	local function makeAdornment(part, col, grow, transparency)
+		local adornment = Instance.new(part.Name == 'Head' and 'SphereHandleAdornment' or 'BoxHandleAdornment')
+		if part.Name == 'Head' then
+			adornment.Radius = 0.75 + grow
+		else
+			adornment.Size = part.Size + Vector3.one * (grow * 2)
+		end
+		adornment.AlwaysOnTop = Walls.Enabled
+		adornment.Adornee = part
+		adornment.ZIndex = 0
+		adornment.Transparency = transparency
+		adornment.Color3 = col
+		adornment.Parent = Folder
+		return adornment
+	end
+
 	local function Added(ent)
 		if not Targets.Players.Enabled and ent.Player then return end
 		if not Targets.NPCs.Enabled and ent.NPC then return end
 		if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
-		if vape.ThreadFix then
-			setthreadidentity(8)
-		end
-	
-		if Mode.Value == 'Highlight' then
+		if vape.ThreadFix then setthreadidentity(8) end
+
+		local col = entitylib.getEntityColor(ent) or Color3.fromHSV(FillColor.Hue, FillColor.Sat, FillColor.Value)
+		local outline = Color3.fromHSV(OutlineColor.Hue, OutlineColor.Sat, OutlineColor.Value)
+		local data = {Mode = Mode.Value, Handles = {}, Glow = {}, GlowOuter = {}}
+
+		if Mode.Value == 'Highlight' or Mode.Value == 'Modern' then
 			local cham = Instance.new('Highlight')
 			cham.Adornee = ent.Character
 			cham.DepthMode = Enum.HighlightDepthMode[Walls.Enabled and 'AlwaysOnTop' or 'Occluded']
-			cham.FillColor = entitylib.getEntityColor(ent) or Color3.fromHSV(FillColor.Hue, FillColor.Sat, FillColor.Value)
-			cham.OutlineColor = Color3.fromHSV(OutlineColor.Hue, OutlineColor.Sat, OutlineColor.Value)
-			cham.FillTransparency = FillTransparency.Value
-			cham.OutlineTransparency = OutlineTransparency.Value
+			cham.FillColor = col
+			cham.OutlineColor = Mode.Value == 'Modern' and col or outline
+			cham.FillTransparency = Mode.Value == 'Modern' and math.clamp(FillTransparency.Value + 0.12, 0, 1) or FillTransparency.Value
+			cham.OutlineTransparency = Mode.Value == 'Modern' and math.min(OutlineTransparency.Value, 0.12) or OutlineTransparency.Value
 			cham.Parent = Folder
-			Reference[ent] = cham
-		else
-			local chams = {}
-			for _, v in ent.Character:GetChildren() do
-				if v:IsA('BasePart') and (ent.NPC or v.Name:find('Arm') or v.Name:find('Leg') or v.Name:find('Hand') or v.Name:find('Feet') or v.Name:find('Torso') or v.Name == 'Head') then
-					local box = Instance.new(v.Name == 'Head' and 'SphereHandleAdornment' or 'BoxHandleAdornment')
-					if v.Name == 'Head' then
-						box.Radius = 0.75
-					else
-						box.Size = v.Size
-					end
-					box.AlwaysOnTop = Walls.Enabled
-					box.Adornee = v
-					box.ZIndex = 0
-					box.Transparency = FillTransparency.Value
-					box.Color3 = entitylib.getEntityColor(ent) or Color3.fromHSV(FillColor.Hue, FillColor.Sat, FillColor.Value)
-					box.Parent = Folder
-					table.insert(chams, box)
-				end
-			end
-			Reference[ent] = chams
+			data.Main = cham
 		end
+
+		if Mode.Value == 'BoxHandles' then
+			for _, part in bodyParts(ent) do
+				table.insert(data.Handles, makeAdornment(part, col, 0, FillTransparency.Value))
+			end
+		elseif Mode.Value == 'Modern' then
+			for _, part in bodyParts(ent) do
+				table.insert(data.Glow, makeAdornment(part, col, 0.08, 0.70))
+				table.insert(data.GlowOuter, makeAdornment(part, col, 0.18, 0.88))
+			end
+
+			local head = ent.Character:FindFirstChild('Head')
+			if head then
+				local face = Instance.new('SurfaceGui')
+				face.Name = 'ModernSmiley'
+				face.Adornee = head
+				face.Face = Enum.NormalId.Front
+				face.AlwaysOnTop = Walls.Enabled
+				face.LightInfluence = 0
+				face.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+				face.PixelsPerStud = 64
+				face.Parent = Folder
+				local image = Instance.new('ImageLabel')
+				image.AnchorPoint = Vector2.new(0.5, 0.5)
+				image.Position = UDim2.fromScale(0.5, 0.5)
+				image.Size = UDim2.fromScale(0.76, 0.76)
+				image.BackgroundTransparency = 1
+				image.Image = getvapeasset('newvape/assets/new/face1')
+				image.ImageColor3 = Color3.new(1, 1, 1)
+				image.Parent = face
+				data.Face = face
+			end
+		end
+
+		Reference[ent] = data
 	end
-	
+
 	local function Removed(ent)
-		if Reference[ent] then
-			if vape.ThreadFix then
-				setthreadidentity(8)
-			end
-			if type(Reference[ent]) == 'table' then
-				for _, v in Reference[ent] do
-					v:Destroy()
-				end
-				table.clear(Reference[ent])
-			else
-				Reference[ent]:Destroy()
-			end
-			Reference[ent] = nil
+		local data = Reference[ent]
+		if not data then return end
+		if vape.ThreadFix then setthreadidentity(8) end
+		Reference[ent] = nil
+		if data.Main then data.Main:Destroy() end
+		if data.Face then data.Face:Destroy() end
+		for _, group in {data.Handles, data.Glow, data.GlowOuter} do
+			for _, obj in group do obj:Destroy() end
+			table.clear(group)
 		end
 	end
-	
+
+	local function applyColor(ent, data, col)
+		if data.Main then
+			data.Main.FillColor = col
+			if data.Mode == 'Modern' then data.Main.OutlineColor = col end
+		end
+		for _, group in {data.Handles, data.Glow, data.GlowOuter} do
+			for _, obj in group do obj.Color3 = col end
+		end
+	end
+
 	Chams = vape.Categories.Render:CreateModule({
 		Name = 'Chams',
 		Function = function(callback)
 			if callback then
 				Chams:Clean(entitylib.Events.EntityRemoved:Connect(Removed))
 				Chams:Clean(entitylib.Events.EntityAdded:Connect(function(ent)
-					if Reference[ent] then
-						Removed(ent)
-					end
+					if Reference[ent] then Removed(ent) end
 					Added(ent)
 				end))
 				Chams:Clean(vape.Categories.Friends.ColorUpdate.Event:Connect(function()
-					for i, v in Reference do
-						local color = entitylib.getEntityColor(i) or Color3.fromHSV(FillColor.Hue, FillColor.Sat, FillColor.Value)
-						if type(v) == 'table' then
-							for _, v2 in v do v2.Color3 = color end
-						else
-							v.FillColor = color
-						end
+					for ent, data in Reference do
+						applyColor(ent, data, entitylib.getEntityColor(ent) or Color3.fromHSV(FillColor.Hue, FillColor.Sat, FillColor.Value))
 					end
 				end))
-	
-				for _, v in entitylib.List do
-					if Reference[v] then
-						Removed(v)
-					end
-					Added(v)
+				for _, ent in entitylib.List do
+					if Reference[ent] then Removed(ent) end
+					Added(ent)
 				end
 			else
-				for i in Reference do
-					Removed(i)
-				end
+				for ent in Reference do Removed(ent) end
 			end
 		end,
 		Tooltip = 'Render players through walls'
@@ -4238,46 +4309,32 @@ run(function()
 	Targets = Chams:CreateTargets({
 		Players = true,
 		Function = function()
-			if Chams.Enabled then
-				Chams:Toggle()
-				Chams:Toggle()
-			end
+			if Chams.Enabled then Chams:Toggle(); Chams:Toggle() end
 		end
-		})
+	})
 	Mode = Chams:CreateDropdown({
 		Name = 'Mode',
-		List = {'Highlight', 'BoxHandles'},
+		List = {'Highlight', 'BoxHandles', 'Modern'},
 		Function = function(val)
-			OutlineColor.Object.Visible = val == 'Highlight'
-			OutlineTransparency.Object.Visible = val == 'Highlight'
-			if Chams.Enabled then
-				Chams:Toggle()
-				Chams:Toggle()
-			end
+			if OutlineColor then OutlineColor.Object.Visible = val ~= 'BoxHandles' end
+			if OutlineTransparency then OutlineTransparency.Object.Visible = val ~= 'BoxHandles' end
+			if Chams.Enabled then Chams:Toggle(); Chams:Toggle() end
 		end
 	})
 	FillColor = Chams:CreateColorSlider({
 		Name = 'Color',
 		Function = function(hue, sat, val)
-			for i, v in Reference do
-				local color = entitylib.getEntityColor(i) or Color3.fromHSV(hue, sat, val)
-				if type(v) == 'table' then
-					for _, v2 in v do v2.Color3 = color end
-				else
-					v.FillColor = color
-				end
-			end
+			local col = Color3.fromHSV(hue, sat, val)
+			for ent, data in Reference do applyColor(ent, data, entitylib.getEntityColor(ent) or col) end
 		end
 	})
 	OutlineColor = Chams:CreateColorSlider({
 		Name = 'Outline Color',
 		DefaultSat = 0,
 		Function = function(hue, sat, val)
-			for i, v in Reference do
-				if type(v) ~= 'table' then
-					v.OutlineColor = Color3.fromHSV(hue, sat, val)
-				end
-			end
+			if Mode.Value == 'Modern' then return end
+			local col = Color3.fromHSV(hue, sat, val)
+			for _, data in Reference do if data.Main then data.Main.OutlineColor = col end end
 		end,
 		Darker = true
 	})
@@ -4287,12 +4344,9 @@ run(function()
 		Max = 1,
 		Default = 0.5,
 		Function = function(val)
-			for _, v in Reference do
-				if type(v) == 'table' then
-					for _, v2 in v do v2.Transparency = val end
-				else
-					v.FillTransparency = val
-				end
+			for _, data in Reference do
+				if data.Main then data.Main.FillTransparency = data.Mode == 'Modern' and math.clamp(val + 0.12, 0, 1) or val end
+				for _, obj in data.Handles do obj.Transparency = val end
 			end
 		end,
 		Decimal = 10
@@ -4303,10 +4357,8 @@ run(function()
 		Max = 1,
 		Default = 0.5,
 		Function = function(val)
-			for _, v in Reference do
-				if type(v) ~= 'table' then
-					v.OutlineTransparency = val
-				end
+			for _, data in Reference do
+				if data.Main then data.Main.OutlineTransparency = data.Mode == 'Modern' and math.min(val, 0.12) or val end
 			end
 		end,
 		Decimal = 10,
@@ -4315,13 +4367,11 @@ run(function()
 	Walls = Chams:CreateToggle({
 		Name = 'Render Walls',
 		Function = function(callback)
-			for _, v in Reference do
-				if type(v) == 'table' then
-					for _, v2 in v do
-						v2.AlwaysOnTop = callback
-					end
-				else
-					v.DepthMode = Enum.HighlightDepthMode[callback and 'AlwaysOnTop' or 'Occluded']
+			for _, data in Reference do
+				if data.Main then data.Main.DepthMode = Enum.HighlightDepthMode[callback and 'AlwaysOnTop' or 'Occluded'] end
+				if data.Face then data.Face.AlwaysOnTop = callback end
+				for _, group in {data.Handles, data.Glow, data.GlowOuter} do
+					for _, obj in group do obj.AlwaysOnTop = callback end
 				end
 			end
 		end,
@@ -4330,10 +4380,7 @@ run(function()
 	Teammates = Chams:CreateToggle({
 		Name = 'Priority Only',
 		Function = function()
-			if Chams.Enabled then
-				Chams:Toggle()
-				Chams:Toggle()
-			end
+			if Chams.Enabled then Chams:Toggle(); Chams:Toggle() end
 		end,
 		Default = true,
 		Tooltip = 'Hides teammates & non targetable entities'
@@ -4486,6 +4533,69 @@ run(function()
 		end
 	}
 	
+	ESPAdded.DrawingModern = function(ent)
+		if not Targets.Players.Enabled and ent.Player then return end
+		if not Targets.NPCs.Enabled and ent.NPC then return end
+		if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
+		if vape.ThreadFix then setthreadidentity(8) end
+		local col = entitylib.getEntityColor(ent) or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
+		local data = {}
+		data.GlowOuter = Drawing.new('Square')
+		data.GlowOuter.Filled = false
+		data.GlowOuter.Thickness = 9
+		data.GlowOuter.Transparency = 0.10
+		data.GlowOuter.Color = col
+		data.GlowOuter.ZIndex = 0
+		data.Glow = Drawing.new('Square')
+		data.Glow.Filled = false
+		data.Glow.Thickness = 5
+		data.Glow.Transparency = 0.24
+		data.Glow.Color = col
+		data.Glow.ZIndex = 1
+		data.Main = Drawing.new('Square')
+		data.Main.Filled = false
+		data.Main.Thickness = 1.5
+		data.Main.Transparency = 1
+		data.Main.Color = col
+		data.Main.ZIndex = 3
+		data.Fill = Drawing.new('Square')
+		data.Fill.Filled = true
+		data.Fill.Transparency = Filled.Enabled and 0.13 or 0.045
+		data.Fill.Color = col
+		data.Fill.ZIndex = 1
+		if HealthBar.Enabled then
+			data.HealthBorder = Drawing.new('Line')
+			data.HealthBorder.Thickness = 6
+			data.HealthBorder.Transparency = 0.30
+			data.HealthBorder.Color = Color3.new()
+			data.HealthLine = Drawing.new('Line')
+			data.HealthLine.Thickness = 3
+			data.HealthLine.ZIndex = 4
+			data.HealthLine.Color = Color3.fromHSV(math.clamp(ent.Health / ent.MaxHealth, 0, 1) / 2.5, 0.89, 0.9)
+		end
+		if Name.Enabled then
+			data.TextBKG = Drawing.new('Square')
+			data.TextBKG.Filled = true
+			data.TextBKG.Transparency = Background.Enabled and 0.72 or 0
+			data.TextBKG.Color = Color3.fromRGB(7, 9, 13)
+			data.TextBKG.ZIndex = 1
+			data.Drop = Drawing.new('Text')
+			data.Drop.Color = Color3.new()
+			data.Drop.Transparency = 0.55
+			data.Drop.Center = true
+			data.Drop.Size = 15
+			data.Drop.ZIndex = 2
+			data.Text = Drawing.new('Text')
+			data.Text.Text = ent.Player and whitelist:tag(ent.Player, true)..(DisplayName.Enabled and ent.Player.DisplayName or ent.Player.Name) or ent.Character.Name
+			data.Drop.Text = data.Text.Text
+			data.Text.Color = col
+			data.Text.Center = true
+			data.Text.Size = 15
+			data.Text.ZIndex = 4
+		end
+		Reference[ent] = data
+	end
+
 	local ESPRemoved = {
 		Drawing2D = function(ent)
 			local EntityESP = Reference[ent]
@@ -4505,6 +4615,7 @@ run(function()
 	}
 	ESPRemoved.Drawing3D = ESPRemoved.Drawing2D
 	ESPRemoved.DrawingSkeleton = ESPRemoved.Drawing2D
+	ESPRemoved.DrawingModern = ESPRemoved.Drawing2D
 	
 	local ESPUpdated = {
 		Drawing2D = function(ent)
@@ -4526,6 +4637,8 @@ run(function()
 		end
 	}
 	
+	ESPUpdated.DrawingModern = ESPUpdated.Drawing2D
+
 	local ColorFunc = {
 		Drawing2D = function(hue, sat, val)
 			local color = Color3.fromHSV(hue, sat, val)
@@ -4547,6 +4660,16 @@ run(function()
 		end
 	}
 	ColorFunc.DrawingSkeleton = ColorFunc.Drawing3D
+	ColorFunc.DrawingModern = function(hue, sat, val)
+		local col = Color3.fromHSV(hue, sat, val)
+		for ent, data in Reference do
+			local playercol = entitylib.getEntityColor(ent) or col
+			for _, key in {'Main', 'Glow', 'GlowOuter', 'Fill'} do
+				if data[key] then data[key].Color = playercol end
+			end
+			if data.Text then data.Text.Color = playercol end
+		end
+	end
 	
 	local ESPLoop = {
 		Drawing2D = function()
@@ -4707,6 +4830,49 @@ run(function()
 		end
 	}
 	
+	ESPLoop.DrawingModern = function()
+		for ent, data in Reference do
+			if Distance.Enabled then
+				local distance = entitylib.isAlive and (entitylib.character.RootPart.Position - ent.RootPart.Position).Magnitude or math.huge
+				if distance < DistanceLimit.ValueMin or distance > DistanceLimit.ValueMax then
+					for _, obj in data do obj.Visible = false end
+					continue
+				end
+			end
+			local rootPos, rootVis = gameCamera:WorldToViewportPoint(ent.RootPart.Position)
+			for _, obj in data do obj.Visible = rootVis end
+			if not rootVis then continue end
+			local topPos = gameCamera:WorldToViewportPoint((CFrame.lookAlong(ent.RootPart.Position, gameCamera.CFrame.LookVector) * CFrame.new(2, ent.HipHeight, 0)).p)
+			local bottomPos = gameCamera:WorldToViewportPoint((CFrame.lookAlong(ent.RootPart.Position, gameCamera.CFrame.LookVector) * CFrame.new(-2, -ent.HipHeight - 1, 0)).p)
+			local sizex, sizey = topPos.X - bottomPos.X, topPos.Y - bottomPos.Y
+			local posx, posy = rootPos.X - (sizex / 2), rootPos.Y - (sizey / 2)
+			local pos = Vector2.new(posx, posy) // 1
+			local size = Vector2.new(sizex, sizey) // 1
+			for _, key in {'Main', 'Glow', 'GlowOuter', 'Fill'} do
+				if data[key] then data[key].Position = pos; data[key].Size = size end
+			end
+			local pulse = (math.sin(os.clock() * 3.4) + 1) * 0.5
+			data.Main.Transparency = BoundingBox.Enabled and 1 or 0
+			data.Glow.Transparency = BoundingBox.Enabled and (0.19 + (pulse * 0.09)) or 0
+			data.GlowOuter.Transparency = BoundingBox.Enabled and (0.07 + (pulse * 0.06)) or 0
+			data.Fill.Transparency = Filled.Enabled and 0.13 or 0.045
+			if data.HealthLine then
+				local health = math.clamp(ent.Health / ent.MaxHealth, 0, 1)
+				data.HealthLine.Visible = ent.Health > 0
+				data.HealthLine.From = Vector2.new(posx - 7, posy + sizey) // 1
+				data.HealthLine.To = Vector2.new(posx - 7, posy + (sizey * (1 - health))) // 1
+				data.HealthBorder.From = Vector2.new(posx - 7, posy + sizey) // 1
+				data.HealthBorder.To = Vector2.new(posx - 7, posy) // 1
+			end
+			if data.Text then
+				data.Text.Position = Vector2.new(posx + (sizex / 2), posy - 20) // 1
+				data.Drop.Position = data.Text.Position + Vector2.new(1, 1)
+				data.TextBKG.Size = data.Text.TextBounds + Vector2.new(12, 6)
+				data.TextBKG.Position = data.Text.Position - Vector2.new(6 + (data.Text.TextBounds.X / 2), 2)
+			end
+		end
+	end
+
 	ESP = vape.Categories.Render:CreateModule({
 		Name = 'ESP',
 		Function = function(callback)
@@ -4764,16 +4930,17 @@ run(function()
 	})
 	Method = ESP:CreateDropdown({
 		Name = 'Mode',
-		List = {'2D', '3D', 'Skeleton'},
+		List = {'2D', '3D', 'Skeleton', 'Modern'},
 		Function = function(val)
 			if ESP.Enabled then
 				ESP:Toggle()
 				ESP:Toggle()
 			end
-			BoundingBox.Object.Visible = (val == '2D')
-			Filled.Object.Visible = (val == '2D')
-			HealthBar.Object.Visible = (val == '2D')
-			Name.Object.Visible = (val == '2D')
+			local twod = val == '2D' or val == 'Modern'
+			BoundingBox.Object.Visible = twod
+			Filled.Object.Visible = twod
+			HealthBar.Object.Visible = twod
+			Name.Object.Visible = twod
 			DisplayName.Object.Visible = Name.Object.Visible and Name.Enabled
 			Background.Object.Visible = Name.Object.Visible and Name.Enabled
 		end,
@@ -5224,6 +5391,7 @@ run(function()
 	local Health
 	local Distance
 	local DrawingToggle
+	local Mode
 	local Scale
 	local FontOption
 	local Teammates
@@ -5304,6 +5472,73 @@ run(function()
 		end
 	}
 	
+	Added.Modern = function(ent)
+		if not Targets.Players.Enabled and ent.Player then return end
+		if not Targets.NPCs.Enabled and ent.NPC then return end
+		if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
+		if vape.ThreadFix then setthreadidentity(8) end
+		Strings[ent] = ent.Player and whitelist:tag(ent.Player, true, true)..(DisplayName.Enabled and ent.Player.DisplayName or ent.Player.Name) or ent.Character.Name
+		if Health.Enabled then
+			local hp = Color3.fromHSV(math.clamp(ent.Health / ent.MaxHealth, 0, 1) / 2.5, 0.89, 0.75)
+			Strings[ent] = Strings[ent]..' <font color="#'..hp:ToHex()..'">'..math.round(ent.Health)..'</font>'
+		end
+		if Distance.Enabled then Strings[ent] = '<font color="rgb(145,225,255)">◆ %s</font>  '..Strings[ent] end
+		local col = entitylib.getEntityColor(ent) or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
+		local root = Instance.new('Frame')
+		root.Name = ent.Player and ent.Player.Name or ent.Character.Name
+		root.AnchorPoint = Vector2.new(0.5, 1)
+		root.BackgroundColor3 = Color3.fromRGB(8, 10, 14)
+		root.BackgroundTransparency = math.clamp(Background.Value * 0.72, 0.08, 0.9)
+		root.BorderSizePixel = 0
+		root.Visible = false
+		root.ZIndex = 4
+		root.Parent = Folder
+		local corner = Instance.new('UICorner')
+		corner.CornerRadius = UDim.new(0, 7)
+		corner.Parent = root
+		local glow = Instance.new('UIStroke')
+		glow.Name = 'Glow'
+		glow.Color = col
+		glow.Thickness = 5
+		glow.Transparency = 0.74
+		glow.Parent = root
+		local stroke = Instance.new('UIStroke')
+		stroke.Name = 'AccentStroke'
+		stroke.Color = col
+		stroke.Thickness = 1.2
+		stroke.Transparency = 0.10
+		stroke.Parent = root
+		local accent = Instance.new('Frame')
+		accent.Name = 'Accent'
+		accent.AnchorPoint = Vector2.new(0.5, 1)
+		accent.Position = UDim2.new(0.5, 0, 1, 0)
+		accent.Size = UDim2.new(0.72, 0, 0, 2)
+		accent.BackgroundColor3 = col
+		accent.BorderSizePixel = 0
+		accent.ZIndex = 5
+		accent.Parent = root
+		local ac = Instance.new('UICorner')
+		ac.CornerRadius = UDim.new(1, 0)
+		ac.Parent = accent
+		local text = Instance.new('TextLabel')
+		text.Name = 'Text'
+		text.BackgroundTransparency = 1
+		text.Position = UDim2.fromOffset(9, 4)
+		text.TextSize = 14 * Scale.Value
+		text.FontFace = FontOption.Value
+		text.RichText = true
+		text.TextXAlignment = Enum.TextXAlignment.Left
+		text.TextStrokeTransparency = 1
+		text.TextColor3 = col
+		text.Text = Strings[ent]
+		text.ZIndex = 6
+		text.Parent = root
+		local size = getfontbounds(removeTags(Strings[ent]), text.TextSize, text.FontFace, Vector2.new(100000, 100000))
+		text.Size = UDim2.fromOffset(size.X, size.Y + 1)
+		root.Size = UDim2.fromOffset(size.X + 18, size.Y + 10)
+		Reference[ent] = {Root = root, Text = text, Accent = accent, Stroke = stroke, Glow = glow}
+	end
+
 	local Removed = {
 		Normal = function(ent)
 			local v = Reference[ent]
@@ -5336,6 +5571,17 @@ run(function()
 		end
 	}
 	
+	Removed.Modern = function(ent)
+		local data = Reference[ent]
+		if data then
+			if vape.ThreadFix then setthreadidentity(8) end
+			Reference[ent] = nil
+			Strings[ent] = nil
+			Sizes[ent] = nil
+			data.Root:Destroy()
+		end
+	end
+
 	local Updated = {
 		Normal = function(ent)
 			local nametag = Reference[ent]
@@ -5385,6 +5631,23 @@ run(function()
 			end
 		end
 	}
+
+	Updated.Modern = function(ent)
+		local data = Reference[ent]
+		if not data then return end
+		Sizes[ent] = nil
+		Strings[ent] = ent.Player and whitelist:tag(ent.Player, true, true)..(DisplayName.Enabled and ent.Player.DisplayName or ent.Player.Name) or ent.Character.Name
+		if Health.Enabled then
+			local hp = Color3.fromHSV(math.clamp(ent.Health / ent.MaxHealth, 0, 1) / 2.5, 0.89, 0.75)
+			Strings[ent] = Strings[ent]..' <font color="#'..hp:ToHex()..'">'..math.round(ent.Health)..'</font>'
+		end
+		if Distance.Enabled then Strings[ent] = '<font color="rgb(145,225,255)">◆ %s</font>  '..Strings[ent] end
+		data.Text.Text = Strings[ent]
+		local size = getfontbounds(removeTags(Strings[ent]), data.Text.TextSize, data.Text.FontFace, Vector2.new(100000, 100000))
+		data.Text.Size = UDim2.fromOffset(size.X, size.Y + 1)
+		data.Root.Size = UDim2.fromOffset(size.X + 18, size.Y + 10)
+	end
+
 	
 	local ColorFunc = {
 		Normal = function(hue, sat, val)
@@ -5401,6 +5664,17 @@ run(function()
 		end
 	}
 	
+	ColorFunc.Modern = function(hue, sat, val)
+		local col = Color3.fromHSV(hue, sat, val)
+		for ent, data in Reference do
+			local playercol = entitylib.getEntityColor(ent) or col
+			data.Text.TextColor3 = playercol
+			data.Accent.BackgroundColor3 = playercol
+			data.Stroke.Color = playercol
+			data.Glow.Color = playercol
+		end
+	end
+
 	local Loop = {
 		Normal = function()
 			for ent, nametag in Reference do
@@ -5462,11 +5736,39 @@ run(function()
 		end
 	}
 	
+	Loop.Modern = function()
+		for ent, data in Reference do
+			if DistanceCheck.Enabled then
+				local dist = entitylib.isAlive and (entitylib.character.RootPart.Position - ent.RootPart.Position).Magnitude or math.huge
+				if dist < DistanceLimit.ValueMin or dist > DistanceLimit.ValueMax then
+					data.Root.Visible = false
+					continue
+				end
+			end
+			local headPos, headVis = gameCamera:WorldToViewportPoint(ent.RootPart.Position + Vector3.new(0, ent.HipHeight + 1, 0))
+			data.Root.Visible = headVis
+			if not headVis then continue end
+			if Distance.Enabled then
+				local mag = entitylib.isAlive and math.floor((entitylib.character.RootPart.Position - ent.RootPart.Position).Magnitude) or 0
+				if Sizes[ent] ~= mag then
+					data.Text.Text = string.format(Strings[ent], mag)
+					local size = getfontbounds(removeTags(data.Text.Text), data.Text.TextSize, data.Text.FontFace, Vector2.new(100000, 100000))
+					data.Text.Size = UDim2.fromOffset(size.X, size.Y + 1)
+					data.Root.Size = UDim2.fromOffset(size.X + 18, size.Y + 10)
+					Sizes[ent] = mag
+				end
+			end
+			data.Root.Position = UDim2.fromOffset(headPos.X, headPos.Y - 4)
+			local pulse = (math.sin(os.clock() * 3.6) + 1) * 0.5
+			data.Glow.Transparency = 0.68 + (pulse * 0.16)
+		end
+	end
+
 	NameTags = vape.Categories.Render:CreateModule({
 		Name = 'NameTags',
 		Function = function(callback)
 			if callback then
-				methodused = DrawingToggle.Enabled and 'Drawing' or 'Normal'
+				methodused = Mode.Value == 'Modern' and 'Modern' or (DrawingToggle.Enabled and 'Drawing' or 'Normal')
 				if Removed[methodused] then
 					NameTags:Clean(entitylib.Events.EntityRemoved:Connect(Removed[methodused]))
 				end
@@ -5515,6 +5817,14 @@ run(function()
 				NameTags:Toggle()
 				NameTags:Toggle()
 			end
+		end
+	})
+	Mode = NameTags:CreateDropdown({
+		Name = 'Mode',
+		List = {'Classic', 'Modern'},
+		Function = function(val)
+			if DrawingToggle then DrawingToggle.Object.Visible = val ~= 'Modern' end
+			if NameTags.Enabled then NameTags:Toggle(); NameTags:Toggle() end
 		end
 	})
 	FontOption = NameTags:CreateFont({
@@ -5622,6 +5932,7 @@ run(function()
 			end
 		end
 	})
+	DrawingToggle.Object.Visible = Mode.Value ~= 'Modern'
 	DistanceCheck = NameTags:CreateToggle({
 		Name = 'Distance Check',
 		Function = function(callback)
@@ -6891,6 +7202,7 @@ run(function()
 	local Tracers
 	local Targets
 	local Color
+	local Mode
 	local Transparency
 	local StartPosition
 	local EndPosition
@@ -6900,57 +7212,86 @@ run(function()
 	local DistanceLimit
 	local Behind
 	local Reference = {}
-	
+
+	local function setLineVisible(data, visible)
+		for _, key in {'Core', 'Glow', 'GlowOuter', 'Pulse', 'PulseGlow'} do
+			if data[key] then data[key].Visible = visible end
+		end
+	end
+
+	local function setLineColor(data, col)
+		for _, key in {'Core', 'Glow', 'GlowOuter', 'Pulse', 'PulseGlow'} do
+			if data[key] then data[key].Color = col end
+		end
+	end
+
 	local function Added(ent)
 		if not Targets.Players.Enabled and ent.Player then return end
 		if not Targets.NPCs.Enabled and ent.NPC then return end
 		if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
-		if vape.ThreadFix then
-			setthreadidentity(8)
+		if vape.ThreadFix then setthreadidentity(8) end
+		local col = entitylib.getEntityColor(ent) or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
+		local opacity = 1 - Transparency.Value
+		local core = Drawing.new('Line')
+		core.Thickness = Mode.Value == 'Modern' and 1.7 or 1
+		core.Transparency = opacity
+		core.Color = col
+		core.ZIndex = 4
+		local data = {Core = core}
+		if Mode.Value == 'Modern' then
+			local glow = Drawing.new('Line')
+			glow.Thickness = 5
+			glow.Transparency = opacity * 0.32
+			glow.Color = col
+			glow.ZIndex = 2
+			local glowOuter = Drawing.new('Line')
+			glowOuter.Thickness = 10
+			glowOuter.Transparency = opacity * 0.12
+			glowOuter.Color = col
+			glowOuter.ZIndex = 1
+			local pulse = Drawing.new('Circle')
+			pulse.Filled = true
+			pulse.Radius = 2.4
+			pulse.Thickness = 1
+			pulse.Color = col
+			pulse.Transparency = opacity
+			pulse.ZIndex = 5
+			local pulseGlow = Drawing.new('Circle')
+			pulseGlow.Filled = true
+			pulseGlow.Radius = 6.5
+			pulseGlow.Thickness = 1
+			pulseGlow.Color = col
+			pulseGlow.Transparency = opacity * 0.18
+			pulseGlow.ZIndex = 3
+			data.Glow, data.GlowOuter, data.Pulse, data.PulseGlow = glow, glowOuter, pulse, pulseGlow
 		end
-	
-		local EntityTracer = Drawing.new('Line')
-		EntityTracer.Thickness = 1
-		EntityTracer.Transparency = 1 - Transparency.Value
-		EntityTracer.Color = entitylib.getEntityColor(ent) or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
-		Reference[ent] = EntityTracer
+		Reference[ent] = data
 	end
-	
+
 	local function Removed(ent)
-		local v = Reference[ent]
-		if v then
-			if vape.ThreadFix then
-				setthreadidentity(8)
-			end
+		local data = Reference[ent]
+		if data then
+			if vape.ThreadFix then setthreadidentity(8) end
 			Reference[ent] = nil
-			pcall(function()
-				v.Visible = false
-				v:Remove()
-			end)
+			for _, obj in data do pcall(function() obj.Visible = false; obj:Remove() end) end
 		end
 	end
-	
+
 	local function ColorFunc(hue, sat, val)
 		if DistanceColor.Enabled then return end
-		local tracerColor = Color3.fromHSV(hue, sat, val)
-		for ent, EntityTracer in Reference do
-			EntityTracer.Color = entitylib.getEntityColor(ent) or tracerColor
-		end
+		local col = Color3.fromHSV(hue, sat, val)
+		for ent, data in Reference do setLineColor(data, entitylib.getEntityColor(ent) or col) end
 	end
-	
+
 	local function Loop()
 		local screenSize = vape.gui.AbsoluteSize
 		local startVector = StartPosition.Value == 'Mouse' and inputService:GetMouseLocation() or Vector2.new(screenSize.X / 2, (StartPosition.Value == 'Middle' and screenSize.Y / 2 or screenSize.Y))
-	
-		for ent, EntityTracer in Reference do
+		for ent, data in Reference do
 			local distance = entitylib.isAlive and (entitylib.character.RootPart.Position - ent.RootPart.Position).Magnitude
-			if Distance.Enabled and distance then
-				if distance < DistanceLimit.ValueMin or distance > DistanceLimit.ValueMax then
-					EntityTracer.Visible = false
-					continue
-				end
+			if Distance.Enabled and distance and (distance < DistanceLimit.ValueMin or distance > DistanceLimit.ValueMax) then
+				setLineVisible(data, false)
+				continue
 			end
-	
 			local pos = ent[EndPosition.Value == 'Torso' and 'RootPart' or 'Head'].Position
 			local rootPos, rootVis = gameCamera:WorldToViewportPoint(pos)
 			if not rootVis and Behind.Enabled then
@@ -6959,133 +7300,58 @@ run(function()
 				rootPos = gameCamera:WorldToViewportPoint(gameCamera.CFrame:pointToWorldSpace(tempPos))
 				rootVis = true
 			end
-	
+			setLineVisible(data, rootVis)
+			if not rootVis then continue end
 			local endVector = Vector2.new(rootPos.X, rootPos.Y)
-			EntityTracer.Visible = rootVis
-			EntityTracer.From = startVector
-			EntityTracer.To = endVector
-			if DistanceColor.Enabled and distance then
-				EntityTracer.Color = Color3.fromHSV(math.min((distance / 128) / 2.8, 0.4), 0.89, 0.75)
+			for _, key in {'Core', 'Glow', 'GlowOuter'} do
+				if data[key] then data[key].From = startVector; data[key].To = endVector end
+			end
+			if DistanceColor.Enabled and distance then setLineColor(data, Color3.fromHSV(math.min((distance / 128) / 2.8, 0.4), 0.89, 0.75)) end
+			if data.Pulse then
+				local alpha = (os.clock() * 0.72) % 1
+				local point = startVector:Lerp(endVector, alpha)
+				data.Pulse.Position = point
+				data.PulseGlow.Position = point
+				data.PulseGlow.Radius = 5.5 + ((math.sin(os.clock() * 6) + 1) * 1.4)
 			end
 		end
 	end
-	
+
 	Tracers = vape.Categories.Render:CreateModule({
 		Name = 'Tracers',
 		Function = function(callback)
 			if callback then
 				Tracers:Clean(entitylib.Events.EntityRemoved:Connect(Removed))
-				for _, v in entitylib.List do
-					if Reference[v] then
-						Removed(v)
-					end
-					Added(v)
-				end
-				Tracers:Clean(entitylib.Events.EntityAdded:Connect(function(ent)
-					if Reference[ent] then
-						Removed(ent)
-					end
-					Added(ent)
-				end))
-				Tracers:Clean(vape.Categories.Friends.ColorUpdate.Event:Connect(function()
-					ColorFunc(Color.Hue, Color.Sat, Color.Value)
-				end))
+				for _, ent in entitylib.List do if Reference[ent] then Removed(ent) end; Added(ent) end
+				Tracers:Clean(entitylib.Events.EntityAdded:Connect(function(ent) if Reference[ent] then Removed(ent) end; Added(ent) end))
+				Tracers:Clean(vape.Categories.Friends.ColorUpdate.Event:Connect(function() ColorFunc(Color.Hue, Color.Sat, Color.Value) end))
 				Tracers:Clean(runService.RenderStepped:Connect(Loop))
 			else
-				for i in Reference do
-					Removed(i)
-				end
+				for ent in Reference do Removed(ent) end
 			end
 		end,
 		Tooltip = 'Renders tracers on players.'
 	})
-	Targets = Tracers:CreateTargets({
-		Players = true,
-		Function = function()
-			if Tracers.Enabled then
-				Tracers:Toggle()
-				Tracers:Toggle()
-			end
-		end
-	})
-	StartPosition = Tracers:CreateDropdown({
-		Name = 'Start Position',
-		List = {'Middle', 'Bottom', 'Mouse'},
-		Function = function()
-			if Tracers.Enabled then
-				Tracers:Toggle()
-				Tracers:Toggle()
-			end
-		end
-	})
-	EndPosition = Tracers:CreateDropdown({
-		Name = 'End Position',
-		List = {'Head', 'Torso'},
-		Function = function()
-			if Tracers.Enabled then
-				Tracers:Toggle()
-				Tracers:Toggle()
-			end
-		end
-	})
-	Color = Tracers:CreateColorSlider({
-		Name = 'Player Color',
-		Function = function(hue, sat, val)
-			if Tracers.Enabled then
-				ColorFunc(hue, sat, val)
-			end
-		end
-	})
+	Targets = Tracers:CreateTargets({Players = true, Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
+	Mode = Tracers:CreateDropdown({Name = 'Mode', List = {'Classic', 'Modern'}, Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
+	StartPosition = Tracers:CreateDropdown({Name = 'Start Position', List = {'Middle', 'Bottom', 'Mouse'}, Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
+	EndPosition = Tracers:CreateDropdown({Name = 'End Position', List = {'Head', 'Torso'}, Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
+	Color = Tracers:CreateColorSlider({Name = 'Player Color', Function = function(hue, sat, val) if Tracers.Enabled then ColorFunc(hue, sat, val) end end})
 	Transparency = Tracers:CreateSlider({
-		Name = 'Transparency',
-		Min = 0,
-		Max = 1,
+		Name = 'Transparency', Min = 0, Max = 1, Decimal = 10,
 		Function = function(val)
-			for _, tracer in Reference do
-				tracer.Transparency = 1 - val
-			end
-		end,
-		Decimal = 10
-	})
-	DistanceColor = Tracers:CreateToggle({
-		Name = 'Color by distance',
-		Function = function()
-			if Tracers.Enabled then
-				Tracers:Toggle()
-				Tracers:Toggle()
+			local opacity = 1 - val
+			for _, data in Reference do
+				data.Core.Transparency = opacity
+				if data.Glow then data.Glow.Transparency = opacity * 0.32; data.GlowOuter.Transparency = opacity * 0.12; data.Pulse.Transparency = opacity; data.PulseGlow.Transparency = opacity * 0.18 end
 			end
 		end
 	})
-	Distance = Tracers:CreateToggle({
-		Name = 'Distance Check',
-		Function = function(callback)
-			DistanceLimit.Object.Visible = callback
-		end
-	})
-	DistanceLimit = Tracers:CreateTwoSlider({
-		Name = 'Player Distance',
-		Min = 0,
-		Max = 256,
-		DefaultMin = 0,
-		DefaultMax = 64,
-		Darker = true,
-		Visible = false
-	})
-	Behind = Tracers:CreateToggle({
-		Name = 'Behind',
-		Default = true
-	})
-	Teammates = Tracers:CreateToggle({
-		Name = 'Priority Only',
-		Function = function()
-			if Tracers.Enabled then
-				Tracers:Toggle()
-				Tracers:Toggle()
-			end
-		end,
-		Default = true,
-		Tooltip = 'Hides teammates & non targetable entities'
-	})
+	DistanceColor = Tracers:CreateToggle({Name = 'Color by distance', Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
+	Distance = Tracers:CreateToggle({Name = 'Distance Check', Function = function(callback) DistanceLimit.Object.Visible = callback end})
+	DistanceLimit = Tracers:CreateTwoSlider({Name = 'Player Distance', Min = 0, Max = 256, DefaultMin = 0, DefaultMax = 64, Darker = true, Visible = false})
+	Behind = Tracers:CreateToggle({Name = 'Behind', Default = true})
+	Teammates = Tracers:CreateToggle({Name = 'Priority Only', Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end, Default = true, Tooltip = 'Hides teammates & non targetable entities'})
 end)
 
 run(function()
@@ -7093,117 +7359,78 @@ run(function()
 	local FontOption
 	local List
 	local Color
+	local Mode
 	local Scale
 	local Background
 	local Stroke
 	WaypointFolder = Instance.new('Folder')
 	WaypointFolder.Parent = vape.holder
-	
+
+	local function buildWaypoint(data)
+		local split = data:split('/')
+		local text = split[2]
+		local tagSize = getfontbounds(removeTags(text), 14 * Scale.Value, FontOption.Value, Vector2.new(100000, 100000))
+		local modern = Mode.Value == 'Modern'
+		local billboard = Instance.new('BillboardGui')
+		billboard.Name = 'Waypoint'
+		billboard.AlwaysOnTop = true
+		billboard.Size = modern and UDim2.fromOffset(tagSize.X + 34, tagSize.Y + 18) or UDim2.fromOffset(tagSize.X + 8, tagSize.Y + 7)
+		billboard.StudsOffsetWorldSpace = Vector3.new(unpack(split[1]:split(',')))
+		billboard.Parent = WaypointFolder
+		local col = Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
+		if modern then
+			local card = Instance.new('Frame')
+			card.Name = 'ModernCard'
+			card.Size = UDim2.fromScale(1, 1)
+			card.BackgroundColor3 = Color3.fromRGB(8, 10, 14)
+			card.BackgroundTransparency = math.clamp(Background.Value * 0.7, 0.06, 0.9)
+			card.BorderSizePixel = 0
+			card.Parent = billboard
+			local corner = Instance.new('UICorner'); corner.CornerRadius = UDim.new(0, 7); corner.Parent = card
+			local glow = Instance.new('UIStroke'); glow.Name = 'Glow'; glow.Color = col; glow.Thickness = 5; glow.Transparency = 0.72; glow.Parent = card
+			local edge = Instance.new('UIStroke'); edge.Name = 'Edge'; edge.Color = col; edge.Thickness = 1.2; edge.Transparency = 0.08; edge.Parent = card
+			local dot = Instance.new('Frame')
+			dot.Name = 'Dot'; dot.AnchorPoint = Vector2.new(0.5, 0.5); dot.Position = UDim2.fromOffset(13, (tagSize.Y + 18) / 2); dot.Size = UDim2.fromOffset(7, 7); dot.BackgroundColor3 = col; dot.BorderSizePixel = 0; dot.Parent = card
+			local dotCorner = Instance.new('UICorner'); dotCorner.CornerRadius = UDim.new(1, 0); dotCorner.Parent = dot
+			local tag = Instance.new('TextLabel')
+			tag.Name = 'TextLabel'; tag.BackgroundTransparency = 1; tag.Position = UDim2.fromOffset(24, 4); tag.Size = UDim2.new(1, -29, 1, -8); tag.FontFace = FontOption.Value; tag.RichText = true; tag.TextXAlignment = Enum.TextXAlignment.Left; tag.Text = text; tag.TextColor3 = col; tag.TextSize = 14 * Scale.Value; tag.TextStrokeTransparency = 1; tag.Parent = card
+		else
+			local tag = Instance.new('TextLabel')
+			tag.BackgroundColor3 = Color3.new(); tag.BackgroundTransparency = Background.Value; tag.BorderSizePixel = 0; tag.FontFace = FontOption.Value; tag.RichText = true; tag.Size = billboard.Size; tag.Text = text; tag.TextColor3 = col; tag.TextSize = 14 * Scale.Value; tag.TextStrokeTransparency = Stroke.Value; tag.Visible = true; tag.Parent = billboard
+		end
+	end
+
 	Waypoints = vape.Categories.Render:CreateModule({
 		Name = 'Waypoints',
 		Function = function(callback)
-			if callback then
-				for _, data in List.ListEnabled do
-					local split = data:split('/')
-					local tagSize = getfontbounds(removeTags(split[2]), 14 * Scale.Value, FontOption.Value, Vector2.new(100000, 100000))
-					local billboard = Instance.new('BillboardGui')
-					billboard.AlwaysOnTop = true
-					billboard.Size = UDim2.fromOffset(tagSize.X + 8, tagSize.Y + 7)
-					billboard.StudsOffsetWorldSpace = Vector3.new(unpack(split[1]:split(',')))
-					billboard.Parent = WaypointFolder
-					local tag = Instance.new('TextLabel')
-					tag.BackgroundColor3 = Color3.new()
-					tag.BackgroundTransparency = Background.Value
-					tag.BorderSizePixel = 0
-					tag.FontFace = FontOption.Value
-					tag.RichText = true
-					tag.Size = billboard.Size
-					tag.Text = split[2]
-					tag.TextColor3 = Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
-					tag.TextSize = 14 * Scale.Value
-					tag.TextStrokeTransparency = Stroke.Value
-					tag.Visible = true
-					tag.Parent = billboard
-				end
-			else
-				WaypointFolder:ClearAllChildren()
-			end
+			if callback then for _, data in List.ListEnabled do buildWaypoint(data) end else WaypointFolder:ClearAllChildren() end
 		end,
 		Tooltip = 'Mark certain spots with a visual indicator'
 	})
-	FontOption = Waypoints:CreateFont({
-		Name = 'Font',
-		Blacklist = 'Arial',
-		Function = function()
-			if Waypoints.Enabled then
-				Waypoints:Toggle()
-				Waypoints:Toggle()
-			end
-		end,
-	})
+	Mode = Waypoints:CreateDropdown({Name = 'Mode', List = {'Classic', 'Modern'}, Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end})
+	FontOption = Waypoints:CreateFont({Name = 'Font', Blacklist = 'Arial', Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end})
 	List = Waypoints:CreateTextList({
-		Name = 'Points',
-		Placeholder = '(name) | (x, y, z/name)',
-		Function = function()
-			if Waypoints.Enabled then
-				Waypoints:Toggle()
-				Waypoints:Toggle()
-			end
-		end,
+		Name = 'Points', Placeholder = '(name) | (x, y, z/name)',
+		Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end,
 		TextFunction = function(text)
-			if not text:find('/') then
-				local pos = entitylib.character.RootPart.Position // 1
-				return pos.X..','..pos.Y..','..pos.Z..'/'..text
-			end
+			if not text:find('/') then local pos = entitylib.character.RootPart.Position // 1; return pos.X..','..pos.Y..','..pos.Z..'/'..text end
 		end
 	})
 	Color = Waypoints:CreateColorSlider({
 		Name = 'Color',
 		Function = function(hue, sat, val)
-			for _, v in WaypointFolder:GetChildren() do
-				v.TextLabel.TextColor3 = Color3.fromHSV(hue, sat, val)
+			local col = Color3.fromHSV(hue, sat, val)
+			for _, billboard in WaypointFolder:GetChildren() do
+				local card = billboard:FindFirstChild('ModernCard')
+				if card then
+					card.TextLabel.TextColor3 = col; card.Dot.BackgroundColor3 = col; card.Glow.Color = col; card.Edge.Color = col
+				elseif billboard:FindFirstChild('TextLabel') then billboard.TextLabel.TextColor3 = col end
 			end
 		end
 	})
-	Scale = Waypoints:CreateSlider({
-		Name = 'Scale',
-		Function = function()
-			if Waypoints.Enabled then
-				Waypoints:Toggle()
-				Waypoints:Toggle()
-			end
-		end,
-		Default = 1,
-		Min = 0.1,
-		Max = 1.5,
-		Decimal = 10
-	})
-	Background = Waypoints:CreateSlider({
-		Name = 'Transparency',
-		Function = function()
-			if Waypoints.Enabled then
-				Waypoints:Toggle()
-				Waypoints:Toggle()
-			end
-		end,
-		Default = 0.5,
-		Min = 0,
-		Max = 1,
-		Decimal = 10
-	})
-	Stroke = Waypoints:CreateSlider({
-		Name = 'Stroke Transparency',
-		Function = function()
-			if Waypoints.Enabled then
-				Waypoints:Toggle()
-				Waypoints:Toggle()
-			end
-		end,
-		Default = 1,
-		Min = 0,
-		Max = 1,
-		Decimal = 10
-	})
+	Scale = Waypoints:CreateSlider({Name = 'Scale', Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end, Default = 1, Min = 0.1, Max = 1.5, Decimal = 10})
+	Background = Waypoints:CreateSlider({Name = 'Transparency', Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end, Default = 0.5, Min = 0, Max = 1, Decimal = 10})
+	Stroke = Waypoints:CreateSlider({Name = 'Stroke Transparency', Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end, Default = 1, Min = 0, Max = 1, Decimal = 10})
 end)
 
 run(function()
