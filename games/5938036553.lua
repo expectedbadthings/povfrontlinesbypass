@@ -1205,124 +1205,42 @@ end)
 run(function()
 	local GrenadeTP
 	local Range
-	local targetCache = setmetatable({}, {__mode = 'k'})
-
-	local function validTarget(ent)
-		return ent
-			and ent.Targetable == true
-			and ent.RootPart
-			and ent.RootPart.Parent
-			and type(ent.Health) == 'number' and ent.Health > 0
-	end
-
-	local function getTargetCFrame(ent)
-		local root = ent and ent.RootPart
-		if not root or not root.Parent then return end
-
-		-- Prefer the animated center-mass bones so the grenade sits inside the
-		-- actual soldier hitbox instead of lagging behind the root pivot.
-		local node = root:FindFirstChild('Chest_M', true)
-			or root:FindFirstChild('Spine2_M', true)
-			or root:FindFirstChild('Spine1_M', true)
-
-		if node then
-			if node:IsA('Bone') then
-				return node.TransformedWorldCFrame
-			elseif node:IsA('Attachment') then
-				return node.WorldCFrame
-			elseif node:IsA('BasePart') then
-				return node.CFrame
-			end
-		end
-
-		-- Frontlines' root is low on the body, so raise the fallback to torso height.
-		return root.CFrame + Vector3.new(0, math.max(ent.HipHeight or 2, 1.5) * 0.7, 0)
-	end
-
-	local function getNearestTarget(throwable, primary, now)
-		local cached = targetCache[throwable]
-		if cached and now < cached.Expires and not cached.Entity then return end
-		if cached and now < cached.Expires and validTarget(cached.Entity) and entitylib.isVulnerable(cached.Entity) then
-			if (cached.Entity.RootPart.Position - primary.Position).Magnitude <= Range.Value + 8 then
-				return cached.Entity
-			end
-		end
-
-		-- EntityPosition requires a living local player and excludes NPCs by
-		-- default. Thrown grenades outlive their owner, and Frontlines soldiers
-		-- without a Roblox Player instance are represented as NPC entities.
-		local ent
-		local nearest = Range.Value
-		for _, candidate in entitylib.List do
-			if validTarget(candidate) and entitylib.isVulnerable(candidate) then
-				local distance = (candidate.RootPart.Position - primary.Position).Magnitude
-				if distance <= nearest then
-					nearest, ent = distance, candidate
-				end
-			end
-		end
-
-		targetCache[throwable] = {
-			Entity = ent,
-			Expires = now + 0.05
-		}
-		return ent
-	end
-
-	local function step()
-		if not GrenadeTP.Enabled or type(frontlines.Throwables) ~= 'table' then return end
-		local now = os.clock()
-
-		for _, throwable in frontlines.Throwables do
-			if type(throwable) ~= 'table' then continue end
-			local model = throwable.model
-			if typeof(model) ~= 'Instance' or not model:IsA('Model') or not model.Parent then
-				targetCache[throwable] = nil
-				continue
-			end
-			local primary = model.PrimaryPart or model:FindFirstChildWhichIsA('BasePart', true)
-
-			if primary and primary.Parent and (throwable.network_ownership == true or throwable.network_ownership == 1) then
-				local ent = getNearestTarget(throwable, primary, now)
-				if validTarget(ent) then
-					local targetCF = getTargetCFrame(ent)
-					if targetCF then
-						-- Move before the physics step so overlap/contact can be processed on
-						-- this frame instead of waiting for the next polling iteration.
-						-- Align the physical grenade part, not a potentially offset model pivot.
-						model:PivotTo(targetCF * primary.CFrame:Inverse() * model:GetPivot())
-
-						-- Prevent the grenade's old throw velocity from immediately pulling it
-						-- back out of the target between teleports. Match target velocity instead.
-						local targetVelocity = ent.RootPart.AssemblyLinearVelocity
-						if typeof(targetVelocity) ~= 'Vector3' then targetVelocity = Vector3.zero end
-						pcall(function()
-							primary.AssemblyLinearVelocity = targetVelocity
-							primary.AssemblyAngularVelocity = Vector3.zero
-						end)
-					end
-				end
-			else
-				targetCache[throwable] = nil
-			end
-		end
-	end
-
+	
 	GrenadeTP = vape.Categories.Blatant:CreateModule({
 		Name = 'GrenadeTP',
 		Function = function(callback)
-			table.clear(targetCache)
 			if callback then
-				-- Snap both before and after physics. PreSimulation lets contact resolve on
-				-- the current physics frame; Heartbeat keeps the grenade from drifting away.
-				step()
-				GrenadeTP:Clean(runService.PreSimulation:Connect(step))
-				GrenadeTP:Clean(runService.Heartbeat:Connect(step))
+				repeat
+					for _, v in frontlines.Throwables do
+						if v.model and v.network_ownership then
+							local ent = entitylib.EntityPosition({
+								Range = Range.Value,
+								Part = 'RootPart',
+								Origin = v.model.PrimaryPart.Position,
+								Players = true
+							})
+	
+							if ent then
+								local id
+								for i, hash in frontlines.Main.globals.soldier_hitbox_hash do
+									if i.Weld.Part0 == v.RootPart then
+										id = hash
+										break
+									end
+								end
+	
+								if id then
+									v.model:PivotTo(ent.RootPart.Root_M.Spine1_M.WorldCFrame)
+								end
+							end
+						end
+					end
+					task.wait(0.016)
+				until not GrenadeTP.Enabled
 			end
 		end,
-		Tooltip = 'Teleports owned throwables directly onto the nearest enemy center mass'
+		Tooltip = 'Teleports throwables near enemy players'
 	})
-
 	Range = GrenadeTP:CreateSlider({
 		Name = 'Range',
 		Min = 1,
