@@ -6829,7 +6829,7 @@ run(function()
 end)
 
 run(function()
-	local Bot, Mode, SearchRange
+	local Bot, Mode, SearchRange, Underground, Depth
 	local status = 'Idle'
 
 	local function ammoAction(gun, ammo)
@@ -6850,6 +6850,8 @@ run(function()
 			end
 			local savedModules, savedOptions = {}, {}
 			local movementRoot, hoverY, target, currentCharacter
+			local route
+			local collisions = {}
 			local nextReload, resetAt = 0, nil
 			local stopped, respawnPending = false, false
 			local function toggle(module, enabled)
@@ -6860,6 +6862,16 @@ run(function()
 					movementRoot.AssemblyLinearVelocity = Vector3.zero
 				end
 				movementRoot, hoverY = nil, nil
+				route = nil
+				for part, value in collisions do
+					if part.Parent then part.CanCollide = value end
+				end
+				table.clear(collisions)
+			end
+			local function allowUnderground(part)
+				if not part or not part.Parent then return end
+				if collisions[part] == nil then collisions[part] = part.CanCollide end
+				part.CanCollide = false
 			end
 			local function stopAttack()
 				toggle(aura, false)
@@ -6988,16 +7000,41 @@ run(function()
 				local melee = Mode.Value == 'Killaura'
 				local delta = root.Position - target.RootPart.Position
 				local stopDistance = melee and 5 or 24
-				if delta.Magnitude > stopDistance + 1 then
+				if route and not Underground.Enabled then stopTravel() end
+				if route or delta.Magnitude > stopDistance + 1 then
 					stopAttack()
 					status = 'Flying • 80 studs/s'
-					local direction = target.RootPart.Position - root.Position
-					local distance = math.min(80 * dt, math.max(0, direction.Magnitude - stopDistance))
+					local goal = target.RootPart.Position
+					local arrivalDistance = stopDistance
+					if Underground.Enabled then
+						if not route then
+							local y = math.min(root.Position.Y, target.RootPart.Position.Y) - Depth.Value
+							route = {Stage = 'Descend', Y = y, Entry = Vector3.new(root.Position.X, y, root.Position.Z)}
+						end
+						allowUnderground(root)
+						allowUnderground(globals.fpv_sol_instances and globals.fpv_sol_instances.root)
+						local facing = target.RootPart.CFrame and target.RootPart.CFrame.LookVector or Vector3.new(0, 0, 1)
+						facing *= Vector3.new(1, 0, 1)
+						if facing.Magnitude < 0.01 then facing = Vector3.new(0, 0, 1) end
+						local surface = target.RootPart.Position - facing.Unit * (melee and 3 or 6)
+						local below = Vector3.new(surface.X, route.Y, surface.Z)
+						if route.Stage == 'Descend' and (root.Position - route.Entry).Magnitude <= 0.1 then route.Stage = 'Travel' end
+						if route.Stage == 'Travel' and (root.Position - below).Magnitude <= 0.1 then route.Stage = 'Rise' end
+						goal = route.Stage == 'Descend' and route.Entry or route.Stage == 'Travel' and below or surface
+						arrivalDistance = 0
+						status = 'Underground • '..route.Stage
+						if route.Stage == 'Rise' and (root.Position - goal).Magnitude <= 0.1 then
+							stopTravel()
+							return
+						end
+					end
+					local direction = goal - root.Position
+					local distance = math.min(80 * dt, math.max(0, direction.Magnitude - arrivalDistance))
 					-- Move the native soldier root after simulation, including vertical
 					-- travel, without relying on impulses the movement controller cancels.
 					movementRoot, hoverY = root, nil
 					root.AssemblyLinearVelocity = Vector3.zero
-					root.CFrame += direction.Unit * distance
+					if distance > 0.001 then root.CFrame += direction.Unit * distance end
 				else
 					if not melee and (not gun or not gun.fire_params or gun.type == 2) then
 						stopTravel(); stopAttack(); status = 'Equip a firearm'; return
@@ -7015,10 +7052,13 @@ run(function()
 			step()
 		end,
 		ExtraText = function() return status end,
-		Tooltip = 'Flies directly toward enemies at 80 studs/s, including vertical travel, then hovers at attack range. No tweening or pathfinding. Uses Killaura or SilentAim AutoFire, reloads, resets when the equipped firearm is fully empty and respawns. Restores controlled modules on disable.'
+		Tooltip = 'Approaches enemies at 80 studs/s: descend, travel underground, then rise beside the target. Adjustable depth; disable Underground Approach for direct flight. Uses Killaura or Shoot, reloads and resets/respawns when empty. Restores collision and controlled modules on disable.'
 	})
 	Mode = Bot:CreateDropdown({Name = 'Attack Mode', List = {'Killaura', 'Shoot'}, Default = 'Killaura'})
 	SearchRange = Bot:CreateSlider({Name = 'Search Range', Min = 25, Max = 2000, Default = 1000, Suffix = 'studs'})
+	Underground = Bot:CreateToggle({Name = 'Underground Approach', Default = true})
+	Depth = Bot:CreateSlider({Name = 'Underground Depth', Min = 6, Max = 50, Default = 12, Suffix = 'studs',
+		Tooltip = 'Depth below the lower of your starting position and the target. Applies to the next approach.'})
 end)
 
 -- Native integration bridge; initialized only inside Frontlines' client actor.
