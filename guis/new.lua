@@ -225,7 +225,6 @@ do
 		['newvape/assets/new/editlarge.png'] = 'rbxassetid://119233876755282',
 		['newvape/assets/new/expandarrow.png'] = 'rbxassetid://86360332526471',
 		['newvape/assets/new/friends.png'] = 'rbxassetid://92957214042038',
-		['newvape/assets/new/face1.png'] = '',
 		['newvape/assets/new/inventory.png'] = 'rbxassetid://93264756888499',
 		['newvape/assets/new/legit_mode_icon.png'] = 'rbxassetid://102858626075156',
 		['newvape/assets/new/legit_switch.png'] = 'rbxassetid://127508881124779',
