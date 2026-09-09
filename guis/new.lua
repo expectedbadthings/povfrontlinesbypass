@@ -866,6 +866,182 @@ local function addCorner(parent, radius)
 	return corner
 end
 
+-- GUI style system -------------------------------------------------------------
+-- new.lua keeps Vape V4 as the default presentation while allowing the same
+-- live interface to switch to the newer modern styling without reinjection.
+vape.GUIStyleName = 'Vape V4'
+vape.GUIStyleObjects = setmetatable({}, {__mode = 'k'})
+
+local function styleCorner(object, radius)
+	if not object then return end
+	local corner = object:FindFirstChild('ModernStyleCorner') or object:FindFirstChildWhichIsA('UICorner')
+	if not corner then
+		corner = Instance.new('UICorner')
+		corner.Name = 'ModernStyleCorner'
+		corner.Parent = object
+	end
+	corner.CornerRadius = UDim.new(0, radius)
+	return corner
+end
+
+local function styleStroke(object, transparency, thickness, useExisting)
+	if not object then return end
+	local stroke = object:FindFirstChild('ModernStyleStroke')
+	if not stroke and useExisting then stroke = object:FindFirstChildWhichIsA('UIStroke') end
+	if not stroke then
+		stroke = Instance.new('UIStroke')
+		stroke.Name = 'ModernStyleStroke'
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Parent = object
+	end
+	stroke.Color = color.Light(uipallet.Main, 0.12)
+	stroke.Transparency = transparency
+	stroke.Thickness = thickness or 1
+	return stroke
+end
+
+local function styleShadow(object, modern)
+	if not object then return end
+	local shadow = object:FindFirstChildWhichIsA('UIShadow')
+	if shadow then
+		shadow.BlurRadius = UDim.new(0, modern and 18 or 13)
+		shadow.Transparency = modern and 0.34 or 0.25
+	end
+end
+
+local function styleAccent(object, modern, y)
+	if not object then return end
+	local accent = object:FindFirstChild('ModernHeaderAccent')
+	if not accent then
+		accent = Instance.new('Frame')
+		accent.Name = 'ModernHeaderAccent'
+		accent.BorderSizePixel = 0
+		accent.Position = UDim2.fromOffset(10, y or 37)
+		accent.Size = UDim2.new(1, -20, 0, 1)
+		accent.ZIndex = math.max(object.ZIndex + 5, 5)
+		accent.Parent = object
+	end
+	accent.Visible = modern
+	if modern then
+		vape:RegisterThemeSolid(accent, 'BackgroundColor3', 0.08)
+	else
+		vape:UnregisterThemeSolid(accent)
+	end
+end
+
+function vape:ApplyGUIStyleObject(object, role)
+	if typeof(object) ~= 'Instance' or not object.Parent then return end
+	local modern = self.GUIStyleName == 'Modern'
+
+	if role == 'MainWindow' then
+		object.BackgroundColor3 = color.Dark(uipallet.Main, modern and 0.012 or 0.02)
+		object.BackgroundTransparency = modern and 0.025 or 0
+		styleCorner(object, modern and 11 or 5)
+		styleStroke(object, modern and 0.62 or 0.8, modern and 1.15 or 1, true)
+		styleShadow(object, modern)
+		styleAccent(object, modern, 37)
+	elseif role == 'CategoryWindow' then
+		object.BackgroundColor3 = modern and color.Dark(uipallet.Main, 0.012) or uipallet.Main
+		object.BackgroundTransparency = modern and 0.018 or 0
+		styleCorner(object, modern and 10 or 5)
+		styleStroke(object, modern and 0.65 or 0.8, modern and 1.1 or 1, true)
+		styleShadow(object, modern)
+		styleAccent(object, modern, 37)
+	elseif role == 'CategoryListWindow' then
+		object.BackgroundColor3 = modern and color.Dark(uipallet.Main, 0.012) or uipallet.Main
+		object.BackgroundTransparency = modern and 0.018 or 0
+		styleCorner(object, modern and 10 or 5)
+		styleStroke(object, modern and 0.65 or 0.8, modern and 1.1 or 1, true)
+		styleShadow(object, modern)
+		styleAccent(object, modern, 41)
+	elseif role == 'SearchWindow' then
+		object.BackgroundColor3 = color.Dark(uipallet.Main, modern and 0.012 or 0.02)
+		object.BackgroundTransparency = modern and 0.025 or 0
+		styleCorner(object, modern and 11 or 5)
+		styleStroke(object, modern and 0.62 or 0.8, modern and 1.1 or 1, true)
+		styleShadow(object, modern)
+	elseif role == 'LegitWindow' then
+		object.BackgroundColor3 = modern and color.Dark(uipallet.Main, 0.008) or uipallet.Main
+		object.BackgroundTransparency = modern and 0.018 or 0
+		styleCorner(object, modern and 12 or 5)
+		styleStroke(object, modern and 0.68 or 1, modern and 1.1 or 1, false)
+		styleShadow(object, modern)
+	elseif role == 'SettingsPane' then
+		object.BackgroundTransparency = modern and 0.02 or 0
+		styleCorner(object, modern and 10 or 5)
+		styleStroke(object, modern and 0.72 or 1, modern and 1.05 or 1, false)
+		styleAccent(object, modern, 40)
+	elseif role == 'SettingsBody' then
+		object.BackgroundColor3 = modern and color.Dark(uipallet.Main, 0.008) or uipallet.Main
+		object.BackgroundTransparency = modern and 0.02 or 0
+	elseif role == 'ModuleRow' then
+		local background = object:FindFirstChild('ThemeBackground')
+		if background then styleCorner(background, modern and 6 or 0) end
+		local accent = object:FindFirstChild('ModernModuleAccent')
+		if not accent then
+			accent = Instance.new('Frame')
+			accent.Name = 'ModernModuleAccent'
+			accent.BorderSizePixel = 0
+			accent.Position = UDim2.fromOffset(4, 12)
+			accent.Size = UDim2.fromOffset(2, 16)
+			accent.ZIndex = object.ZIndex + 4
+			accent.Parent = object
+			styleCorner(accent, 2)
+		end
+		accent.Visible = modern
+		if modern then
+			self:RegisterThemeSolid(accent, 'BackgroundColor3', 0.08)
+		else
+			self:UnregisterThemeSolid(accent)
+		end
+	elseif role == 'ControlRow' then
+		styleCorner(object, modern and 6 or 0)
+		styleStroke(object, modern and 0.9 or 1, 1, false)
+	elseif role == 'ControlHolder' then
+		styleCorner(object, modern and 7 or 5)
+		styleStroke(object, modern and 0.82 or 1, 1, false)
+	elseif role == 'ToggleTrack' then
+		object.Position = UDim2.new(1, modern and -32 or -30, 0, modern and 8 or 9)
+		object.Size = UDim2.fromOffset(modern and 24 or 22, modern and 14 or 12)
+		styleStroke(object, modern and 0.76 or 1, 1, false)
+		local knob = object:FindFirstChildWhichIsA('Frame')
+		if knob then
+			knob.Size = UDim2.fromOffset(modern and 10 or 8, modern and 10 or 8)
+		end
+	elseif role == 'ImageToggleTrack' then
+		object.Position = UDim2.new(1, modern and -32 or -30, 0, modern and 13 or 14)
+		object.Size = UDim2.fromOffset(modern and 24 or 22, modern and 14 or 12)
+		styleStroke(object, modern and 0.76 or 1, 1, false)
+		local knob = object:FindFirstChildWhichIsA('Frame')
+		if knob then knob.Size = UDim2.fromOffset(modern and 10 or 8, modern and 10 or 8) end
+	elseif role == 'SliderTrack' then
+		object.Size = UDim2.new(1, -20, 0, modern and 3 or 2)
+		styleCorner(object, modern and 2 or 0)
+	end
+end
+
+function vape:RegisterGUIStyleObject(object, role)
+	if typeof(object) ~= 'Instance' then return object end
+	self.GUIStyleObjects[object] = role
+	object.Destroying:Once(function()
+		if self.GUIStyleObjects then self.GUIStyleObjects[object] = nil end
+	end)
+	self:ApplyGUIStyleObject(object, role)
+	return object
+end
+
+function vape:ApplyGUIStyle()
+	for object, role in self.GUIStyleObjects do
+		if object and object.Parent then
+			self:ApplyGUIStyleObject(object, role)
+		else
+			self.GUIStyleObjects[object] = nil
+		end
+	end
+	self:UpdateGUI()
+end
+-- GUI style system end ---------------------------------------------------------
+
 -- Shared motion curves for the ClickGUI. Kept short enough to feel responsive,
 -- but eased so dropdowns/windows no longer snap between states.
 local uiMotionFast = TweenInfo.new(0.12, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
@@ -2601,6 +2777,16 @@ function vape:LoadGUI()
 		Tooltip = 'Show module/setting help when hovering controls'
 	})
 
+	vape.GUIStyle = guipane:CreateDropdown({
+		Name = 'GUI Style',
+		List = {'Vape V4', 'Modern'},
+		Function = function(value)
+			vape.GUIStyleName = value == 'Vape V4' and 'Vape V4' or 'Modern'
+			vape:ApplyGUIStyle()
+		end,
+		Tooltip = 'Switch the same Vape V4 interface between the original presentation and newer rounded/glass styling.'
+	})
+
 	vape.GradientTheme = guipane:CreateDropdown({
 		Name = 'Animated theme',
 		List = themeNames,
@@ -2760,6 +2946,7 @@ function vape:LoadGUI()
 		Tooltip = 'Show the less frequently used performance, legacy rainbow, search and layout controls.'
 	})
 	refreshAdvancedGUI()
+	vape:ApplyGUIStyle()
 
 	--[[
 		Notification Settings
@@ -4588,6 +4775,8 @@ components = {
 		holder.Size = UDim2.fromOffset(200, 27)
 		holder.Parent = button
 		addCorner(holder)
+		vape:RegisterGUIStyleObject(button, 'ControlRow')
+		vape:RegisterGUIStyleObject(holder, 'ControlHolder')
 		local title = Instance.new('TextLabel')
 		title.BackgroundColor3 = uipallet.Main
 		title.FontFace = uipallet.Font
@@ -4720,6 +4909,7 @@ components = {
 		stroke.Color = Color3.fromRGB(85, 85, 85)
 		stroke.Transparency = 0.8
 		stroke.Parent = window
+		vape:RegisterGUIStyleObject(window, 'CategoryWindow')
 		local windowlist = Instance.new('UIListLayout')
 		windowlist.HorizontalAlignment = Enum.HorizontalAlignment.Center
 		windowlist.SortOrder = Enum.SortOrder.LayoutOrder
@@ -5000,6 +5190,7 @@ components = {
 		stroke.Color = Color3.fromRGB(85, 85, 85)
 		stroke.Transparency = 0.8
 		stroke.Parent = window
+		vape:RegisterGUIStyleObject(window, 'CategoryListWindow')
 		local windowlist = Instance.new('UIListLayout')
 		windowlist.HorizontalAlignment = Enum.HorizontalAlignment.Center
 		windowlist.Padding = UDim.new(0, 4)
@@ -5622,6 +5813,7 @@ components = {
 		colorslider.Visible = props.Visible == nil or props.Visible
 		colorslider.Parent = children
 		component.Object = colorslider
+		vape:RegisterGUIStyleObject(colorslider, 'ControlRow')
 		addTooltip(colorslider, props.Tooltip)
 		local title = Instance.new('TextLabel')
 		title.BackgroundTransparency = 1
@@ -5650,6 +5842,7 @@ components = {
 		holder.Position = UDim2.fromOffset(10, 39)
 		holder.Size = UDim2.new(1, -20, 0, 2)
 		holder.Parent = colorslider
+		vape:RegisterGUIStyleObject(holder, 'SliderTrack')
 		local rainbowTable = {}
 		for i = 0, 1, 0.1 do
 			table.insert(rainbowTable, ColorSequenceKeypoint.new(i, Color3.fromHSV(i, 1, 1)))
@@ -5979,6 +6172,7 @@ components = {
 		dropdown.Parent = children
 		component.Object = dropdown
 		addTooltip(dropdown, props.Tooltip or props.Name)
+		vape:RegisterGUIStyleObject(dropdown, 'ControlRow')
 
 		local holder = Instance.new('Frame')
 		holder.BackgroundColor3 = color.Light(uipallet.Main, 0.034)
@@ -5986,6 +6180,7 @@ components = {
 		holder.Size = UDim2.new(1, -20, 1, -11)
 		holder.Parent = dropdown
 		addCorner(holder, UDim.new(0, 6))
+		vape:RegisterGUIStyleObject(holder, 'ControlHolder')
 
 		local button = Instance.new('TextButton')
 		button.AutoButtonColor = false
@@ -6407,6 +6602,7 @@ components = {
 		stroke.Color = Color3.fromRGB(85, 85, 85)
 		stroke.Transparency = 0.8
 		stroke.Parent = window
+		vape:RegisterGUIStyleObject(window, 'MainWindow')
 		local settingspane = components.SettingsPane({
 			Name = 'Settings',
 			Main = true
@@ -6546,6 +6742,7 @@ components = {
 		button.TextXAlignment = Enum.TextXAlignment.Left
 		button.Parent = children
 		component.Object = button
+		vape:RegisterGUIStyleObject(button, 'ControlRow')
 
 		local icon
 		if props.Icon then
@@ -7164,6 +7361,7 @@ components = {
 		toggle.Visible = props.Visible == nil or props.Visible
 		toggle.Parent = children
 		component.Object = toggle
+		vape:RegisterGUIStyleObject(toggle, 'ControlRow')
 		local icon = Instance.new('ImageLabel')
 		icon.BackgroundTransparency = 1
 		icon.Image = props.Icon
@@ -7179,12 +7377,14 @@ components = {
 		holder.Size = UDim2.fromOffset(22, 12)
 		holder.Parent = toggle
 		addCorner(holder, UDim.new(1, 0))
+		vape:RegisterGUIStyleObject(holder, 'ImageToggleTrack')
 		local knob = Instance.new('Frame')
 		knob.BackgroundColor3 = uipallet.Main
 		knob.Position = UDim2.fromOffset(2, 2)
 		knob.Size = UDim2.fromOffset(8, 8)
 		knob.Parent = holder
 		addCorner(knob, UDim.new(1, 0))
+		vape:ApplyGUIStyleObject(holder, 'ImageToggleTrack')
 		props.Function = props.Function or function() end
 
 		function component:Color(hue, sat, val, isRainbow)
@@ -7589,6 +7789,7 @@ components = {
 		addBlur(window)
 		addCorner(window)
 		addDragHandler(window)
+		vape:RegisterGUIStyleObject(window, 'LegitWindow')
 		local modal = Instance.new('TextButton')
 		modal.BackgroundTransparency = 1
 		modal.Modal = true
@@ -7614,6 +7815,7 @@ components = {
 		holder.Size = UDim2.fromOffset(242, 29)
 		holder.Parent = window
 		addCorner(holder, UDim.new(0, 4))
+		vape:RegisterGUIStyleObject(holder, 'ControlHolder')
 		local stroke = Instance.new('UIStroke')
 		stroke.Color = color.Light(uipallet.Main, 0.02)
 		stroke.Parent = holder
@@ -7783,12 +7985,14 @@ components = {
 		button.Parent = children
 		component.Object = button
 		addTooltip(button, (props.Tooltip and (props.Tooltip..'\n') or '')..'LMB toggle • RMB settings • Shift+RMB favorite')
+		vape:RegisterGUIStyleObject(button, 'ModuleRow')
 		local themeBackground = Instance.new('Frame')
 		themeBackground.BackgroundColor3 = uipallet.Main
 		themeBackground.BorderSizePixel = 0
 		themeBackground.Name = 'ThemeBackground'
 		themeBackground.Size = UDim2.fromScale(1, 1)
 		themeBackground.Parent = button
+		vape:ApplyGUIStyleObject(button, 'ModuleRow')
 		-- No per-module UIGradient here. Enabled rows sample the one shared
 		-- screen-space ModuleThemePacket, which keeps the row visually flat.
 		local moduleTitle = Instance.new('TextLabel')
@@ -7907,15 +8111,32 @@ components = {
 			local active = isHover or moduleExpanded
 			local idleBackground = active and color.Light(uipallet.Main, 0.02) or uipallet.Main
 			local idleText = active and uipallet.Text or color.Dark(uipallet.Text, 0.16)
+			local modernAccent = button:FindFirstChild('ModernModuleAccent')
+			if modernAccent then
+				modernAccent.BackgroundTransparency = enabled and 0 or (active and 0.45 or 0.72)
+			end
 
 			if enabled then
-				-- Flat row color sampled from the single screen-wide animated theme packet.
-				vape:RegisterModuleThemeObject(themeBackground)
-				moduleTitle.TextColor3 = Color3.new(1, 1, 1)
-				moduleTitle.TextStrokeColor3 = Color3.new(0, 0, 0)
-				moduleTitle.TextStrokeTransparency = 0.48
-				component.Bind:SetColor(moduleTitle.TextColor3)
-				dots.ImageColor3 = moduleTitle.TextColor3
+				if vape.GUIStyleName == 'Modern' then
+					-- Modern keeps the V4 structure, but treats theme color as an accent
+					-- instead of flooding the entire module row with a bright gradient.
+					vape:UnregisterModuleThemeObject(themeBackground)
+					themeBackground.BackgroundColor3 = color.Light(uipallet.Main, 0.028)
+					moduleTitle.TextColor3 = uipallet.Text
+					moduleTitle.TextStrokeTransparency = 1
+					local accentColor = vape:GetThemeColor(component.Index * 0.045)
+					component.Bind:SetColor(accentColor)
+					dots.ImageColor3 = accentColor
+				else
+					-- Original Vape V4 presentation: enabled rows use the full shared
+					-- screen-space theme packet.
+					vape:RegisterModuleThemeObject(themeBackground)
+					moduleTitle.TextColor3 = Color3.new(1, 1, 1)
+					moduleTitle.TextStrokeColor3 = Color3.new(0, 0, 0)
+					moduleTitle.TextStrokeTransparency = 0.48
+					component.Bind:SetColor(moduleTitle.TextColor3)
+					dots.ImageColor3 = moduleTitle.TextColor3
+				end
 			else
 				vape:UnregisterModuleThemeObject(themeBackground)
 				moduleTitle.TextStrokeTransparency = 1
@@ -8723,6 +8944,7 @@ components = {
 		stroke.Color = Color3.fromRGB(85, 85, 85)
 		stroke.Transparency = 0.8
 		stroke.Parent = search
+		vape:RegisterGUIStyleObject(search, 'SearchWindow')
 		local windowlist = Instance.new('UIListLayout')
 		windowlist.HorizontalAlignment = Enum.HorizontalAlignment.Center
 		windowlist.SortOrder = Enum.SortOrder.LayoutOrder
@@ -9143,6 +9365,7 @@ components = {
 		back.Size = UDim2.fromOffset(14, 14)
 		back.Parent = pane
 		addCorner(pane)
+		vape:RegisterGUIStyleObject(pane, 'SettingsPane')
 		local settingschildren = Instance.new('ScrollingFrame')
 		settingschildren.CanvasSize = UDim2.new()
 		settingschildren.ScrollBarThickness = 3
@@ -9154,6 +9377,7 @@ components = {
 		settingschildren.Position = UDim2.fromOffset(0, 41)
 		settingschildren.Size = UDim2.new(1, 0, 1, -57)
 		settingschildren.Parent = pane
+		vape:RegisterGUIStyleObject(settingschildren, 'SettingsBody')
 		local divider = Instance.new('Frame')
 		divider.BackgroundColor3 = Color3.new(1, 1, 1)
 		divider.BackgroundTransparency = 0.928
@@ -9249,6 +9473,7 @@ components = {
 		slider.Parent = children
 		component.Object = slider
 		addTooltip(slider, props.Tooltip)
+		vape:RegisterGUIStyleObject(slider, 'ControlRow')
 		local title = Instance.new('TextLabel')
 		title.BackgroundTransparency = 1
 		title.FontFace = uipallet.Font
@@ -9287,6 +9512,7 @@ components = {
 		holder.Position = UDim2.fromOffset(10, 37)
 		holder.Size = UDim2.new(1, -20, 0, 2)
 		holder.Parent = slider
+		vape:RegisterGUIStyleObject(holder, 'SliderTrack')
 		local fill = Instance.new('Frame')
 		fill.BackgroundColor3 = vape:GetThemeColor(0)
 		fill.BorderSizePixel = 0
@@ -9424,6 +9650,7 @@ components = {
 		targets.Visible = props.Visible == nil or props.Visible
 		targets.Parent = children
 		component.Object = targets
+		vape:RegisterGUIStyleObject(targets, 'ControlRow')
 		addTooltip(targets, props.Tooltip)
 		local holder = Instance.new('Frame')
 		holder.BackgroundColor3 = color.Light(uipallet.Main, 0.034)
@@ -9431,6 +9658,7 @@ components = {
 		holder.Size = UDim2.new(1, -20, 1, -9)
 		holder.Parent = targets
 		addCorner(holder, UDim.new(0, 4))
+		vape:RegisterGUIStyleObject(holder, 'ControlHolder')
 		local button = Instance.new('TextButton')
 		button.AutoButtonColor = false
 		button.BackgroundColor3 = uipallet.Main
@@ -9482,6 +9710,7 @@ components = {
 		component.Window = targetswindow
 		addBlur(targetswindow)
 		addCorner(targetswindow)
+		vape:RegisterGUIStyleObject(targetswindow, 'CategoryWindow')
 		local icon = Instance.new('ImageLabel')
 		icon.BackgroundTransparency = 1
 		icon.Image = getvapeasset('newvape/assets/new/aim.png')
@@ -9802,6 +10031,7 @@ components = {
 		textbox.Visible = props.Visible == nil or props.Visible
 		textbox.Parent = children
 		component.Object = textbox
+		vape:RegisterGUIStyleObject(textbox, 'ControlRow')
 		addTooltip(textbox, props.Tooltip)
 		local title = Instance.new('TextLabel')
 		title.BackgroundTransparency = 1
@@ -9819,6 +10049,7 @@ components = {
 		holder.Size = UDim2.new(1, -20, 0, 29)
 		holder.Parent = textbox
 		addCorner(holder, UDim.new(0, 4))
+		vape:RegisterGUIStyleObject(holder, 'ControlHolder')
 		local inputbox = Instance.new('TextBox')
 		inputbox.BackgroundTransparency = 1
 		inputbox.ClearTextOnFocus = false
@@ -9888,6 +10119,7 @@ components = {
 		textlist.Visible = props.Visible == nil or props.Visible
 		textlist.Parent = children
 		component.Object = textlist
+		vape:RegisterGUIStyleObject(textlist, 'ControlRow')
 		addTooltip(textlist, props.Tooltip)
 		local holder = Instance.new('Frame')
 		holder.BackgroundColor3 = color.Light(uipallet.Main, 0.034)
@@ -9895,6 +10127,7 @@ components = {
 		holder.Size = UDim2.new(1, -20, 1, -9)
 		holder.Parent = textlist
 		addCorner(holder, UDim.new(0, 4))
+		vape:RegisterGUIStyleObject(holder, 'ControlHolder')
 		local button = Instance.new('TextButton')
 		button.AutoButtonColor = false
 		button.BackgroundColor3 = uipallet.Main
@@ -9944,6 +10177,7 @@ components = {
 		component.Window = textlistwindow
 		addBlur(textlistwindow)
 		addCorner(textlistwindow)
+		vape:RegisterGUIStyleObject(textlistwindow, 'CategoryWindow')
 		local icon = Instance.new('ImageLabel')
 		icon.BackgroundTransparency = 1
 		icon.Image = getvapeasset('newvape/assets/new/allowedicon.png')
@@ -9967,6 +10201,7 @@ components = {
 		boxholder.Size = UDim2.fromOffset(200, 31)
 		boxholder.Parent = textlistwindow
 		addCorner(boxholder)
+		vape:RegisterGUIStyleObject(boxholder, 'ControlHolder')
 		local boxinner = Instance.new('Frame')
 		boxinner.BackgroundColor3 = color.Dark(uipallet.Main, 0.02)
 		boxinner.Position = UDim2.fromOffset(1, 1)
@@ -10246,6 +10481,7 @@ components = {
 		toggle.Parent = children
 		component.Object = toggle
 		addTooltip(toggle, props.Tooltip)
+		vape:RegisterGUIStyleObject(toggle, 'ControlRow')
 		local holder = Instance.new('Frame')
 		holder.BackgroundColor3 = color.Light(uipallet.Main, 0.14)
 		holder.Name = 'Holder'
@@ -10253,12 +10489,14 @@ components = {
 		holder.Size = UDim2.fromOffset(22, 12)
 		holder.Parent = toggle
 		addCorner(holder, UDim.new(1, 0))
+		vape:RegisterGUIStyleObject(holder, 'ToggleTrack')
 		local knob = Instance.new('Frame')
 		knob.BackgroundColor3 = uipallet.Main
 		knob.Position = UDim2.fromOffset(2, 2)
 		knob.Size = UDim2.fromOffset(8, 8)
 		knob.Parent = holder
 		addCorner(knob, UDim.new(1, 0))
+		vape:ApplyGUIStyleObject(holder, 'ToggleTrack')
 		props.Function = props.Function or function() end
 
 		function component:Color(hue, sat, val, isRainbow)
@@ -10362,6 +10600,7 @@ components = {
 		twoslider.Parent = children
 		component.Object = twoslider
 		addTooltip(twoslider, props.Tooltip)
+		vape:RegisterGUIStyleObject(twoslider, 'ControlRow')
 		local title = Instance.new('TextLabel')
 		title.BackgroundTransparency = 1
 		title.FontFace = uipallet.Font
@@ -10407,6 +10646,7 @@ components = {
 		holder.Position = UDim2.fromOffset(10, 37)
 		holder.Size = UDim2.new(1, -20, 0, 2)
 		holder.Parent = twoslider
+		vape:RegisterGUIStyleObject(holder, 'SliderTrack')
 		local fill = Instance.new('Frame')
 		fill.BackgroundColor3 = vape:GetThemeColor(0)
 		fill.BorderSizePixel = 0
