@@ -8537,6 +8537,7 @@ components = {
 			ResultActions = {},
 			ResultNames = {},
 			ResultLocations = {},
+			ResultRows = {},
 			SelectedIndex = 0
 		}
 
@@ -8695,6 +8696,7 @@ components = {
 		resultCount.Text = '#category   @on   @fav   ·   ↑↓ select'
 		resultCount.ZIndex = 21
 		resultCount.Parent = search
+		addTooltip(resultCount, 'Enter: toggle · Shift+Enter: locate\nPage Up/Down: move one page · Ctrl+Home/End: first/last result\nCtrl+1–4: filters · Ctrl+D: favorite')
 		local revision = 0
 
 		function component:IsPointInside(point)
@@ -8747,21 +8749,24 @@ components = {
 			end)
 		end
 
-		function component:SetSelection(index)
+		function component:SetSelection(index, preserveScroll)
 			local total = #self.ResultButtons
 			if total == 0 then
 				self.SelectedIndex = 0
 				return
 			end
 			index = ((index - 1) % total) + 1
+			local previous = self.ResultButtons[self.SelectedIndex]
+			local previousStroke = previous and previous:FindFirstChild('SearchSelection')
+			if previousStroke then previousStroke.Enabled = false end
 			self.SelectedIndex = index
-			for i, button in ipairs(self.ResultButtons) do
-				local selection = button:FindFirstChild('SearchSelection')
-				if selection then selection.Enabled = i == index end
-			end
+			local button = self.ResultButtons[index]
+			local selection = button:FindFirstChild('SearchSelection')
+			if selection then selection.Enabled = true end
+			if preserveScroll then return end
 			local y = (index - 1) * 40
 			local current = children.CanvasPosition.Y
-			local view = children.AbsoluteSize.Y
+			local view = children.AbsoluteSize.Y / scale.Scale
 			if y < current then
 				children.CanvasPosition = Vector2.new(0, y)
 			elseif y + 40 > current + view then
@@ -8781,12 +8786,10 @@ components = {
 				if current ~= revision or not search.Parent or not search.Visible or not clickgui.Visible then return end
 				local previousName = self.ResultNames[self.SelectedIndex]
 				local sameQuery = self.LastQuery == box.Text and self.LastFilter == self.Filter
+				local previousScroll = children.CanvasPosition
 				self.LastQuery, self.LastFilter = box.Text, self.Filter
 				empty.Visible = false
-				children.CanvasPosition = Vector2.zero
-				for _, obj in children:GetChildren() do
-					if obj:IsA('TextButton') then obj:Destroy() end
-				end
+				if not sameQuery then children.CanvasPosition = Vector2.zero end
 				table.clear(self.ResultButtons)
 				table.clear(self.ResultActions)
 				table.clear(self.ResultNames)
@@ -8828,85 +8831,112 @@ components = {
 				if suggestions then
 					while #names > 8 do table.remove(names) end
 				end
+				-- Keep unchanged result objects and their listeners. Release only rows
+				-- that left the result set or whose source module was replaced.
+				local wanted = {}
+				for _, name in ipairs(names) do wanted[name] = true end
+				for name, row in self.ResultRows do
+					if not wanted[name] or row.Module ~= vape.Modules[name] then
+						row.Button:Destroy()
+						self.ResultRows[name] = nil
+					end
+				end
 				local matches = 0
 				for _, name in ipairs(names) do
 					local module = vape.Modules[name]
 					do
 						matches += 1
-						local button = module.Object:Clone()
-						button.LayoutOrder = matches
-						button.ZIndex = 21
-						local bindObject = button:FindFirstChild('Bind')
-						if bindObject then bindObject:Destroy() end
-						local dotsObject = button:FindFirstChild('Dots')
-						if dotsObject then dotsObject.Visible = false end
-						local selection = Instance.new('UIStroke')
-						selection.Name = 'SearchSelection'
-						selection.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-						selection.Color = vape:GetGUIColorRGB()
-						vape:RegisterThemeSolid(selection, 'Color', 0.06)
-						selection.Thickness = 1
-						selection.Transparency = 0.18
-						selection.Enabled = false
-						selection.Parent = button
-						local star = Instance.new('TextButton')
-						star.Position = UDim2.new(1, -34, 0, 0)
-						star.Size = UDim2.fromOffset(34, 40)
-						star.BackgroundTransparency = 1
-						star.Text = vape.Favorites[name] and '★' or '☆'
-						star.TextSize = 20
-						star.TextColor3 = vape.Favorites[name] and vape:GetGUIColorRGB() or uipallet.Text
-						if vape.Favorites[name] then vape:RegisterThemeSolid(star, 'TextColor3', 0.10) end
-						star.ZIndex = 22
-						star.Parent = button
-						addTooltip(star, 'Add or remove favorite · Ctrl+D on selected result')
-						star.Activated:Connect(function() vape:ToggleFavorite(name) end)
+						local row = self.ResultRows[name]
+						if not row then
+							local button = module.Object:Clone()
+							button.LayoutOrder = matches
+							button.ZIndex = 21
+							local bindObject = button:FindFirstChild('Bind')
+							if bindObject then bindObject:Destroy() end
+							local dotsObject = button:FindFirstChild('Dots')
+							if dotsObject then dotsObject.Visible = false end
+							local selection = Instance.new('UIStroke')
+							selection.Name = 'SearchSelection'
+							selection.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+							selection.Color = vape:GetGUIColorRGB()
+							vape:RegisterThemeSolid(selection, 'Color', 0.06)
+							selection.Thickness = 1
+							selection.Transparency = 0.18
+							selection.Enabled = false
+							selection.Parent = button
+							local star = Instance.new('TextButton')
+							star.Position = UDim2.new(1, -34, 0, 0)
+							star.Size = UDim2.fromOffset(34, 40)
+							star.BackgroundTransparency = 1
+							star.Text = vape.Favorites[name] and '★' or '☆'
+							star.TextSize = 20
+							star.TextColor3 = vape.Favorites[name] and vape:GetGUIColorRGB() or uipallet.Text
+							if vape.Favorites[name] then vape:RegisterThemeSolid(star, 'TextColor3', 0.10) end
+							star.ZIndex = 22
+							star.Parent = button
+							addTooltip(star, 'Add or remove favorite · Ctrl+D on selected result')
+							star.Activated:Connect(function() vape:ToggleFavorite(name) end)
 
-						local function activate()
-							module:Toggle()
-							if component.Mode == 'On demand' then component:Close(true) end
-						end
-						button.MouseButton1Click:Connect(activate)
-						button.MouseEnter:Connect(function() component:SetSelection(button.LayoutOrder) end)
-						local function locate()
-							local category = vape.Categories[module.Category]
-							if category and not category.Expanded and category.Expand then category:Expand() end
-							module.Object.Parent.Parent.Visible = true
-							local frame = module.Object.Parent
-							local highlight = Instance.new('Frame')
-							highlight.Size = UDim2.fromScale(1, 1)
-							highlight.BackgroundColor3 = Color3.new(1, 1, 1)
-							highlight.BackgroundTransparency = 0.6
-							highlight.BorderSizePixel = 0
-							highlight.Parent = module.Object
-							tween:Tween(highlight, TweenInfo.new(0.5), {BackgroundTransparency = 1})
-							task.delay(0.5, highlight.Destroy, highlight)
-							frame.CanvasPosition = Vector2.new(0, (module.Object.LayoutOrder * 40) - (math.min(frame.CanvasSize.Y.Offset, 600) / 2))
-							if component.Mode == 'On demand' then component:Close(false) end
-						end
-						button.MouseButton2Click:Connect(locate)
+							local function activate()
+								module:Toggle()
+								if component.Mode == 'On demand' then component:Close(true) end
+							end
+							button.MouseButton1Click:Connect(activate)
+							button.MouseEnter:Connect(function() component:SetSelection(button.LayoutOrder) end)
+							local function locate()
+								local category = vape.Categories[module.Category]
+								if category and not category.Expanded and category.Expand then category:Expand() end
+								module.Object.Parent.Parent.Visible = true
+								local frame = module.Object.Parent
+								local highlight = Instance.new('Frame')
+								highlight.Size = UDim2.fromScale(1, 1)
+								highlight.BackgroundColor3 = Color3.new(1, 1, 1)
+								highlight.BackgroundTransparency = 0.6
+								highlight.BorderSizePixel = 0
+								highlight.Parent = module.Object
+								tween:Tween(highlight, TweenInfo.new(0.5), {BackgroundTransparency = 1})
+								task.delay(0.5, highlight.Destroy, highlight)
+								local offset = (module.Object.AbsolutePosition.Y - frame.AbsolutePosition.Y) / scale.Scale + frame.CanvasPosition.Y
+								frame.CanvasPosition = Vector2.new(0, math.clamp(offset - (frame.AbsoluteSize.Y - module.Object.AbsoluteSize.Y) / (2 * scale.Scale),
+									0, math.max(0, (frame.AbsoluteCanvasSize.Y - frame.AbsoluteSize.Y) / scale.Scale)))
+								if component.Mode == 'On demand' then component:Close(false) end
+							end
+							button.MouseButton2Click:Connect(locate)
 
-						for _, prop in {'Text', 'TextColor3', 'BackgroundColor3'} do
-							listenProperty(module.Object, button, prop, button)
+							for _, prop in {'Text', 'TextColor3', 'BackgroundColor3'} do
+								listenProperty(module.Object, button, prop, button)
+							end
+							local sourceBackground = module.Object:FindFirstChild('ThemeBackground')
+							local resultBackground = button:FindFirstChild('ThemeBackground')
+							if sourceBackground and resultBackground then
+								listenProperty(sourceBackground, resultBackground, 'BackgroundColor3', button)
+							end
+							listenProperty(module.Object.UIGradient, button.UIGradient, 'Color', button)
+							listenProperty(module.Object.UIGradient, button.UIGradient, 'Enabled', button)
+							button.Parent = children
+							row = {Module = module, Button = button, Star = star, Selection = selection, Activate = activate, Locate = locate}
+							self.ResultRows[name] = row
 						end
-						local sourceBackground = module.Object:FindFirstChild('ThemeBackground')
-						local resultBackground = button:FindFirstChild('ThemeBackground')
-						if sourceBackground and resultBackground then
-							listenProperty(sourceBackground, resultBackground, 'BackgroundColor3', button)
+						row.Button.LayoutOrder = matches
+						row.Selection.Enabled = false
+						row.Star.Text = vape.Favorites[name] and '★' or '☆'
+						if vape.Favorites[name] then
+							vape:RegisterThemeSolid(row.Star, 'TextColor3', 0.10)
+						else
+							vape:UnregisterThemeSolid(row.Star)
+							row.Star.TextColor3 = uipallet.Text
 						end
-						listenProperty(module.Object.UIGradient, button.UIGradient, 'Color', button)
-						listenProperty(module.Object.UIGradient, button.UIGradient, 'Enabled', button)
-						button.Parent = children
-						self.ResultButtons[#self.ResultButtons + 1] = button
-						self.ResultActions[#self.ResultActions + 1] = activate
+						self.ResultButtons[#self.ResultButtons + 1] = row.Button
+						self.ResultActions[#self.ResultActions + 1] = row.Activate
 						self.ResultNames[#self.ResultNames + 1] = name
-						self.ResultLocations[#self.ResultLocations + 1] = locate
+						self.ResultLocations[#self.ResultLocations + 1] = row.Locate
 					end
 				end
 				resultCount.Text = (suggestions and 'Quick picks' or tostring(matches)..' results')..' · Enter toggle · Shift+Enter locate'
 				empty.Text = suggestions and 'Star a module to keep it here' or self.Filter == 'Favorites' and 'Shift+RMB a module or star it here' or (self.Filter == 'Recent' and 'Toggle a module and it will show up here' or 'No matching modules')
 				empty.Visible = matches == 0
-				if matches > 0 then self:SetSelection(sameQuery and table.find(self.ResultNames, previousName) or 1) end
+				if sameQuery then children.CanvasPosition = previousScroll end
+				if matches > 0 then self:SetSelection(sameQuery and table.find(self.ResultNames, previousName) or 1, sameQuery) end
 			end)
 		end
 
@@ -8928,6 +8958,14 @@ components = {
 				component:SetSelection(component.SelectedIndex + 1)
 			elseif input.KeyCode == Enum.KeyCode.Up then
 				component:SetSelection(component.SelectedIndex - 1)
+			elseif input.KeyCode == Enum.KeyCode.PageDown or input.KeyCode == Enum.KeyCode.PageUp then
+				local page = math.max(1, math.floor(children.AbsoluteSize.Y / (40 * scale.Scale)))
+				local direction = input.KeyCode == Enum.KeyCode.PageDown and 1 or -1
+				component:SetSelection(math.clamp(component.SelectedIndex + page * direction, 1, math.max(1, #component.ResultButtons)))
+			elseif control and input.KeyCode == Enum.KeyCode.Home then
+				component:SetSelection(1)
+			elseif control and input.KeyCode == Enum.KeyCode.End then
+				component:SetSelection(#component.ResultButtons)
 			elseif input.KeyCode == Enum.KeyCode.Return or input.KeyCode == Enum.KeyCode.KeypadEnter then
 				local action = (shift and component.ResultLocations or component.ResultActions)[component.SelectedIndex]
 				if action then action() end
@@ -9014,7 +9052,11 @@ components = {
 		back.Size = UDim2.fromOffset(14, 14)
 		back.Parent = pane
 		addCorner(pane)
-		local settingschildren = Instance.new('Frame')
+		local settingschildren = Instance.new('ScrollingFrame')
+		settingschildren.CanvasSize = UDim2.new()
+		settingschildren.ScrollBarThickness = 3
+		settingschildren.ScrollBarImageTransparency = 0.45
+		settingschildren.ScrollingDirection = Enum.ScrollingDirection.Y
 		settingschildren.BackgroundColor3 = uipallet.Main
 		settingschildren.BorderSizePixel = 0
 		settingschildren.Name = 'Children'
@@ -9090,7 +9132,7 @@ components = {
 				setthreadidentity(8)
 			end
 
-			pane.Size = UDim2.new(1, 0, 0, math.max(45 + listlayout.AbsoluteContentSize.Y, component.Parent.AbsoluteSize.Y) / scale.Scale)
+			settingschildren.CanvasSize = UDim2.fromOffset(0, listlayout.AbsoluteContentSize.Y / scale.Scale)
 		end)
 
 		component.Object = pane
