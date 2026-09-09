@@ -4249,7 +4249,7 @@ run(function()
 				image.Position = UDim2.fromScale(0.5, 0.5)
 				image.Size = UDim2.fromScale(0.76, 0.76)
 				image.BackgroundTransparency = 1
-				image.Image = getvapeasset('newvape/assets/new/face1')
+				image.Image = getvapeasset('newvape/assets/new/face1.png')
 				image.ImageColor3 = Color3.new(1, 1, 1)
 				image.Parent = face
 				data.Face = face
