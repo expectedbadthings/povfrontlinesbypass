@@ -6828,6 +6828,196 @@ run(function()
 	})
 end)
 
+run(function()
+	local Bot, Mode, SearchRange
+	local status = 'Idle'
+
+	local function ammoAction(gun, ammo)
+		if not gun or gun.type == 2 or not gun.reload_params or type(ammo) ~= 'table'
+			or type(ammo.ammo) ~= 'number' or type(ammo.reserve) ~= 'number' then return end
+		if ammo.ammo <= 0 then return ammo.reserve > 0 and 'Reload' or 'Reset' end
+	end
+
+	Bot = vape.Categories.Blatant:CreateModule({
+		Name = 'Bot',
+		Function = function(callback)
+			if not callback then return end
+			local aura, aim = vape.Modules.Killaura, vape.Modules.SilentAim
+			if not aura or not aim then
+				notif('Bot', 'Killaura and SilentAim are required.', 5, 'alert')
+				Bot:Toggle()
+				return
+			end
+			local savedModules, savedOptions = {}, {}
+			local travel, target, destination, currentCharacter
+			local nextPlan, nextReload, resetAt = 0, 0, nil
+			local stopped, respawnPending = false, false
+			local function toggle(module, enabled)
+				if module.Enabled ~= enabled then module:Toggle() end
+			end
+			local function stopTravel()
+				if travel then travel:Cancel(); travel = nil end
+				destination = nil
+			end
+			local function stopAttack()
+				toggle(aura, false)
+				toggle(aim, false)
+				local main = frontlines.Main
+				if main and main.globals and main.globals.ctrl_states then main.globals.ctrl_states.trigger = false end
+			end
+			local function setOption(option, value)
+				if not option then return end
+				local isToggle = type(value) == 'boolean'
+				local old = option.Value
+				if isToggle then old = option.Enabled end
+				if savedOptions[option] == nil then savedOptions[option] = {Value = old, Toggle = isToggle} end
+				if isToggle then
+					if option.Enabled ~= value then option:Toggle() end
+				elseif option.Value ~= value then option:SetValue(value) end
+			end
+			Bot:Clean(function()
+				stopped = true
+				stopTravel()
+				stopAttack()
+				for option, saved in savedOptions do
+					if saved.Toggle then
+						if option.Enabled ~= saved.Value then option:Toggle() end
+					else option:SetValue(saved.Value) end
+				end
+				for name, saved in savedModules do
+					if vape.Modules[name] == saved.Module then toggle(saved.Module, saved.Enabled) end
+				end
+				status = 'Idle'
+			end)
+			for _, name in {'FrontlinesFly', 'Fly', 'Speed', 'TargetStrafe', 'LongJump', 'Killaura', 'SilentAim', 'AutoRespawn'} do
+				local module = vape.Modules[name]
+				if module then
+					savedModules[name] = {Module = module, Enabled = module.Enabled}
+					toggle(module, false)
+				end
+			end
+			for _, module in {aura, aim} do
+				local targets = module.Options.Targets
+				if targets then
+					setOption(targets.Players, true)
+					setOption(targets.NPCs, true)
+				end
+			end
+			setOption(aura.Options['Require mouse down'], false)
+			setOption(aura.Options['Knife only'], false)
+			setOption(aura.Options['Max angle'], 360)
+			setOption(aura.Options['Attack range'], 8)
+			setOption(aura.Options['Swing range'], 8)
+			setOption(aim.Options.Mode, 'Position')
+			setOption(aim.Options.AutoFire, true)
+			setOption(aim.Options.Range, 150)
+
+			Bot:Clean(hookEvent('ENTER_CLI_KILLCAM', function()
+				if respawnPending then return end
+				respawnPending = true
+				stopTravel()
+				stopAttack()
+				status = 'Respawning'
+				task.defer(function()
+					respawnPending = false
+					local main = frontlines.Main
+					if not stopped and Bot.Enabled and main then
+						main.exe_set(main.exe_set_t.CTRL_KILLCAM_TO_COMBAT_RELEASE)
+					end
+				end)
+			end))
+
+			local function valid(ent)
+				return ent and ent.Targetable and ent.RootPart and ent.RootPart.Parent
+					and ent.Health and ent.Health > 0 and entitylib.isVulnerable(ent)
+			end
+			local function step()
+				if stopped or not Bot.Enabled then return end
+				local main = frontlines.Main
+				local globals = main and main.globals
+				local state = globals and globals.cli_state
+				local char = entitylib.isAlive and entitylib.character
+				local root = char and char.RootPart
+				if char ~= currentCharacter then
+					stopTravel()
+					target, resetAt, currentCharacter = nil, nil, char
+				end
+				if not root or not root.Parent or not state or state.state ~= main.cli_state_t.COMBAT then
+					stopTravel(); stopAttack(); status = 'Waiting for combat'; return
+				end
+				if inputService:GetFocusedTextBox() then
+					stopTravel(); stopAttack(); status = 'Paused while typing'; return
+				end
+				local now = os.clock()
+				if resetAt then
+					if now - resetAt > 5 then
+						notif('Bot', 'The reset did not reach the killcam. Bot stopped; reset manually.', 6, 'alert')
+						Bot:Toggle()
+					end
+					return
+				end
+				local equipment = globals.fpv_sol_equipment
+				local gun = equipment and equipment.curr_equipment
+				local action = ammoAction(gun, globals.fpv_sol_ammo)
+				if action then
+					stopTravel(); stopAttack(); status = action == 'Reset' and 'Resetting: no ammo' or 'Reloading'
+					if action == 'Reset' then
+						resetAt = now
+						char.Humanoid.Health = 0
+						char.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+					elseif now >= nextReload then
+						nextReload = now + 1
+						main.exe_set(main.exe_set_t.FPV_SOL_AMMO_IN, gun)
+					end
+					return
+				end
+				if not valid(target) or (target.RootPart.Position - root.Position).Magnitude > SearchRange.Value then
+					stopTravel(); target = nil
+					local distance = SearchRange.Value
+					for _, ent in entitylib.List do
+						if valid(ent) then
+							local candidate = (ent.RootPart.Position - root.Position).Magnitude
+							if candidate < distance then distance, target = candidate, ent end
+						end
+					end
+				end
+				if not target then stopAttack(); status = 'Finding enemies'; return end
+				local melee = Mode.Value == 'Killaura'
+				local delta = root.Position - target.RootPart.Position
+				local stopDistance = melee and 5 or 24
+				if delta.Magnitude > stopDistance + 1 then
+					stopAttack()
+					status = 'Moving • 120 studs/s'
+					local goal = target.RootPart.Position + delta.Unit * stopDistance
+					if not travel or travel.PlaybackState == Enum.PlaybackState.Completed
+						or now >= nextPlan and (not destination or (goal - destination).Magnitude > 2) then
+						stopTravel()
+						destination, nextPlan = goal, now + 0.15
+						local duration = (goal - root.Position).Magnitude / 120
+						travel = tweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = root.CFrame + (goal - root.Position)})
+						travel:Play()
+					end
+					root.AssemblyLinearVelocity = Vector3.zero
+				else
+					stopTravel()
+					if not melee and (not gun or not gun.fire_params or gun.type == 2) then
+						stopAttack(); status = 'Equip a firearm'; return
+					end
+					toggle(melee and aim or aura, false)
+					toggle(melee and aura or aim, true)
+					status = melee and 'Attacking • Killaura' or 'Attacking • Shoot'
+				end
+			end
+			Bot:Clean(runService.Heartbeat:Connect(step))
+			step()
+		end,
+		ExtraText = function() return status end,
+		Tooltip = 'Tweens toward enemies at 120 studs/s, then uses Killaura or SilentAim AutoFire. Reloads while reserves remain; resets the equipped firearm when fully empty and respawns on killcam. Temporarily controls combat/movement modules and restores them on disable.'
+	})
+	Mode = Bot:CreateDropdown({Name = 'Attack Mode', List = {'Killaura', 'Shoot'}, Default = 'Killaura'})
+	SearchRange = Bot:CreateSlider({Name = 'Search Range', Min = 25, Max = 2000, Default = 1000, Suffix = 'studs'})
+end)
+
 -- Native integration bridge; initialized only inside Frontlines' client actor.
 vape.Libraries.frontlines = frontlines
 vape:Clean(function()
