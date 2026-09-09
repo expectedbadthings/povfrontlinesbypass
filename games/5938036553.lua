@@ -5613,6 +5613,82 @@ run(function()
 end)
 
 run(function()
+	local VisualComfort
+	local options = {}
+	local tracked = {}
+	local lighting = cloneref(game:GetService('Lighting'))
+	local classes = {'BlurEffect', 'BloomEffect', 'DepthOfFieldEffect'}
+
+	local function inScope(effect)
+		local camera = workspace.CurrentCamera
+		return effect:IsDescendantOf(lighting) or (camera and effect:IsDescendantOf(camera))
+	end
+
+	local function release(effect)
+		local state = tracked[effect]
+		if not state then return end
+		tracked[effect] = nil
+		state.Changed:Disconnect()
+		state.Ancestry:Disconnect()
+		-- Destroyed effects can no longer accept property writes.
+		pcall(function() effect.Enabled = state.Enabled end)
+	end
+
+	local function consider(effect)
+		local option = options[effect.ClassName]
+		if not option or not option.Enabled or not inScope(effect) then return end
+		if tracked[effect] then return end
+		local state = {Enabled = effect.Enabled}
+		tracked[effect] = state
+		effect.Enabled = false
+		state.Changed = effect:GetPropertyChangedSignal('Enabled'):Connect(function()
+			if effect.Enabled then
+				state.Enabled = true
+				effect.Enabled = false
+			end
+		end)
+		state.Ancestry = effect.AncestryChanged:Connect(function()
+			if not inScope(effect) then release(effect) end
+		end)
+	end
+
+	local function refresh()
+		if not VisualComfort or not VisualComfort.Enabled then return end
+		for effect in tracked do
+			if not options[effect.ClassName].Enabled or not inScope(effect) then
+				release(effect)
+			end
+		end
+		for _, effect in lighting:GetDescendants() do consider(effect) end
+		local camera = workspace.CurrentCamera
+		if camera then
+			for _, effect in camera:GetDescendants() do consider(effect) end
+		end
+	end
+
+	VisualComfort = vape.Categories.Render:CreateModule({
+		Name = 'VisualComfort',
+		Function = function(callback)
+			if callback then
+				VisualComfort:Clean(function()
+					for effect in tracked do release(effect) end
+				end)
+				VisualComfort:Clean(lighting.DescendantAdded:Connect(consider))
+				VisualComfort:Clean(workspace.DescendantAdded:Connect(consider))
+				VisualComfort:Clean(workspace:GetPropertyChangedSignal('CurrentCamera'):Connect(refresh))
+				refresh()
+			end
+		end,
+		Tooltip = 'Reduce post-processing for visual comfort. Restores effects when switched off.'
+	})
+	for index, name in {'Remove Blur', 'Remove Bloom', 'Remove Depth of Field'} do
+		options[classes[index]] = VisualComfort:CreateToggle({
+			Name = name, Default = true, Function = refresh
+		})
+	end
+end)
+
+run(function()
 	local ThirdPerson
 	local Distance
 	local hook = false
@@ -5688,19 +5764,42 @@ end)
 
 run(function()
 	local AutoRespawn
+	local Delay
+	local pending
+	local generation = 0
+
+	local function cancelPending()
+		generation += 1
+		if pending then
+			task.cancel(pending)
+			pending = nil
+		end
+	end
 	
 	AutoRespawn = vape.Categories.Utility:CreateModule({
 		Name = 'AutoRespawn',
 		Function = function(callback)
+			cancelPending()
 			if callback then
+				AutoRespawn:Clean(cancelPending)
 				AutoRespawn:Clean(hookEvent('ENTER_CLI_KILLCAM', function(id, health)
-					task.delay(0, function()
-						frontlines.Main.exe_set(frontlines.Main.exe_set_t.CTRL_KILLCAM_TO_COMBAT_RELEASE)
+					cancelPending()
+					local token = generation
+					pending = task.delay(Delay.Value, function()
+						if token ~= generation then return end
+						pending = nil
+						local main = frontlines.Main
+						if not AutoRespawn.Enabled or not main or entitylib.isAlive then return end
+						main.exe_set(main.exe_set_t.CTRL_KILLCAM_TO_COMBAT_RELEASE)
 					end)
 				end))
 			end
 		end,
-		Tooltip = 'Automatically respawns after death'
+		Tooltip = 'Automatically respawns after death with an optional killcam delay.'
+	})
+	Delay = AutoRespawn:CreateSlider({
+		Name = 'Respawn Delay', Min = 0, Max = 10, Default = 0, Decimal = 10, Suffix = 's',
+		Tooltip = 'Time to keep the killcam visible. Applies on your next death.'
 	})
 end)
 
@@ -6384,6 +6483,260 @@ run(function()
 
 	StrafeSpeed.Object.Visible = not MatchSpeed.Enabled
 end)
+run(function()
+	local FrontlinesFly
+	local RepeatPulses
+	local preset = {
+		{'Speed', 108},
+		{'Speed Mode', 'Impulse'},
+		{'Float Mode', 'Velocity'},
+		{'Move Mode', 'Direct'},
+		{'Humanoid State', 'None'}
+	}
+
+	FrontlinesFly = vape.Categories.Blatant:CreateModule({
+		Name = 'FrontlinesFly',
+		Function = function(callback)
+			if not callback then return end
+			local fly = vape.Modules.Fly
+			if not fly or not fly.Options then
+				notif('FrontlinesFly', 'The Fly movement engine is unavailable.', 5, 'alert')
+				FrontlinesFly:Toggle()
+				return
+			end
+			for _, setting in preset do
+				local option = fly.Options[setting[1]]
+				if not option or type(option.SetValue) ~= 'function' then
+					notif('FrontlinesFly', 'Missing Fly setting: '..setting[1], 5, 'alert')
+					FrontlinesFly:Toggle()
+					return
+				end
+			end
+
+			-- Own the normal Fly toggle for this session so its existing Speed
+			-- coordination, direct input, float physics and keybinds remain intact.
+			if fly.Enabled then fly:Toggle() end
+			local saved = {}
+			local phase, deadline, character = 'Waiting', nil, nil
+			local stopped = false
+			local function stopFlight()
+				if fly.Enabled then fly:Toggle() end
+			end
+			FrontlinesFly:Clean(function()
+				stopped = true
+				stopFlight()
+				for _, setting in preset do
+					local option = fly.Options[setting[1]]
+					-- Preserve a setting the user changed during the countdown/pulse.
+					if option and option.Value == setting[2] and saved[setting[1]] ~= nil then
+						option:SetValue(saved[setting[1]])
+					end
+				end
+			end)
+			for _, setting in preset do
+				local option = fly.Options[setting[1]]
+				saved[setting[1]] = option.Value
+				option:SetValue(setting[2])
+			end
+
+			local label = Instance.new('TextLabel')
+			label.Name = 'FrontlinesFlyCountdown'
+			label.AnchorPoint = Vector2.new(0.5, 0)
+			label.Position = UDim2.fromScale(0.5, 0.2)
+			label.Size = UDim2.fromOffset(340, 64)
+			label.BackgroundColor3 = Color3.fromRGB(20, 22, 28)
+			label.BackgroundTransparency = 0.15
+			label.BorderSizePixel = 0
+			label.Font = Enum.Font.GothamMedium
+			label.TextSize = 18
+			label.TextColor3 = Color3.fromRGB(240, 243, 250)
+			label.Text = 'FRONTLINES FLY — Waiting for combat'
+			label.Parent = vape.gui
+			FrontlinesFly:Clean(label)
+			local corner = Instance.new('UICorner')
+			corner.CornerRadius = UDim.new(0, 10)
+			corner.Parent = label
+			local track = Instance.new('Frame')
+			track.BorderSizePixel = 0
+			track.BackgroundColor3 = Color3.fromRGB(105, 175, 255)
+			track.Size = UDim2.new(0, 0, 0, 3)
+			track.Position = UDim2.new(0, 0, 1, -3)
+			track.Parent = label
+
+			local function step()
+				if stopped or not FrontlinesFly.Enabled then return end
+				local now = os.clock()
+				local main = frontlines.Main
+				local globals = main and main.globals
+				local state = globals and globals.cli_state
+				local current = entitylib.isAlive and entitylib.character
+				local root = current and current.RootPart
+				local ready = state and state.state == main.cli_state_t.COMBAT and root and root.Parent
+				local typing = inputService:GetFocusedTextBox() ~= nil
+				if not ready or typing or current ~= character then
+					stopFlight()
+					phase, deadline, character = 'Waiting', nil, current
+				end
+				if not ready or typing then
+					label.Text = typing and 'FRONTLINES FLY — Paused while typing' or 'FRONTLINES FLY — Waiting for combat'
+					track.Size = UDim2.new(0, 0, 0, 3)
+					return
+				end
+				if phase == 'Waiting' then
+					phase, deadline = 'Countdown', now + 5
+				end
+				if phase == 'Countdown' then
+					stopFlight()
+					if now >= deadline then
+						-- Reapply the requested preset immediately before every pulse.
+						for _, setting in preset do fly.Options[setting[1]]:SetValue(setting[2]) end
+						fly:Toggle()
+						phase, deadline = 'Flying', now + 3
+					end
+				elseif not fly.Enabled or now >= deadline then
+					local cancelled = not fly.Enabled
+					stopFlight()
+					if cancelled or not RepeatPulses.Enabled then
+						FrontlinesFly:Toggle()
+						return
+					end
+					phase, deadline = 'Countdown', now + 5
+				end
+				local remaining = math.max(0, deadline - now)
+				local flying = phase == 'Flying'
+				label.Text = (flying and string.format('FLY PULSE — %.1fs', remaining) or 'FLY IN '..math.ceil(remaining)..'s')
+					..'\n108 studs/s • Impulse • Velocity • Direct'
+				track.BackgroundColor3 = flying and Color3.fromRGB(110, 230, 165) or Color3.fromRGB(105, 175, 255)
+				track.Size = UDim2.new(math.clamp(remaining / (flying and 3 or 5), 0, 1), 0, 0, 3)
+			end
+			FrontlinesFly:Clean(runService.PreSimulation:Connect(step))
+			step()
+		end,
+		ExtraText = function() return '108 • 5s / 3s' end,
+		Tooltip = '5-second countdown, then a 3-second fly pulse at 108 studs/s. Uses Impulse speed, Velocity float and Direct WASD input. Uses Fly\'s up/down binds and vertical speed. Resets on death or typing; restores previous Fly settings when finished.'
+	})
+	RepeatPulses = FrontlinesFly:CreateToggle({Name = 'Repeat Pulses', Default = false})
+end)
+
+run(function()
+	local AmmoHUD
+	local LowAmmo, ShowReserve, TextSize, VerticalPosition, Background
+
+	AmmoHUD = vape.Categories.Render:CreateModule({
+		Name = 'AmmoHUD',
+		Function = function(callback)
+			if not callback then return end
+			local label = Instance.new('TextLabel')
+			label.Name = 'FrontlinesAmmoHUD'
+			label.AnchorPoint = Vector2.new(0.5, 0.5)
+			label.Size = UDim2.fromOffset(240, 40)
+			label.BackgroundColor3 = Color3.fromRGB(20, 22, 28)
+			label.BorderSizePixel = 0
+			label.Font = Enum.Font.GothamMedium
+			label.Text = ''
+			label.Visible = false
+			label.Parent = vape.gui
+			AmmoHUD:Clean(label)
+			local corner = Instance.new('UICorner')
+			corner.CornerRadius = UDim.new(0, 8)
+			corner.Parent = label
+
+			local function update()
+				local main = frontlines.Main
+				local globals = main and main.globals
+				local equipment = globals and globals.fpv_sol_equipment
+				local gun = equipment and equipment.curr_equipment
+				local ammo = globals and globals.fpv_sol_ammo
+				local state = globals and globals.cli_state
+				label.Visible = not not (entitylib.isAlive and state and state.state == main.cli_state_t.COMBAT
+					and gun and gun.reload_params and ammo and type(ammo.ammo) == 'number')
+				if not label.Visible then return end
+				local count = math.max(0, math.floor(ammo.ammo))
+				local reserve = type(ammo.reserve) == 'number' and tostring(math.max(0, math.floor(ammo.reserve))) or '--'
+				label.Text = (count == 0 and 'EMPTY' or tostring(count))..(ShowReserve.Enabled and ' / '..reserve or '')
+				label.TextColor3 = count <= LowAmmo.Value and Color3.fromRGB(255, 140, 105) or Color3.fromRGB(240, 243, 250)
+				label.TextSize = TextSize.Value
+				label.Position = UDim2.fromScale(0.5, VerticalPosition.Value / 100)
+				label.BackgroundTransparency = Background.Enabled and 0.25 or 1
+			end
+			local elapsed = 0
+			AmmoHUD:Clean(runService.Heartbeat:Connect(function(dt)
+				elapsed += dt
+				if elapsed >= 0.1 then
+					elapsed = 0
+					update()
+				end
+			end))
+			update()
+		end,
+		Tooltip = 'Readable firearm ammo near the crosshair. Hides in menus, on death and when using melee.'
+	})
+	LowAmmo = AmmoHUD:CreateSlider({Name = 'Low Ammo Threshold', Min = 0, Max = 30, Default = 5})
+	ShowReserve = AmmoHUD:CreateToggle({Name = 'Show Reserve', Default = true})
+	TextSize = AmmoHUD:CreateSlider({Name = 'Text Size', Min = 14, Max = 32, Default = 22})
+	VerticalPosition = AmmoHUD:CreateSlider({Name = 'Vertical Position', Min = 10, Max = 90, Default = 60, Suffix = '%'})
+	Background = AmmoHUD:CreateToggle({Name = 'Background', Default = true})
+end)
+
+run(function()
+	local LowHealthAlert
+	local Threshold, Cooldown
+	LowHealthAlert = vape.Categories.Utility:CreateModule({
+		Name = 'LowHealthAlert',
+		Function = function(callback)
+			if not callback then return end
+			local warned, character = false, nil
+			local lastAlert, elapsed = -math.huge, 0
+			LowHealthAlert:Clean(runService.Heartbeat:Connect(function(dt)
+				elapsed += dt
+				if elapsed < 0.2 then return end
+				elapsed = 0
+				local current = entitylib.isAlive and entitylib.character
+				if current ~= character then
+					character, warned, lastAlert = current, false, -math.huge
+				end
+				local hum = current and current.Humanoid
+				if not hum or hum.Health <= 0 or hum.MaxHealth <= 0 then return end
+				local percent = hum.Health / hum.MaxHealth * 100
+				-- Require recovery above the threshold before another warning.
+				if percent > Threshold.Value + 5 then warned = false end
+				if percent <= Threshold.Value and not warned and os.clock() - lastAlert >= Cooldown.Value then
+					warned, lastAlert = true, os.clock()
+					notif('Low health', tostring(math.ceil(percent))..'% health remaining.', 3, 'alert')
+				end
+			end))
+		end,
+		Tooltip = 'Warns once when health is low; rearms after recovery or respawn.'
+	})
+	Threshold = LowHealthAlert:CreateSlider({Name = 'Health Threshold', Min = 5, Max = 75, Default = 25, Suffix = '%'})
+	Cooldown = LowHealthAlert:CreateSlider({Name = 'Alert Cooldown', Min = 5, Max = 60, Default = 15, Suffix = 's'})
+end)
+
+run(function()
+	local BreakReminder
+	local Interval
+	local elapsed = 0
+	BreakReminder = vape.Categories.Utility:CreateModule({
+		Name = 'BreakReminder',
+		Function = function(callback)
+			elapsed = 0
+			if not callback then return end
+			BreakReminder:Clean(runService.Heartbeat:Connect(function(dt)
+				elapsed += dt
+				if elapsed >= Interval.Value * 60 then
+					elapsed = 0
+					notif('Break reminder', 'Your '..Interval.Value..'-minute reminder: time for a short break.', 8)
+				end
+			end))
+		end,
+		Tooltip = 'Optional periodic break reminder while enabled. Re-enabling or changing the interval resets the timer.'
+	})
+	Interval = BreakReminder:CreateSlider({
+		Name = 'Reminder Interval', Min = 5, Max = 120, Default = 30, Suffix = 'min',
+		Function = function() elapsed = 0 end
+	})
+end)
+
 -- Native integration bridge; initialized only inside Frontlines' client actor.
 vape.Libraries.frontlines = frontlines
 vape:Clean(function()
