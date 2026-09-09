@@ -1209,10 +1209,10 @@ run(function()
 
 	local function validTarget(ent)
 		return ent
-			and ent.Targetable ~= false
+			and ent.Targetable == true
 			and ent.RootPart
 			and ent.RootPart.Parent
-			and ent.Health ~= 0
+			and type(ent.Health) == 'number' and ent.Health > 0
 	end
 
 	local function getTargetCFrame(ent)
@@ -1241,18 +1241,26 @@ run(function()
 
 	local function getNearestTarget(throwable, primary, now)
 		local cached = targetCache[throwable]
-		if cached and now < cached.Expires and validTarget(cached.Entity) then
+		if cached and now < cached.Expires and not cached.Entity then return end
+		if cached and now < cached.Expires and validTarget(cached.Entity) and entitylib.isVulnerable(cached.Entity) then
 			if (cached.Entity.RootPart.Position - primary.Position).Magnitude <= Range.Value + 8 then
 				return cached.Entity
 			end
 		end
 
-		local ent = entitylib.EntityPosition({
-			Range = Range.Value,
-			Part = 'RootPart',
-			Origin = primary.Position,
-			Players = true
-		})
+		-- EntityPosition requires a living local player and excludes NPCs by
+		-- default. Thrown grenades outlive their owner, and Frontlines soldiers
+		-- without a Roblox Player instance are represented as NPC entities.
+		local ent
+		local nearest = Range.Value
+		for _, candidate in entitylib.List do
+			if validTarget(candidate) and entitylib.isVulnerable(candidate) then
+				local distance = (candidate.RootPart.Position - primary.Position).Magnitude
+				if distance <= nearest then
+					nearest, ent = distance, candidate
+				end
+			end
+		end
 
 		targetCache[throwable] = {
 			Entity = ent,
@@ -1266,17 +1274,23 @@ run(function()
 		local now = os.clock()
 
 		for _, throwable in frontlines.Throwables do
-			local model = throwable and throwable.model
-			local primary = model and model.PrimaryPart
+			if type(throwable) ~= 'table' then continue end
+			local model = throwable.model
+			if typeof(model) ~= 'Instance' or not model:IsA('Model') or not model.Parent then
+				targetCache[throwable] = nil
+				continue
+			end
+			local primary = model.PrimaryPart or model:FindFirstChildWhichIsA('BasePart', true)
 
-			if primary and primary.Parent and throwable.network_ownership then
+			if primary and primary.Parent and (throwable.network_ownership == true or throwable.network_ownership == 1) then
 				local ent = getNearestTarget(throwable, primary, now)
 				if validTarget(ent) then
 					local targetCF = getTargetCFrame(ent)
 					if targetCF then
 						-- Move before the physics step so overlap/contact can be processed on
 						-- this frame instead of waiting for the next polling iteration.
-						model:PivotTo(targetCF)
+						-- Align the physical grenade part, not a potentially offset model pivot.
+						model:PivotTo(targetCF * primary.CFrame:Inverse() * model:GetPivot())
 
 						-- Prevent the grenade's old throw velocity from immediately pulling it
 						-- back out of the target between teleports. Match target velocity instead.
@@ -2100,6 +2114,83 @@ run(function()
 end)
 
 -- ILLUSIONHD_GUNCHANGER_V5
+run(function()
+	local GunViewmodel
+	local X, Y, Z, Pitch, Yaw, Roll, AimReset
+	local model, original, applied
+	local renderName = 'FrontlinesGunViewmodel'
+
+	local function samePose(a, b)
+		return (a.Position - b.Position).Magnitude < 0.0001
+			and a.LookVector:Dot(b.LookVector) > 0.999999
+			and a.RightVector:Dot(b.RightVector) > 0.999999
+	end
+
+	local function restore()
+		if model and model.Parent and original and applied then
+			-- Only undo our last offset. The game may already have supplied a new
+			-- animated pose, which must never be overwritten with an older frame.
+			if samePose(model:GetPivot(), applied) then model:PivotTo(original) end
+		end
+		model, original, applied = nil, nil, nil
+	end
+
+	local function render()
+		restore()
+		if not GunViewmodel.Enabled or not entitylib.isAlive then return end
+		local main = frontlines.Main
+		local globals = main and main.globals
+		local state = globals and globals.cli_state
+		local equipment = globals and globals.fpv_sol_equipment
+		local gun = equipment and equipment.curr_equipment
+		if not state or state.state ~= main.cli_state_t.COMBAT or not gun or gun.type == 2 or not gun.reload_params then return end
+		if vape.Modules.ThirdPerson and vape.Modules.ThirdPerson.Enabled then return end
+		if AimReset.Enabled and inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then return end
+		local camera = workspace.CurrentCamera
+		local candidate = workspace:FindFirstChild('Model')
+		if not camera or not candidate or not candidate:IsA('Model') then return end
+		local base = candidate:GetPivot()
+		-- Use the same FPV assembly as GunChanger, with a proximity guard to
+		-- avoid touching an unrelated world model when no viewmodel is present.
+		if (base.Position - camera.CFrame.Position).Magnitude > 20 then return end
+		local offset = CFrame.new(X.Value, Y.Value, -Z.Value)
+			* CFrame.Angles(math.rad(Pitch.Value), math.rad(Yaw.Value), math.rad(Roll.Value))
+		model, original = candidate, base
+		candidate:PivotTo(camera.CFrame * offset * camera.CFrame:ToObjectSpace(base))
+		applied = candidate:GetPivot()
+	end
+
+	GunViewmodel = vape.Categories.Render:CreateModule({
+		Name = 'GunViewmodel',
+		Function = function(callback)
+			if not callback then return end
+			GunViewmodel:Clean(function()
+				runService:UnbindFromRenderStep(renderName)
+				runService:UnbindFromRenderStep(renderName..'Restore')
+				restore()
+			end)
+			-- Clear the visual offset before simulation and camera/animation work,
+			-- then apply exactly once at the end of rendering to prevent drift.
+			GunViewmodel:Clean(runService.PreSimulation:Connect(restore))
+			runService:BindToRenderStep(renderName..'Restore', Enum.RenderPriority.First.Value, restore)
+			runService:BindToRenderStep(renderName, Enum.RenderPriority.Last.Value + 150, render)
+		end,
+		Tooltip = 'Adjusts the first-person firearm and hands together without changing the camera. Restores on disable; skips melee, menus and ThirdPerson.'
+	})
+	X = GunViewmodel:CreateSlider({Name = 'Horizontal', Min = -3, Max = 3, Default = 0, Decimal = 100, Suffix = 'studs'})
+	Y = GunViewmodel:CreateSlider({Name = 'Vertical', Min = -3, Max = 3, Default = 0, Decimal = 100, Suffix = 'studs'})
+	Z = GunViewmodel:CreateSlider({Name = 'Forward', Min = -3, Max = 3, Default = 0, Decimal = 100, Suffix = 'studs'})
+	Pitch = GunViewmodel:CreateSlider({Name = 'Pitch', Min = -45, Max = 45, Default = 0, Suffix = '°'})
+	Yaw = GunViewmodel:CreateSlider({Name = 'Yaw', Min = -45, Max = 45, Default = 0, Suffix = '°'})
+	Roll = GunViewmodel:CreateSlider({Name = 'Roll', Min = -90, Max = 90, Default = 0, Suffix = '°'})
+	AimReset = GunViewmodel:CreateToggle({Name = 'Reset While Right Click Held', Default = true,
+		Tooltip = 'Uses the original pose while holding right mouse for aiming.'})
+	GunViewmodel:CreateButton({Name = 'Reset Offsets', Function = function()
+		for _, option in {X, Y, Z, Pitch, Yaw, Roll} do option:SetValue(0) end
+		restore()
+	end})
+end)
+
 run(function()
 	local GunChanger
 	local RainbowSpeed
