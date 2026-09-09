@@ -6849,7 +6849,7 @@ run(function()
 				return
 			end
 			local savedModules, savedOptions = {}, {}
-			local movementRoot, target, currentCharacter
+			local movementRoot, hoverY, target, currentCharacter
 			local nextReload, resetAt = 0, nil
 			local stopped, respawnPending = false, false
 			local function toggle(module, enabled)
@@ -6857,10 +6857,9 @@ run(function()
 			end
 			local function stopTravel()
 				if movementRoot and movementRoot.Parent then
-					local horizontal = movementRoot.AssemblyLinearVelocity * Vector3.new(1, 0, 1)
-					movementRoot:ApplyImpulse((Vector3.zero - horizontal) * movementRoot.AssemblyMass)
+					movementRoot.AssemblyLinearVelocity = Vector3.zero
 				end
-				movementRoot = nil
+				movementRoot, hoverY = nil, nil
 			end
 			local function stopAttack()
 				toggle(aura, false)
@@ -6985,42 +6984,38 @@ run(function()
 						end
 					end
 				end
-				if not target then stopAttack(); status = 'Finding enemies'; return end
+				if not target then stopTravel(); stopAttack(); status = 'Finding enemies'; return end
 				local melee = Mode.Value == 'Killaura'
 				local delta = root.Position - target.RootPart.Position
 				local stopDistance = melee and 5 or 24
 				if delta.Magnitude > stopDistance + 1 then
 					stopAttack()
-					status = 'Moving • Impulse 80 studs/s'
-					local direction = (target.RootPart.Position - root.Position) * Vector3.new(1, 0, 1)
-					if direction.Magnitude < 0.01 then
-						stopTravel(); status = 'Target above/below'; return
-					end
-					-- Accelerate at up to 160 studs/s² and brake as we approach.
-					-- Horizontal impulses preserve normal gravity/jumping and collisions.
-					local remaining = math.max(0, direction.Magnitude - stopDistance)
-					local speed = math.min(80, math.sqrt(2 * 160 * remaining))
-					local velocity = root.AssemblyLinearVelocity * Vector3.new(1, 0, 1)
-					local correction = direction.Unit * speed - velocity
-					local limit = 160 * dt
-					if correction.Magnitude > limit then correction = correction.Unit * limit end
-					movementRoot = root
-					root:ApplyImpulse(correction * root.AssemblyMass)
+					status = 'Flying • 80 studs/s'
+					local direction = target.RootPart.Position - root.Position
+					local distance = math.min(80 * dt, math.max(0, direction.Magnitude - stopDistance))
+					-- Move the native soldier root after simulation, including vertical
+					-- travel, without relying on impulses the movement controller cancels.
+					movementRoot, hoverY = root, nil
+					root.AssemblyLinearVelocity = Vector3.zero
+					root.CFrame += direction.Unit * distance
 				else
-					stopTravel()
 					if not melee and (not gun or not gun.fire_params or gun.type == 2) then
-						stopAttack(); status = 'Equip a firearm'; return
+						stopTravel(); stopAttack(); status = 'Equip a firearm'; return
 					end
+					movementRoot = root
+					hoverY = hoverY or root.Position.Y
+					root.AssemblyLinearVelocity = Vector3.zero
+					root.CFrame += Vector3.new(0, hoverY - root.Position.Y, 0)
 					toggle(melee and aim or aura, false)
 					toggle(melee and aura or aim, true)
 					status = melee and 'Attacking • Killaura' or 'Attacking • Shoot'
 				end
 			end
-			Bot:Clean(runService.PreSimulation:Connect(step))
+			Bot:Clean(runService.Heartbeat:Connect(step))
 			step()
 		end,
 		ExtraText = function() return status end,
-		Tooltip = 'Moves toward enemies with horizontal impulses up to 80 studs/s, smooth acceleration and arrival braking. Preserves gravity and collisions; no tweening or pathfinding. Uses Killaura or SilentAim AutoFire, reloads, resets when the equipped firearm is fully empty and respawns. Restores controlled modules on disable.'
+		Tooltip = 'Flies directly toward enemies at 80 studs/s, including vertical travel, then hovers at attack range. No tweening or pathfinding. Uses Killaura or SilentAim AutoFire, reloads, resets when the equipped firearm is fully empty and respawns. Restores controlled modules on disable.'
 	})
 	Mode = Bot:CreateDropdown({Name = 'Attack Mode', List = {'Killaura', 'Shoot'}, Default = 'Killaura'})
 	SearchRange = Bot:CreateSlider({Name = 'Search Range', Min = 25, Max = 2000, Default = 1000, Suffix = 'studs'})
