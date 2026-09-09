@@ -225,6 +225,7 @@ do
 		['newvape/assets/new/editlarge.png'] = 'rbxassetid://119233876755282',
 		['newvape/assets/new/expandarrow.png'] = 'rbxassetid://86360332526471',
 		['newvape/assets/new/friends.png'] = 'rbxassetid://92957214042038',
+		['newvape/assets/new/face1.png'] = '',
 		['newvape/assets/new/inventory.png'] = 'rbxassetid://93264756888499',
 		['newvape/assets/new/legit_mode_icon.png'] = 'rbxassetid://102858626075156',
 		['newvape/assets/new/legit_switch.png'] = 'rbxassetid://127508881124779',
@@ -3441,6 +3442,7 @@ function vape:LoadGUI()
 			Object = {Visible = {}}
 		}
 		local DisplayName
+		local Mode
 
 		TargetInfoOverlay = vape:CreateOverlay({
 			Name = 'Target Info',
@@ -3536,6 +3538,82 @@ function vape:LoadGUI()
 		Stroke.Color = Color3.fromHSV(0.44, 1, 1)
 		Stroke.Parent = Holder
 
+		local ModernGlowOuter = Instance.new('UIStroke')
+		ModernGlowOuter.Name = 'ModernGlowOuter'
+		ModernGlowOuter.Thickness = 9
+		ModernGlowOuter.Transparency = 0.82
+		ModernGlowOuter.Enabled = false
+		ModernGlowOuter.Parent = Holder
+		local ModernGlow = Instance.new('UIStroke')
+		ModernGlow.Name = 'ModernGlow'
+		ModernGlow.Thickness = 4
+		ModernGlow.Transparency = 0.58
+		ModernGlow.Enabled = false
+		ModernGlow.Parent = Holder
+		local ModernAccent = Instance.new('Frame')
+		ModernAccent.Name = 'ModernAccent'
+		ModernAccent.Position = UDim2.fromOffset(0, 14)
+		ModernAccent.Size = UDim2.new(0, 3, 1, -28)
+		ModernAccent.BorderSizePixel = 0
+		ModernAccent.Visible = false
+		ModernAccent.Parent = Holder
+		addCorner(ModernAccent, UDim.new(1, 0))
+		local Status = Instance.new('TextLabel')
+		Status.Name = 'Status'
+		Status.Position = UDim2.fromOffset(84, 43)
+		Status.Size = UDim2.fromOffset(180, 14)
+		Status.BackgroundTransparency = 1
+		Status.Text = 'Same'
+		Status.TextSize = 11
+		Status.TextXAlignment = Enum.TextXAlignment.Left
+		Status.TextColor3 = color.Light(uipallet.Text, 0.28)
+		Status.FontFace = uipallet.FontSemiBold
+		Status.Visible = false
+		Status.Parent = Holder
+		local AvatarStroke = Instance.new('UIStroke')
+		AvatarStroke.Thickness = 1.5
+		AvatarStroke.Transparency = 0.12
+		AvatarStroke.Enabled = false
+		AvatarStroke.Parent = Headshot
+		local HealthGlow = Instance.new('UIStroke')
+		HealthGlow.Thickness = 3
+		HealthGlow.Transparency = 0.68
+		HealthGlow.Enabled = false
+		HealthGlow.Parent = HealthBKG
+
+		vape:RegisterThemeSolid(ModernGlowOuter, 'Color', 0.04)
+		vape:RegisterThemeSolid(ModernGlow, 'Color', 0.08)
+		vape:RegisterThemeSolid(ModernAccent, 'BackgroundColor3', 0.12)
+		vape:RegisterThemeSolid(AvatarStroke, 'Color', 0.16)
+		vape:RegisterThemeSolid(HealthGlow, 'Color', 0.20)
+
+		local function applyTargetMode(val)
+			local modern = val == 'Modern'
+			Holder.Size = modern and UDim2.fromOffset(304, 100) or UDim2.fromOffset(240, 89)
+			Headshot.Size = modern and UDim2.fromOffset(58, 58) or UDim2.fromOffset(26, 27)
+			Headshot.Position = modern and UDim2.fromOffset(14, 18) or UDim2.fromOffset(19, 17)
+			Name.Size = modern and UDim2.fromOffset(190, 22) or UDim2.fromOffset(145, 20)
+			Name.Position = modern and UDim2.fromOffset(84, 19) or UDim2.fromOffset(54, 20)
+			Name.TextXAlignment = Enum.TextXAlignment.Left
+			Name.TextYAlignment = modern and Enum.TextYAlignment.Center or Enum.TextYAlignment.Top
+			HealthBKG.Size = modern and UDim2.fromOffset(200, 9) or UDim2.fromOffset(200, 9)
+			HealthBKG.Position = modern and UDim2.fromOffset(84, 63) or UDim2.fromOffset(20, 56)
+			ModernGlowOuter.Enabled = modern
+			ModernGlow.Enabled = modern
+			ModernAccent.Visible = modern
+			Status.Visible = modern
+			AvatarStroke.Enabled = modern
+			HealthGlow.Enabled = modern
+			NameShadow.Visible = false
+			targetinfo.Object = Holder
+		end
+
+		Mode = TargetInfoOverlay:CreateDropdown({
+			Name = 'Mode',
+			List = {'Classic', 'Modern'},
+			Function = applyTargetMode
+		})
+
 		TargetInfoOverlay:CreateFont({
 			Name = 'Font',
 			Default = 'Arial',
@@ -3551,7 +3629,7 @@ function vape:LoadGUI()
 			Name = 'Render Background',
 			Function = function(callback)
 				Holder.BackgroundTransparency = callback and BackgroundTransparency.Value or 1
-				NameShadow.Visible = not callback
+				NameShadow.Visible = not callback and Mode.Value ~= 'Modern'
 				BlurHolder.Visible = callback
 				HealthBlur.Enabled = not callback
 				HeadshotBlur.Enabled = not callback
@@ -3590,6 +3668,8 @@ function vape:LoadGUI()
 		vape:RegisterThemeSolid(Headshot, 'BackgroundColor3', 0.10)
 		vape:ApplyThemeGradient(HealthBKG, 'BackgroundColor3', 0.10, true, 0)
 
+		applyTargetMode(Mode.Value)
+
 
 		function targetinfo:Update()
 			local entitylib = vape.Libraries
@@ -3615,6 +3695,18 @@ function vape:LoadGUI()
 			if entity then
 				Name.Text = entity.Player and (DisplayName.Enabled and entity.Player.DisplayName or entity.Player.Name) or entity.Character and entity.Character.Name or Name.Text
 				Headshot.Image = 'rbxthumb://type=AvatarHeadShot&id='..(entity.Player and entity.Player.UserId or 1)..'&w=420&h=420'
+
+				if Mode.Value == 'Modern' then
+					local glowPulse = (math.sin(os.clock() * 3.2) + 1) * 0.5
+					ModernGlow.Transparency = 0.50 + (glowPulse * 0.16)
+					ModernGlowOuter.Transparency = 0.76 + (glowPulse * 0.14)
+					local targetPercent = math.clamp((entity.Health or 0) / math.max(entity.MaxHealth or 100, 1), 0, 1)
+					local entlib = vape.Libraries.entity
+					local localHum = entlib and entlib.character and entlib.character.Humanoid
+					local localPercent = localHum and math.clamp(localHum.Health / math.max(localHum.MaxHealth, 1), 0, 1) or targetPercent
+					local delta = localPercent - targetPercent
+					Status.Text = delta > 0.08 and 'Winning  •  '..math.round((entity.Health or 0))..' HP' or delta < -0.08 and 'Losing  •  '..math.round((entity.Health or 0))..' HP' or 'Same  •  '..math.round((entity.Health or 0))..' HP'
+				end
 
 				if not entity.Character then
 					entity.Health = entity.Health or 0
