@@ -1,4 +1,79 @@
--- Vape interface: restrained surfaces, shared accents, event-driven controls.
+local NEWER_GUI_URL = 'https://raw.githubusercontent.com/expectedbadthings/povfrontlinesbypass/refs/heads/main/guis/newer.lua'
+local NEWER_GUI_CACHE = 'newvape/guis/newer.lua'
+local GUI_STYLE_FILE = 'newvape/profiles/guistyle.txt'
+
+local function readGUIStyleFile()
+	local success, value = pcall(function()
+		return readfile(GUI_STYLE_FILE)
+	end)
+	return success and tostring(value):gsub('%s+$', '') or 'Vape V4'
+end
+
+local function writeGUIStyleFile(value)
+	pcall(function()
+		makefolder('newvape/profiles')
+	end)
+	return pcall(writefile, GUI_STYLE_FILE, value)
+end
+
+local function validNewerSource(source)
+	return type(source) == 'string'
+		and #source > 10000
+		and source ~= '404: Not Found'
+		and source:find('vape:LoadGUI()', 1, true) ~= nil
+		and source:find('return vape', 1, true) ~= nil
+end
+
+local function downloadNewerGUI(forceNetwork)
+	pcall(makefolder, 'newvape')
+	pcall(makefolder, 'newvape/guis')
+
+	local source
+	local networkError
+	if forceNetwork ~= false then
+		local success, result = pcall(function()
+			return game:HttpGet(NEWER_GUI_URL, true)
+		end)
+		if success and validNewerSource(result) then
+			source = result
+			pcall(writefile, NEWER_GUI_CACHE, source)
+		else
+			networkError = success and 'GitHub returned an invalid newer.lua' or tostring(result)
+		end
+	end
+
+	if not source then
+		local success, cached = pcall(function()
+			return readfile(NEWER_GUI_CACHE)
+		end)
+		if success and validNewerSource(cached) then
+			source = cached
+		end
+	end
+
+	return source, networkError
+end
+
+-- The loader still asks for new.lua. This tiny dispatch keeps the loader/API
+-- unchanged while allowing the user-selected GUI implementation to live in its
+-- own GitHub file.
+if readGUIStyleFile() == 'Modern' then
+	local newerSource, newerError = downloadNewerGUI(true)
+	if newerSource then
+		local newerChunk, compileError = loadstring(newerSource, 'newer gui')
+		if newerChunk then
+			return newerChunk()
+		end
+		warn('[Vape] newer.lua compile failed: '..tostring(compileError))
+	else
+		warn('[Vape] newer.lua download failed: '..tostring(newerError))
+	end
+	-- Do not trap the client in a broken Modern selection if GitHub and cache are
+	-- both unavailable. Falling through loads the classic GUI normally.
+	writeGUIStyleFile('Vape V4')
+end
+-- External GUI bridge end -------------------------------------------------------
+
 local vape = {
 	ActiveBinds = {},
 	Categories = {},
@@ -225,7 +300,6 @@ do
 		['newvape/assets/new/editlarge.png'] = 'rbxassetid://119233876755282',
 		['newvape/assets/new/expandarrow.png'] = 'rbxassetid://86360332526471',
 		['newvape/assets/new/friends.png'] = 'rbxassetid://92957214042038',
-		['newvape/assets/new/face1.png'] = '',
 		['newvape/assets/new/inventory.png'] = 'rbxassetid://93264756888499',
 		['newvape/assets/new/legit_mode_icon.png'] = 'rbxassetid://102858626075156',
 		['newvape/assets/new/legit_switch.png'] = 'rbxassetid://127508881124779',
@@ -868,9 +942,9 @@ local function addCorner(parent, radius)
 end
 
 -- GUI style system -------------------------------------------------------------
--- newer.lua keeps Vape V4's layout/API intact, but can restyle the same live
--- controls between the familiar V4 look and a softer modern presentation.
-vape.GUIStyleName = 'Modern'
+-- new.lua keeps Vape V4 as the default presentation while allowing the same
+-- live interface to switch to the newer modern styling without reinjection.
+vape.GUIStyleName = 'Vape V4'
 vape.GUIStyleObjects = setmetatable({}, {__mode = 'k'})
 
 local function styleCorner(object, radius)
@@ -2780,12 +2854,39 @@ function vape:LoadGUI()
 
 	vape.GUIStyle = guipane:CreateDropdown({
 		Name = 'GUI Style',
-		List = {'Modern', 'Vape V4'},
+		List = {'Vape V4', 'Modern'},
 		Function = function(value)
-			vape.GUIStyleName = value == 'Vape V4' and 'Vape V4' or 'Modern'
-			vape:ApplyGUIStyle()
+			if value == 'Modern' then
+				-- newer.lua is intentionally kept separate so the Modern GUI can be
+				-- updated on GitHub without bloating/replacing the classic new.lua.
+				task.spawn(function()
+					if vape.Loaded == nil then return end
+					vape:CreateNotification('GUI', 'Downloading newer.lua...', 3)
+					local source, fetchError = downloadNewerGUI(true)
+					if not source then
+						vape.GUIStyleName = 'Vape V4'
+						vape:ApplyGUIStyle()
+						vape:CreateNotification('GUI', 'Could not download newer.lua: '..tostring(fetchError), 7, 'alert')
+						return
+					end
+
+					writeGUIStyleFile('Modern')
+					vape.GUIStyleName = 'Modern'
+					pcall(function() vape:Save() end)
+					shared.vapereload = true
+					if shared.VapeDeveloper then
+						loadstring(readfile('newvape/loader.lua'), 'loader')()
+					else
+						assert(loadstring(shared.VapeRuntime and shared.VapeRuntime.Read('newvape/loader.lua') or readfile('newvape/loader.lua'), 'loader'))()
+					end
+				end)
+			else
+				writeGUIStyleFile('Vape V4')
+				vape.GUIStyleName = 'Vape V4'
+				vape:ApplyGUIStyle()
+			end
 		end,
-		Tooltip = 'Switch the same Vape V4 interface between the original presentation and newer rounded/glass styling.'
+		Tooltip = 'Vape V4 uses this file. Modern downloads guis/newer.lua from GitHub, caches it, and reinjects using that GUI.'
 	})
 
 	vape.GradientTheme = guipane:CreateDropdown({
