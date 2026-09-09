@@ -6849,15 +6849,18 @@ run(function()
 				return
 			end
 			local savedModules, savedOptions = {}, {}
-			local travel, target, destination, currentCharacter
-			local nextPlan, nextReload, resetAt = 0, 0, nil
+			local movementRoot, target, currentCharacter
+			local nextReload, resetAt = 0, nil
 			local stopped, respawnPending = false, false
 			local function toggle(module, enabled)
 				if module.Enabled ~= enabled then module:Toggle() end
 			end
 			local function stopTravel()
-				if travel then travel:Cancel(); travel = nil end
-				destination = nil
+				if movementRoot and movementRoot.Parent then
+					local horizontal = movementRoot.AssemblyLinearVelocity * Vector3.new(1, 0, 1)
+					movementRoot:ApplyImpulse((Vector3.zero - horizontal) * movementRoot.AssemblyMass)
+				end
+				movementRoot = nil
 			end
 			local function stopAttack()
 				toggle(aura, false)
@@ -6931,8 +6934,9 @@ run(function()
 				return ent and ent.Targetable and ent.RootPart and ent.RootPart.Parent
 					and ent.Health and ent.Health > 0 and entitylib.isVulnerable(ent)
 			end
-			local function step()
+			local function step(dt)
 				if stopped or not Bot.Enabled then return end
+				dt = math.clamp(dt or 1 / 60, 0, 0.05)
 				local main = frontlines.Main
 				local globals = main and main.globals
 				local state = globals and globals.cli_state
@@ -6987,17 +6991,21 @@ run(function()
 				local stopDistance = melee and 5 or 24
 				if delta.Magnitude > stopDistance + 1 then
 					stopAttack()
-					status = 'Moving • 120 studs/s'
-					local goal = target.RootPart.Position + delta.Unit * stopDistance
-					if not travel or travel.PlaybackState == Enum.PlaybackState.Completed
-						or now >= nextPlan and (not destination or (goal - destination).Magnitude > 2) then
-						stopTravel()
-						destination, nextPlan = goal, now + 0.15
-						local duration = (goal - root.Position).Magnitude / 120
-						travel = tweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = root.CFrame + (goal - root.Position)})
-						travel:Play()
+					status = 'Moving • Impulse 80 studs/s'
+					local direction = (target.RootPart.Position - root.Position) * Vector3.new(1, 0, 1)
+					if direction.Magnitude < 0.01 then
+						stopTravel(); status = 'Target above/below'; return
 					end
-					root.AssemblyLinearVelocity = Vector3.zero
+					-- Accelerate at up to 160 studs/s² and brake as we approach.
+					-- Horizontal impulses preserve normal gravity/jumping and collisions.
+					local remaining = math.max(0, direction.Magnitude - stopDistance)
+					local speed = math.min(80, math.sqrt(2 * 160 * remaining))
+					local velocity = root.AssemblyLinearVelocity * Vector3.new(1, 0, 1)
+					local correction = direction.Unit * speed - velocity
+					local limit = 160 * dt
+					if correction.Magnitude > limit then correction = correction.Unit * limit end
+					movementRoot = root
+					root:ApplyImpulse(correction * root.AssemblyMass)
 				else
 					stopTravel()
 					if not melee and (not gun or not gun.fire_params or gun.type == 2) then
@@ -7008,11 +7016,11 @@ run(function()
 					status = melee and 'Attacking • Killaura' or 'Attacking • Shoot'
 				end
 			end
-			Bot:Clean(runService.Heartbeat:Connect(step))
+			Bot:Clean(runService.PreSimulation:Connect(step))
 			step()
 		end,
 		ExtraText = function() return status end,
-		Tooltip = 'Tweens toward enemies at 120 studs/s, then uses Killaura or SilentAim AutoFire. Reloads while reserves remain; resets the equipped firearm when fully empty and respawns on killcam. Temporarily controls combat/movement modules and restores them on disable.'
+		Tooltip = 'Moves toward enemies with horizontal impulses up to 80 studs/s, smooth acceleration and arrival braking. Preserves gravity and collisions; no tweening or pathfinding. Uses Killaura or SilentAim AutoFire, reloads, resets when the equipped firearm is fully empty and respawns. Restores controlled modules on disable.'
 	})
 	Mode = Bot:CreateDropdown({Name = 'Attack Mode', List = {'Killaura', 'Shoot'}, Default = 'Killaura'})
 	SearchRange = Bot:CreateSlider({Name = 'Search Range', Min = 25, Max = 2000, Default = 1000, Suffix = 'studs'})
