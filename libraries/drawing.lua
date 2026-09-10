@@ -1,4 +1,4 @@
---Tenacity cached source file.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 if not get_comm_channel or not create_comm_channel then
 	return '1'
 end
