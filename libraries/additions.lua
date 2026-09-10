@@ -499,12 +499,12 @@ return function(ctx)
 	local function moduledata(item)
 		local options, ok = moduleoptions(item.obj)
 		if not ok then return nil, false end
-		local visible = type(ctx.tenacityapi.getvisible) == 'function' and select(1, ctx.tenacityapi:getvisible(item.obj)) or nil
+		local visible = type(ctx.vapeapi.getvisible) == 'function' and select(1, ctx.vapeapi:getvisible(item.obj)) or nil
 		return {
 			category = item.category,
 			enabled = item.obj.Enabled == true,
 			visible = type(visible) == 'boolean' and visible or nil,
-			bind = clean(ctx.tenacityapi:savebind(item.obj)),
+			bind = clean(ctx.vapeapi:savebind(item.obj)),
 			options = options
 		}, true
 	end
@@ -804,12 +804,12 @@ return function(ctx)
 			end
 			for name, saved in pairs(self.data.modules or {}) do
 				local item = ctx.mods[name]
-				if item and type(saved.visible) == 'boolean' and type(ctx.tenacityapi.setvisible) == 'function' then
-					local shown, result = pcall(ctx.tenacityapi.setvisible, ctx.tenacityapi, item.obj, saved.visible)
+				if item and type(saved.visible) == 'boolean' and type(ctx.vapeapi.setvisible) == 'function' then
+					local shown, result = pcall(ctx.vapeapi.setvisible, ctx.vapeapi, item.obj, saved.visible)
 					if not shown or result == false then fail(name, shown and 'visibility restore returned false' or result) end
 				end
 				if item and saved.bind ~= nil then
-					local bound, result = pcall(ctx.tenacityapi.setbind, ctx.tenacityapi, item.obj, clean(saved.bind))
+					local bound, result = pcall(ctx.vapeapi.setbind, ctx.vapeapi, item.obj, clean(saved.bind))
 					if not bound or result == false then fail(name, bound and 'bind restore returned false' or result) end
 				end
 			end
@@ -940,7 +940,7 @@ return function(ctx)
 
 	local function nativeentry(entry)
 		if not entry.persist then return nil, true end
-		local val, ok = ctx.tenacityapi:snapshotoption(entry.obj)
+		local val, ok = ctx.vapeapi:snapshotoption(entry.obj)
 		if not ok then
 			ctx.log:add('config_serialize', entry.name, val)
 			return nil, false
@@ -1021,7 +1021,7 @@ return function(ctx)
 		for _, item in ipairs(live) do
 			local entry = item.entry
 			if not entry.nativeknown then return false end
-			if entry.native ~= nil and not ctx.tenacityapi:loadoption(entry.obj, entry.native) then return false end
+			if entry.native ~= nil and not ctx.vapeapi:loadoption(entry.obj, entry.native) then return false end
 		end
 		return true
 	end
@@ -1029,7 +1029,7 @@ return function(ctx)
 	local function restorelive(live)
 		local complete = true
 		for _, item in ipairs(live) do
-			if item.data ~= nil and not ctx.tenacityapi:loadoption(item.entry.obj, item.data) then complete = false end
+			if item.data ~= nil and not ctx.vapeapi:loadoption(item.entry.obj, item.data) then complete = false end
 		end
 		return complete
 	end
@@ -1113,7 +1113,7 @@ return function(ctx)
 	local rng = Random.new()
 	local input = game:GetService('UserInputService')
 	local run = game:GetService('RunService')
-	local info = ctx.tenacity.Libraries.targetinfo
+	local info = ctx.vape.Libraries.targetinfo
 	local function finite(v)
 		return typeof(v) == 'Vector3' and v.X == v.X and v.Y == v.Y and v.Z == v.Z
 			and math.abs(v.X) < 1e8 and math.abs(v.Y) < 1e8 and math.abs(v.Z) < 1e8
@@ -1165,7 +1165,7 @@ return function(ctx)
 		if method.Value == 'Origin Scan' then
 			moved = ctx.origin:scan(pos, target, nil, hit)
 			-- The scan can return an offset endpoint. Validate the actual aim bone.
-			if moved and ctx.tenacity.Libraries.entity.Wallcheck(moved, target) then moved = nil end
+			if moved and ctx.vape.Libraries.entity.Wallcheck(moved, target) then moved = nil end
 		else
 			moved = ctx.origin:line(target, dir, hit)
 		end
@@ -1183,7 +1183,7 @@ return function(ctx)
 		original, shootFunction = nil, nil
 		local shouldResume = resume
 		resume = false
-		if shouldResume and ctx.state ~= 'unloading' and ctx.state ~= 'unloaded' and ctx.tenacity.Loaded ~= nil
+		if shouldResume and ctx.state ~= 'unloading' and ctx.state ~= 'unloaded' and ctx.vape.Loaded ~= nil
 			and silent and not silent.Enabled then silent:Toggle() end
 	end
 	local function start()
@@ -1204,7 +1204,7 @@ return function(ctx)
 				elseif not reported then
 					reported = true
 					ctx.log:add('module', 'MagicBullet', newpos)
-					task.defer(ctx.tenacity.CreateNotification, ctx.tenacity, 'MagicBullet', tostring(newpos), 6, 'alert')
+					task.defer(ctx.vape.CreateNotification, ctx.vape, 'MagicBullet', tostring(newpos), 6, 'alert')
 				end
 			end
 			return base(shootid, fire, pos, dir, ...)
@@ -1236,7 +1236,7 @@ return function(ctx)
 				if not ok then
 					stop()
 					ctx.log:add('module', 'MagicBullet', err)
-					ctx.tenacity:CreateNotification('MagicBullet', tostring(err), 6, 'alert')
+					ctx.vape:CreateNotification('MagicBullet', tostring(err), 6, 'alert')
 					task.defer(function() if mod.Enabled then mod:Toggle() end end)
 				end
 			else stop() end
@@ -1255,7 +1255,7 @@ return function(ctx)
 		erase()
 		if enabled then draw = Drawing.new('Circle') draw.NumSides = 100 draw.Thickness = 1 end
 		paint()
-		for _, obj in ipairs({color, alpha, fill}) do if obj then ctx.tenacityapi:setvisible(obj, enabled) end end
+		for _, obj in ipairs({color, alpha, fill}) do if obj then ctx.vapeapi:setvisible(obj, enabled) end end
 	end})
 	color = mod:CreateColorSlider({Name = 'Circle Color', Darker = true, Visible = false, Function = paint})
 	alpha = mod:CreateSlider({Name = 'Transparency', Min = 0, Max = 1, Default = 0.5, Decimal = 10, Darker = true, Visible = false, Function = paint})
@@ -1475,7 +1475,7 @@ return function(ctx)
 		local count = 0
 		local native = ctx.target.native == true and #files > 0
 		if native then
-			ctx.log:add('game', root, 'using the game layer already loaded by Tenacity')
+			ctx.log:add('game', root, 'using the game layer already loaded by Vape')
 		else
 			for _, path in ipairs(files) do
 				if run(path, {
@@ -1598,7 +1598,7 @@ return function(ctx)
 
 	local function list(extra)
 		local out = {}
-		local lib = ctx.tenacity and ctx.tenacity.Libraries and ctx.tenacity.Libraries.entity
+		local lib = ctx.vape and ctx.vape.Libraries and ctx.vape.Libraries.entity
 		local plr = game:GetService('Players').LocalPlayer
 		if plr and plr.Character then out[#out + 1] = plr.Character end
 		local cam = workspace.CurrentCamera
@@ -1704,7 +1704,7 @@ return function(ctx)
 			sys.states[obj] = props
 		end
 		if props[prop] then return props[prop] end
-		local ok, original = ctx.tenacityapi:getprop(obj, prop)
+		local ok, original = ctx.vapeapi:getprop(obj, prop)
 		if not ok then return nil end
 		if ctx.config and type(ctx.config.unwrapped) == 'function' then
 			original = ctx.config:unwrapped(obj, prop, original)
@@ -1730,7 +1730,7 @@ return function(ctx)
 		end
 		state.value = val
 		if sys.suspended then return true end
-		if not ctx.tenacityapi:setprop(state.obj, state.prop, val) then return false end
+		if not ctx.vapeapi:setprop(state.obj, state.prop, val) then return false end
 		if ctx.config and type(ctx.config.rewatch) == 'function' then ctx.config:rewatch(state.obj, state.prop) end
 		return true
 	end
@@ -1761,9 +1761,9 @@ return function(ctx)
 			persist = type(obj.Save) == 'function' and type(obj.Load) == 'function',
 			owners = {[patch] = true}
 		}
-		if not data.created and data.persist and type(ctx.tenacityapi.snapshotoption) == 'function' then
+		if not data.created and data.persist and type(ctx.vapeapi.snapshotoption) == 'function' then
 			local val, ok
-			if snapshot then val, ok = snapshot.value, true else val, ok = ctx.tenacityapi:snapshotoption(obj) end
+			if snapshot then val, ok = snapshot.value, true else val, ok = ctx.vapeapi:snapshotoption(obj) end
 			if not ok then return nil end
 			data.native = val
 			data.nativeknown = true
@@ -1789,7 +1789,7 @@ return function(ctx)
 		local name = obj ~= self.mod and optionname(self.mod, obj)
 		local snapshot
 		if name and not optionrecord(obj) and type(obj.Save) == 'function' and type(obj.Load) == 'function' then
-			local native, ok = ctx.tenacityapi:snapshotoption(obj)
+			local native, ok = ctx.vapeapi:snapshotoption(obj)
 			if not ok then return false end
 			snapshot = {value = native}
 		end
@@ -1895,14 +1895,14 @@ return function(ctx)
 	function patchmeta:option(kind, def)
 		if type(def) ~= 'table' or type(def.name) ~= 'string' or def.name == '' then return nil end
 		if type(self.mod.Options) ~= 'table' then return nil end
-		local keys = type(ctx.tenacityapi.optionkeys) == 'function' and ctx.tenacityapi:optionkeys(kind, def) or {def.name}
+		local keys = type(ctx.vapeapi.optionkeys) == 'function' and ctx.vapeapi:optionkeys(kind, def) or {def.name}
 		for _, name in ipairs(keys) do
 			if self.mod.Options[name] ~= nil then return nil end
 		end
 
 		local before = {}
 		for name, obj in pairs(self.mod.Options) do before[name] = obj end
-		local out = table.pack(pcall(ctx.tenacityapi.createoption, ctx.tenacityapi, self.mod, kind, def))
+		local out = table.pack(pcall(ctx.vapeapi.createoption, ctx.vapeapi, self.mod, kind, def))
 		local opt, msg = out[2], out[3]
 		for name, obj in pairs(self.mod.Options) do
 			if before[name] ~= obj then managed(self, obj, name, true, before[name]) end
@@ -1975,12 +1975,12 @@ return function(ctx)
 			if next(data.owners) == nil then
 				local removed = true
 				if data.created then
-					removed = ctx.tenacityapi:removeoption(data.mod, data.name, data.obj)
+					removed = ctx.vapeapi:removeoption(data.mod, data.name, data.obj)
 					if removed and data.previous ~= nil and data.mod.Options[data.name] == nil then
 						data.mod.Options[data.name] = data.previous
 					end
 				elseif data.native ~= nil then
-					removed = ctx.tenacityapi:loadoption(data.obj, data.native)
+					removed = ctx.vapeapi:loadoption(data.obj, data.native)
 				end
 				ok = removed and ok
 				if removed then
@@ -2025,7 +2025,7 @@ return function(ctx)
 		for i = #self.order, 1, -1 do ok = removepatch(self.order[i]) and ok end
 		for _, props in pairs(self.states) do
 			for _, state in pairs(props) do
-				if not ctx.tenacityapi:setprop(state.obj, state.prop, state.original) then ok = false end
+				if not ctx.vapeapi:setprop(state.obj, state.prop, state.original) then ok = false end
 			end
 		end
 		if ok then table.clear(self.states) end
@@ -2038,7 +2038,7 @@ return function(ctx)
 		local ok = true
 		for _, props in pairs(self.states) do
 			for _, state in pairs(props) do
-				if not ctx.tenacityapi:setprop(state.obj, state.prop, state.original) then ok = false end
+				if not ctx.vapeapi:setprop(state.obj, state.prop, state.original) then ok = false end
 				if ctx.config and type(ctx.config.rewatch) == 'function' then ctx.config:rewatch(state.obj, state.prop) end
 			end
 		end
@@ -2060,7 +2060,7 @@ return function(ctx)
 		for _, props in pairs(self.states) do
 			for _, state in pairs(props) do
 				if rebase then
-					local got, val = ctx.tenacityapi:getprop(state.obj, state.prop)
+					local got, val = ctx.vapeapi:getprop(state.obj, state.prop)
 					if got then
 						if ctx.config and type(ctx.config.unwrapped) == 'function' then
 							val = ctx.config:unwrapped(state.obj, state.prop, val)
@@ -2099,7 +2099,7 @@ return function(ctx)
 			local first = sys.map[id].path or 'runtime'
 			error('duplicate patch id '..id..' (first declared by '..first..')', 0)
 		end
-		local mod = self.tenacityapi:find(name, cat)
+		local mod = self.vapeapi:find(name, cat)
 		if not mod then
 			if self.loading and self.loading.required then error('required patch target missing: '..name, 0) end
 			return nil
@@ -2177,11 +2177,11 @@ return function(ctx)
 	function prof:select(name)
 		name = canonical(name)
 		if not name then return false end
-		local tenacity = ctx.tenacity
-		if ctx.tenacityapi.realprofile and type(tenacity.Save) == 'function' and type(tenacity.Load) == 'function' then
+		local vape = ctx.vape
+		if ctx.vapeapi.realprofile and type(vape.Save) == 'function' and type(vape.Load) == 'function' then
 			local ok, msg = pcall(function()
-				tenacity:Save(name)
-				tenacity:Load(true)
+				vape:Save(name)
+				vape:Load(true)
 			end)
 			if not ok then
 				ctx.log:add('profile', name, msg)
@@ -2192,7 +2192,7 @@ return function(ctx)
 		return self:switch(name)
 	end
 
-	prof:set(ctx.tenacityapi:profile())
+	prof:set(ctx.vapeapi:profile())
 	ctx.profile = prof
 	function ctx:setprofile(name)
 		return self.profile:select(name)
@@ -2211,14 +2211,14 @@ return function(ctx)
 	end
 
 	function ctx:find(name, cat)
-		return self.tenacityapi:find(name, cat)
+		return self.vapeapi:find(name, cat)
 	end
 
 	function ctx:drop(name)
 		local data = self.mods[name]
 		if not data then return false end
 		if not self.patchsys:dropmod(data.obj) then return false end
-		if not self.tenacityapi:remove(name, data.obj) then return false end
+		if not self.vapeapi:remove(name, data.obj) then return false end
 		if self.config and type(self.config.forgetmodule) == 'function' then self.config:forgetmodule(data.obj) end
 		self.mods[name] = nil
 		for i = #self.modorder, 1, -1 do
@@ -2232,7 +2232,7 @@ return function(ctx)
 
 	function ctx:module(cat, def)
 		cat = category(cat)
-		if not cat then error('unsupported Tenacity category', 0) end
+		if not cat then error('unsupported Vape category', 0) end
 		if type(def) ~= 'table' then error('module definition must be a table', 0) end
 		local name = def.name or def.Name
 		if type(name) ~= 'string' or name == '' then error('module name is required', 0) end
@@ -2241,38 +2241,38 @@ return function(ctx)
 			error('module category does not match its manifest', 0)
 		end
 
-		self.tenacityapi:reindex()
-		local live, _, kind = self.tenacityapi:liveslot(name)
-		if kind == 'category' then error('module name collides with a Tenacity category: '..name, 0) end
-		local old = self.tenacityapi:find(name)
-		if live ~= nil and not old then error('Tenacity registry name is already in use: '..name, 0) end
+		self.vapeapi:reindex()
+		local live, _, kind = self.vapeapi:liveslot(name)
+		if kind == 'category' then error('module name collides with a Vape category: '..name, 0) end
+		local old = self.vapeapi:find(name)
+		if live ~= nil and not old then error('Vape registry name is already in use: '..name, 0) end
 		if old then
-			if def.replace ~= true then error('Tenacity module already exists: '..name, 0) end
-			if old.Enabled then error('an enabled Tenacity module cannot be replaced safely: '..name, 0) end
+			if def.replace ~= true then error('Vape module already exists: '..name, 0) end
+			if old.Enabled then error('an enabled Vape module cannot be replaced safely: '..name, 0) end
 			local id = 'replace:'..tostring(load.path or 'runtime')..':'..name
 			local patch = self:patch(name, id, cat)
 			if not patch then error('module replacement could not start: '..name, 0) end
 			local func = def.func or def.Function
 			if func and not patch:set('Function', func) then
-				error('Tenacity callback is unavailable for replacement: '..name, 0)
+				error('Vape callback is unavailable for replacement: '..name, 0)
 			end
 			local tooltip = def.tooltip or def.Tooltip
 			if tooltip ~= nil and not patch:set('Tooltip', tooltip) then
-				error('Tenacity tooltip is unavailable for replacement: '..name, 0)
+				error('Vape tooltip is unavailable for replacement: '..name, 0)
 			end
 			local extra = def.extratext or def.ExtraText
 			if extra ~= nil then patch:set('ExtraText', extra) end
 			return old
 		end
 
-		local spec = self.tenacityapi:spec(def)
+		local spec = self.vapeapi:spec(def)
 		spec.Name = name
 		local func = def.func or def.Function or function() end
 		spec.Function = function(on)
 			if self.config then self.config:schedule() end
 			return func(on)
 		end
-		local mod = self.tenacityapi:create(cat, spec)
+		local mod = self.vapeapi:create(cat, spec)
 		local data = {
 			name = name,
 			category = cat,
@@ -2296,7 +2296,7 @@ return function(ctx)
 		local ok = self.patchsys:rollback(mark.patches)
 		for i = #self.modorder, mark.mods + 1, -1 do
 			local data = self.modorder[i]
-			if self.tenacityapi:remove(data.name, data.obj) then
+			if self.vapeapi:remove(data.name, data.obj) then
 				self.mods[data.name] = nil
 				table.remove(self.modorder, i)
 			else
@@ -2371,16 +2371,16 @@ return function(ctx)
 	function ctx:selfcheck()
 		local cats = {}
 		for _, cat in ipairs(self.cats.order) do
-			cats[cat] = self.tenacityapi:category(cat) ~= nil
+			cats[cat] = self.vapeapi:category(cat) ~= nil
 		end
 		return {
-			tenacity = self.tenacity == self.tenacityapi.object and self.tenacity.Loaded ~= nil,
-			readiness = self.tenacityapi.readiness,
-			adapter = type(self.tenacityapi.capabilities) == 'function' and self.tenacityapi:capabilities() or {},
+			vape = self.vape == self.vapeapi.object and self.vape.Loaded ~= nil,
+			readiness = self.vapeapi.readiness,
+			adapter = type(self.vapeapi.capabilities) == 'function' and self.vapeapi:capabilities() or {},
 			categories = cats,
 			filesystem = table.clone(self.store.fs),
 			profile = self.profile and self.profile.name or 'default',
-			registry = type(self.tenacity.Modules) == 'table',
+			registry = type(self.vape.Modules) == 'table',
 			patch_restore = type(self.patchsys.restore) == 'function',
 			config = self.config and self.config:check() or false
 		}
@@ -2405,12 +2405,12 @@ return function(ctx)
 				self.log:add('config_write', nil, ok and 'cleanup save returned false' or saved)
 			end
 		end
-		stage('cleanup', function() self.tenacityapi:unhook() return true end)
+		stage('cleanup', function() self.vapeapi:unhook() return true end)
 		stage('patch_cleanup', function() return self.patchsys:restore() end)
 		if self.config and self.config.unwatch then stage('cleanup', function() self.config:unwatch() return true end) end
 		for i = #self.modorder, 1, -1 do
 			local data = self.modorder[i]
-			local ok, removed = pcall(self.tenacityapi.remove, self.tenacityapi, data.name, data.obj)
+			local ok, removed = pcall(self.vapeapi.remove, self.vapeapi, data.name, data.obj)
 			if ok and removed then
 				self.mods[data.name] = nil
 				table.remove(self.modorder, i)
@@ -2424,8 +2424,8 @@ return function(ctx)
 		self.reason = reason
 		self.state = complete and 'unloaded' or 'unload_failed'
 		local env = (getgenv and getgenv()) or _G
-		if env.TenacityTweaker == self and (complete or reason == 'reload' or reason == 'startup failure') then
-			env.TenacityTweaker = nil
+		if env.VapeTweaker == self and (complete or reason == 'reload' or reason == 'startup failure') then
+			env.VapeTweaker = nil
 		end
 		return complete
 	end
@@ -2587,12 +2587,12 @@ return function(ctx)
 	end
 
 	function ctx:resolvetarget()
-		local tenacity = self.tenacity
+		local vape = self.vape
 		local gameid = game.GameId
 		local placeid = game.PlaceId
-		local buildid = tenacity.Place or placeid
-		local nativefile = file('tenacity/games/'..tostring(placeid)..'.lua')
-		local independent = type(shared) == 'table' and shared.TenacityIndependent == true
+		local buildid = vape.Place or placeid
+		local nativefile = file('newvape/games/'..tostring(placeid)..'.lua')
+		local independent = type(shared) == 'table' and shared.VapeIndependent == true
 		local native = not independent and (buildid ~= placeid or nativefile == true)
 		local mode = independent and 'independent' or native and 'game' or 'universal'
 
@@ -2603,18 +2603,18 @@ return function(ctx)
 			buildid = buildid,
 			native = native,
 			native_known = buildid ~= placeid or nativefile ~= nil,
-			gui = self.tenacityapi.flavor or 'unknown',
-			version = tenacity.Version,
-			readiness = self.tenacityapi.readiness
+			gui = self.vapeapi.flavor or 'unknown',
+			version = vape.Version,
+			readiness = self.vapeapi.readiness
 		}
 		return self.target
 	end
 end
 ]==]
-sources['core/tenacityapi.lua'] = [==[
+sources['core/vapeapi.lua'] = [==[
 return function(ctx)
-	local tenacity = ctx.tenacity
-	local api = {object = tenacity, flavor = 'new', readiness = 'native modules initialized', realprofile = true}
+	local vape = ctx.vape
+	local api = {object = vape, flavor = 'new', readiness = 'native modules initialized', realprofile = true}
 	local specs = setmetatable({}, {__mode = 'k'})
 	local propertyMap = {name='Name', func='Function', tooltip='Tooltip', extratext='ExtraText', default='Default',
 		list='List', min='Min', max='Max', decimal='Decimal', suffix='Suffix', darker='Darker', visible='Visible'}
@@ -2644,22 +2644,22 @@ return function(ctx)
 		end
 		return out
 	end
-	function api:category(cat) return tenacity.Categories[ctx.cats.names[tostring(cat):lower()] or cat] end
+	function api:category(cat) return vape.Categories[ctx.cats.names[tostring(cat):lower()] or cat] end
 	function api:reindex() return true end
 	function api:liveslot(name)
-		local obj = tenacity.Modules[name]
+		local obj = vape.Modules[name]
 		if obj then return obj, obj.Category, 'module' end
-		obj = tenacity.Categories[name]
+		obj = vape.Categories[name]
 		if obj then return obj, name, 'category' end
 	end
 	function api:find(name, cat)
-		local obj = tenacity.Modules[name]
-		if not obj and tenacity.Auxiliary and tenacity.Auxiliary.Modules then obj = tenacity.Auxiliary.Modules[name] end
+		local obj = vape.Modules[name]
+		if not obj and vape.Legit and vape.Legit.Modules then obj = vape.Legit.Modules[name] end
 		if obj and cat and tostring(obj.Category):lower() ~= tostring(ctx.cats.names[tostring(cat):lower()] or cat):lower() then return end
 		return obj
 	end
 	function api:create(cat, spec)
-		local category = assert(self:category(cat), 'Tenacity category unavailable: '..tostring(cat))
+		local category = assert(self:category(cat), 'Vape category unavailable: '..tostring(cat))
 		local obj = category:CreateModule(spec)
 		specs[obj] = spec
 		local nativeLoad = obj.Load
@@ -2678,10 +2678,10 @@ return function(ctx)
 	function api:remove(name, expected)
 		if self:find(name) ~= expected then return false end
 		if expected.Enabled then expected:Toggle() end
-		tenacity:Remove(name)
+		vape:Remove(name)
 		return self:find(name) == nil
 	end
-	function api:profile() return tenacity.Profile or 'default' end
+	function api:profile() return vape.Profile or 'default' end
 	function api:savebind(obj)
 		local bind = obj.Bind or obj
 		if type(bind.Save) ~= 'function' then return {} end
@@ -2753,7 +2753,7 @@ return function(ctx)
 	end
 	function api:capabilities() return {native = true, profiles = true, options = true, patches = true} end
 	function api:hook()
-		local save, load = tenacity.Save, tenacity.Load
+		local save, load = vape.Save, vape.Load
 		self.oldSave, self.oldLoad = save, load
 		self.saveWrap = function(obj, ...)
 			local out = table.pack(ctx.config:nativesave(save, obj, ...))
@@ -2769,13 +2769,13 @@ return function(ctx)
 			ctx.state = 'loaded'
 			return table.unpack(out, 1, out.n)
 		end
-		tenacity.Save, tenacity.Load = self.saveWrap, self.loadWrap
+		vape.Save, vape.Load = self.saveWrap, self.loadWrap
 	end
 	function api:unhook()
-		if tenacity.Save == self.saveWrap then tenacity.Save = self.oldSave end
-		if tenacity.Load == self.loadWrap then tenacity.Load = self.oldLoad end
+		if vape.Save == self.saveWrap then vape.Save = self.oldSave end
+		if vape.Load == self.loadWrap then vape.Load = self.oldLoad end
 	end
-	ctx.tenacityapi = api
+	ctx.vapeapi = api
 end
 ]==]
 sources['core/weapon.lua'] = [==[
@@ -2793,7 +2793,7 @@ return function(ctx)
 	ctx.weapon = api
 end
 ]==]
-sources['src/modules/movement/fakelag.lua'] = [==[
+sources['src/modules/blatant/fakelag.lua'] = [==[
 return function(ctx)
 	local mod
 	local meth
@@ -2844,9 +2844,9 @@ return function(ctx)
 	end
 
 	local function notice()
-		local tenacity = ctx.tenacityapi and ctx.tenacityapi.object
-		if type(tenacity) == 'table' and type(tenacity.CreateNotification) == 'function' then
-			pcall(tenacity.CreateNotification, tenacity, 'FakeLag', 'The selected method requires an executor with Raknet support.', 10, 'warning')
+		local vape = ctx.vapeapi and ctx.vapeapi.object
+		if type(vape) == 'table' and type(vape.CreateNotification) == 'function' then
+			pcall(vape.CreateNotification, vape, 'FakeLag', 'The selected method requires an executor with Raknet support.', 10, 'warning')
 		end
 	end
 
@@ -3055,14 +3055,14 @@ return function(ctx)
 	local function fail()
 		stop()
 		if meth.Value == 'Raknet' then notice() else
-			ctx.tenacity:CreateNotification('FakeLag', 'Local replication lag is unavailable on this executor.', 6, 'alert')
+			ctx.vape:CreateNotification('FakeLag', 'Local replication lag is unavailable on this executor.', 6, 'alert')
 		end
 		task.defer(function()
 			if mod.Enabled then mod:Toggle() end
 		end)
 	end
 
-	mod = ctx:module('movement', {
+	mod = ctx:module('blatant', {
 		name = 'FakeLag',
 		tooltip = 'Simulates fluctuating network delay using local replication or Raknet packets.',
 		extratext = function()
@@ -3108,7 +3108,7 @@ return function(ctx)
 	ctx:clean(stop)
 end
 ]==]
-sources['src/modules/movement/lagswitch.lua'] = [==[
+sources['src/modules/blatant/lagswitch.lua'] = [==[
 return function(ctx)
 	local mod
 	local meth
@@ -3154,9 +3154,9 @@ return function(ctx)
 	end
 
 	local function notice()
-		local tenacity = ctx.tenacityapi and ctx.tenacityapi.object
-		if type(tenacity) == 'table' and type(tenacity.CreateNotification) == 'function' then
-			pcall(tenacity.CreateNotification, tenacity, 'LagSwitch', 'The selected method requires an executor with Raknet support.', 10, 'warning')
+		local vape = ctx.vapeapi and ctx.vapeapi.object
+		if type(vape) == 'table' and type(vape.CreateNotification) == 'function' then
+			pcall(vape.CreateNotification, vape, 'LagSwitch', 'The selected method requires an executor with Raknet support.', 10, 'warning')
 		end
 	end
 
@@ -3329,14 +3329,14 @@ return function(ctx)
 	local function fail()
 		stop()
 		if meth.Value == 'Raknet' then notice() else
-			ctx.tenacity:CreateNotification('LagSwitch', 'Local replication lag is unavailable on this executor.', 6, 'alert')
+			ctx.vape:CreateNotification('LagSwitch', 'Local replication lag is unavailable on this executor.', 6, 'alert')
 		end
 		task.defer(function()
 			if mod.Enabled then mod:Toggle() end
 		end)
 	end
 
-	mod = ctx:module('movement', {
+	mod = ctx:module('blatant', {
 		name = 'LagSwitch',
 		tooltip = 'Temporarily stalls network traffic using Raknet or local replication lag.',
 		extratext = function()
@@ -3379,7 +3379,7 @@ return function(ctx)
 		List = {'OneShot', 'Toggle'},
 		Default = 'OneShot',
 		Function = function(val)
-			if time then ctx.tenacityapi:setvisible(time, val == 'OneShot') end
+			if time then ctx.vapeapi:setvisible(time, val == 'OneShot') end
 			if not mod.Enabled then return end
 			stop()
 			if meth.Value == 'Raknet' and not ready() then
@@ -3399,12 +3399,12 @@ return function(ctx)
 		Suffix = 's'
 	})
 
-	ctx.tenacityapi:setvisible(time, mode.Value == 'OneShot')
+	ctx.vapeapi:setvisible(time, mode.Value == 'OneShot')
 
 	ctx:clean(stop)
 end
 ]==]
-sources['src/modules/movement/manifest.lua'] = [==[
+sources['src/modules/blatant/manifest.lua'] = [==[
 return {
 	files = {
 		'fakelag.lua',
@@ -3431,8 +3431,8 @@ return function(ctx)
 	local alpha
 	local fill
 	local draw
-	local lib = ctx.tenacity and ctx.tenacity.Libraries and ctx.tenacity.Libraries.entity
-	local info = ctx.tenacity and ctx.tenacity.Libraries and ctx.tenacity.Libraries.targetinfo
+	local lib = ctx.vape and ctx.vape.Libraries and ctx.vape.Libraries.entity
+	local info = ctx.vape and ctx.vape.Libraries and ctx.vape.Libraries.targetinfo
 	local rng = Random.new()
 	local input = game:GetService('UserInputService')
 	local run = game:GetService('RunService')
@@ -4007,9 +4007,9 @@ return function(ctx)
 		if msg == last and now - stamp < 30 then return end
 		last = msg
 		stamp = now
-		local tenacity = ctx.tenacityapi and ctx.tenacityapi.object
-		if type(tenacity) == 'table' and type(tenacity.CreateNotification) == 'function' then
-			pcall(tenacity.CreateNotification, tenacity, 'MagicBullet', msg, 6, 'warning')
+		local vape = ctx.vapeapi and ctx.vapeapi.object
+		if type(vape) == 'table' and type(vape.CreateNotification) == 'function' then
+			pcall(vape.CreateNotification, vape, 'MagicBullet', msg, 6, 'warning')
 		end
 	end
 
@@ -4035,7 +4035,7 @@ return function(ctx)
 			else
 				paint()
 				clear()
-				if ctx.state ~= 'unloading' and ctx.tenacity.Loaded ~= nil and resume and type(silent) == 'table' and not silent.Enabled and type(silent.Toggle) == 'function' then pcall(silent.Toggle, silent) end
+				if ctx.state ~= 'unloading' and ctx.vape.Loaded ~= nil and resume and type(silent) == 'table' and not silent.Enabled and type(silent.Toggle) == 'function' then pcall(silent.Toggle, silent) end
 				resume = false
 			end
 		end
@@ -4148,29 +4148,29 @@ return {
 }
 ]==]
 sources['src/modules/manifest.lua'] = [==[
-return {categories = {'combat', 'movement'}}
+return {categories = {'combat', 'blatant'}}
 ]==]
 sources['src/patches/manifest.lua'] = [==[
 return {categories = {}}
 ]==]
-return function(tenacity)
-	local existing = tenacity.Libraries.additions
+return function(vape)
+	local existing = vape.Libraries.additions
 	if existing and existing.state ~= 'unloaded' then return existing end
 	local ctx = {
-		name = 'Tenacity Additions', version = '1.0', state = 'starting', started = os.clock(), tenacity = tenacity,
+		name = 'Vape Additions', version = '1.0', state = 'starting', started = os.clock(), vape = vape,
 		cfg = {debug = false, strict = true, debounce = 0.35},
 		mods = {}, modorder = {}, patchopts = {}, events = {}, layers = {},
-		cats = {names = {combat='Combat', movement='Movement', render='Render', misc='Misc', exploit='Exploit', scripts='Scripts'},
-			order = {'combat', 'movement', 'render', 'misc', 'exploit', 'scripts'}},
-		frontlines = tenacity.Libraries.frontlines,
-		loader = {root = 'tenacity/additions', games = false, build = 'embedded-1', errors = {}, stats = {compiled = 0}}
+		cats = {names = {combat='Combat', blatant='Blatant', render='Render', utility='Utility', world='World', legit='Legit'},
+			order = {'combat', 'blatant', 'render', 'utility', 'world', 'legit'}},
+		frontlines = vape.Libraries.frontlines,
+		loader = {root = 'newvape/additions', games = false, build = 'embedded-1', errors = {}, stats = {compiled = 0}}
 	}
 	local cache = {}
 	function ctx.loader:try(path)
 		local source = sources[path]
 		if not source then return false, 'No bundled file: '..tostring(path), 'missing' end
 		if cache[path] == nil then
-			local fn, err = loadstring(source, 'Tenacity additions/'..path)
+			local fn, err = loadstring(source, 'Vape additions/'..path)
 			if not fn then return false, err, 'compile' end
 			local ok, value = pcall(fn)
 			if not ok then return false, value, 'runtime' end
@@ -4185,7 +4185,7 @@ return function(tenacity)
 		return value
 	end
 	local ok, err = pcall(function()
-		for _, name in ipairs({'log', 'clean', 'tenacityapi', 'storage', 'target', 'profile', 'patch', 'runtime', 'weapon', 'origin', 'aim', 'network'}) do
+		for _, name in ipairs({'log', 'clean', 'vapeapi', 'storage', 'target', 'profile', 'patch', 'runtime', 'weapon', 'origin', 'aim', 'network'}) do
 			ctx.loader:run('core/'..name..'.lua')(ctx)
 		end
 		ctx:resolvetarget()
@@ -4194,19 +4194,19 @@ return function(tenacity)
 		ctx:loadlayers()
 		assert(ctx.config:capture(), 'Could not capture additional module defaults')
 		ctx.config:watch()
-		ctx.tenacityapi:hook()
+		ctx.vapeapi:hook()
 		ctx.state = 'ready'
 	end)
 	if not ok then
 		if ctx.unload then pcall(ctx.unload, ctx, 'startup failure') elseif ctx.bin then ctx.bin:run() end
 		error(err, 0)
 	end
-	tenacity.Libraries.additions = ctx
+	vape.Libraries.additions = ctx
 	local env = (getgenv and getgenv()) or _G
-	if env.TenacityTweaker == nil then env.TenacityTweaker = ctx end
-	tenacity:Clean(function()
+	if env.VapeTweaker == nil then env.VapeTweaker = ctx end
+	vape:Clean(function()
 		ctx:unload('uninject')
-		if tenacity.Libraries.additions == ctx then tenacity.Libraries.additions = nil end
+		if vape.Libraries.additions == ctx then vape.Libraries.additions = nil end
 	end)
 	return ctx
 end
