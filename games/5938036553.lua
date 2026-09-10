@@ -8,8 +8,8 @@
 -- Local customization: additive Legit speed (+1.7 studs/second).
 local loadstring = function(...)
 	local res, err = loadstring(...)
-	if err and vape then
-		vape:CreateNotification('Vape', 'Failed to load : '..err, 30, 'alert')
+	if err then
+		warn('[Vape] Failed to load: '..tostring(err))
 	end
 	return res
 end
@@ -76,7 +76,7 @@ local debrisService = cloneref(game:GetService('Debris'))
 local gameCamera = workspace.CurrentCamera
 local lplr = playersService.LocalPlayer
 
-local vape = shared.vape
+local vape = assert(shared.vape, 'Vape API is not initialized yet')
 local impactVisuals = assert(loadstring(downloadFile('newvape/libraries/frontlines-effects.lua'), 'Frontlines effects'))()(vape)
 local entitylib = vape.Libraries.entity
 local whitelist = vape.Libraries.whitelist
@@ -85,8 +85,14 @@ local targetinfo = vape.Libraries.targetinfo
 local sessioninfo = vape.Libraries.sessioninfo
 local getvapeasset = vape.Libraries.getvapeasset
 local drawingactor = loadstring(downloadFile('newvape/libraries/drawing.lua'), 'drawing')(...)
-local function notif(...)
-	return vape:CreateNotification(...)
+local function notif(title, text, duration, icon)
+	-- Notification settings may not be initialized yet during the Frontlines actor handoff.
+	-- Never let a cosmetic notification abort the whole game module.
+	if vape and type(vape.CreateNotification) == 'function' then
+		local ok, result = pcall(vape.CreateNotification, vape, title, text, duration, icon)
+		if ok then return result end
+	end
+	warn(string.format('[%s] %s', tostring(title or 'Vape'), tostring(text or '')))
 end
 
 if not select(1, ...) and game.PlaceId == 5938036553 then
