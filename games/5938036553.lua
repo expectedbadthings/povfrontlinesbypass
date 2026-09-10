@@ -4646,32 +4646,6 @@ run(function()
 	})
 end)
 run(function()
- local createCuteVisuals = assert(loadstring(downloadFile('newvape/libraries/cutevisuals.lua'), 'CuteVisuals'))()
- createCuteVisuals(vape, {
-  GetPosition = function()
-   local character = entitylib.isAlive and entitylib.character
-   local root = character and (character.RootPart or character.HumanoidRootPart)
-   if not root or not root.Parent then return nil, false end
-   local velocity = root.AssemblyLinearVelocity
-   return root.Position - Vector3.new(0, 2.5, 0), Vector3.new(velocity.X, 0, velocity.Z).Magnitude > 0.1
-  end,
-  ConnectBurst = function(module, emit)
-   local lastHit, lastTime
-   module:Clean(frontlines.LocalHitEvent.Event:Connect(function(_, position)
-    lastHit, lastTime = position, os.clock()
-   end))
-   module:Clean(frontlines.KillEffectEvent.Event:Connect(function()
-    if lastHit and os.clock() - lastTime < 3 then
-     emit(lastHit)
-    elseif entitylib.isAlive and entitylib.character.RootPart then
-     emit(entitylib.character.RootPart.Position)
-    end
-    lastHit, lastTime = nil, nil
-   end))
-  end
- })
-end)
-run(function()
 	local AmmoHUD
 	local LowAmmo, ShowReserve, TextSize, VerticalPosition, Background
 
