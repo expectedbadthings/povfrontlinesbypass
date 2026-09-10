@@ -1,150 +1,123 @@
--- Initialize the UI and only the modules required by this session.
+-- TenacityForRoblox session bootstrap.
 if not game:IsLoaded() then game.Loaded:Wait() end
+if shared.Tenacity then pcall(function() shared.Tenacity:Uninject() end) end
 
-if shared.vape then shared.vape:Uninject() end
+local core
+local baseLoad
+local rawLoadstring=loadstring
+local function compile(source,name)
+    local chunk,err=rawLoadstring(source,name)
+    if not chunk then
+        warn('[Tenacity] Compile failed: '..tostring(err))
+        if core then core:CreateNotification('Tenacity','Failed to compile '..tostring(name)..': '..tostring(err),30,'alert') end
+        error(err,2)
+    end
+    return chunk
+end
 
-local vape
-local baseVapeLoad
-local loadstring = function(...)
-	local res, err = loadstring(...)
-	if err then
-		warn('Vape failed to compile: '..tostring(err))
-		if vape then
-			vape:CreateNotification('Vape', 'Failed to load : '..err, 30, 'alert')
-		end
-		error(err, 2)
-	end
-	return res
+local queue_on_teleport=queue_on_teleport or function() end
+local isfile=isfile or function(file)
+    local ok,value=pcall(readfile,file)
+    return ok and value~=nil and value~=''
 end
-local queue_on_teleport = queue_on_teleport or function() end
-local isfile = isfile or function(file)
-	local suc, res = pcall(function()
-		return readfile(file)
-	end)
-	return suc and res ~= nil and res ~= ''
-end
-local cloneref = cloneref or function(obj)
-	return obj
-end
-local playersService = cloneref(game:GetService('Players'))
-local gui = 'new'
-local runtime = shared.VapeRuntime
+local cloneref=cloneref or function(value) return value end
+local Players=cloneref(game:GetService('Players'))
+
+local runtime=shared.TenacityRuntime
 if not runtime then
-	-- Direct main.lua launches use the installed runtime too.
-	runtime = assert(loadstring(readfile('newvape/libraries/runtime.lua'), 'runtime'))()
-	shared.VapeRuntime = runtime
+    runtime=assert(compile(readfile('tenacity/libraries/runtime.lua'),'@tenacity/libraries/runtime.lua'))()
+    shared.TenacityRuntime=runtime
 end
-local downloadFile = runtime.Read
-local loading = loadstring(downloadFile('newvape/guis/loading.lua'), 'Vape loading screen')()
-loading:SetLoadingProgress(0.1, 'Loading interface')
-local preload = {'newvape/guis/new.lua'}
-if not shared.VapeIndependent then preload[#preload + 1] = 'newvape/games/universal.lua' end
+local read=runtime.Read
+
+local loading=compile(read('tenacity/guis/loading.lua'),'@tenacity/guis/loading.lua')()
+loading:SetLoadingProgress(.08,'Starting Tenacity')
+
+local preload={'tenacity/guis/tenacity.lua','tenacity/libraries/gui-api.lua'}
+if not shared.TenacityIndependent then preload[#preload+1]='tenacity/games/universal.lua' end
 runtime.Prefetch(preload)
-local function finishLoading()
-	vape.Init = nil
-	loading:SetLoadingProgress(0.85, 'Applying profile')
+loading:SetLoadingProgress(.22,'Building interface')
 
-	-- Frontlines can replace vape.Load during the actor bootstrap.
-	-- Some executors lose that temporary method during the handoff, so keep
-	-- the GUI's original Load function as a guaranteed fallback.
-	local loadMethod = vape and vape.Load
-	if type(loadMethod) ~= 'function' then
-		loadMethod = baseVapeLoad
-		if type(loadMethod) == 'function' then
-			vape.Load = loadMethod
-		end
-	end
+core=compile(read('tenacity/guis/tenacity.lua'),'@tenacity/guis/tenacity.lua')()
+assert(type(core)=='table','Tenacity GUI did not return its core object.')
+local expectedBuild='r12-sidegui-controls'
+assert(core.Build==expectedBuild, 'Stale Tenacity GUI detected (got '..tostring(core.Build)..', expected '..expectedBuild..'). Install main.lua, loader.lua and guis/tenacity.lua from the same release.')
+assert(type(core.Load)=='function','Tenacity GUI is missing core:Load().')
+baseLoad=core.Load
+shared.Tenacity=core
 
-	if type(loadMethod) ~= 'function' then
-		error('[illusionHD] GUI loaded without a usable Load method.', 0)
-	end
+local apiFactory=compile(read('tenacity/libraries/gui-api.lua'),'@tenacity/libraries/gui-api.lua')()
+core.API=apiFactory(core)
+shared.TenacityAPI=core.API
+loading:SetTheme(core.Libraries.uipallet,core.GUIColor)
 
-	-- ADDITIONAL_MODULES_BOOTSTRAP: skip the outer Frontlines actor handoff.
-	if loadMethod == baseVapeLoad and not vape.Libraries.additions then
-		local ok, err = pcall(function()
-			local init = loadstring(downloadFile('newvape/libraries/additions.lua'), 'Vape additions')()
-			init(vape)
-		end)
-		if not ok then vape:CreateNotification('Additional modules', tostring(err), 12, 'alert') end
-		loadMethod = vape.Load
-	end
-	loadMethod(vape)
-	loading:SetLoadingProgress(1, 'Your session is ready')
-	if vape.HideLoadingScreen then
-		vape:HideLoadingScreen()
-	end
-	task.spawn(function()
-		repeat
-			task.wait(30)
-			if shared.vape ~= vape or not vape.Loaded then break end
-			vape:Save()
-		until not vape.Loaded
-	end)
+core.HideLoadingScreen=function(_,immediate) loading:HideLoadingScreen(immediate) end
+core:Clean(function() loading:HideLoadingScreen(true) end)
 
-	local teleportedServers
-	vape:Clean(playersService.LocalPlayer.OnTeleport:Connect(function()
-		if (not teleportedServers) and (not shared.VapeIndependent) then
-			teleportedServers = true
-			local teleportScript = [[
-				shared.vapereload = true
-				local cached, source = pcall(readfile, 'newvape/loader.lua')
-				if cached then
-					assert(loadstring(source, 'loader'))()
-				else
-					loadstring(game:HttpGet('https://raw.githubusercontent.com/expectedbadthings/povfrontlinesbypass/'..readfile('newvape/profiles/commit.txt')..'/loader.lua', true), 'loader')()
-				end
-			]]
-			if shared.VapeDeveloper then
-				teleportScript = 'shared.VapeDeveloper = true\n'..teleportScript
-			end
-			if shared.VapeCustomProfile then
-				teleportScript = 'shared.VapeCustomProfile = '..string.format('%q', shared.VapeCustomProfile)..'\n'..teleportScript
-			end
-			vape:Save()
-			queue_on_teleport(teleportScript)
-		end
-	end))
+local function finish()
+    core.Init=nil
+    loading:SetLoadingProgress(.82,'Applying profile')
 
-	if not shared.vapereload then
-		if not vape.Categories then return end
-		if vape.Settings.GUI.Options['GUI bind indicator'].Enabled then
-			vape:CreateNotification('Finished Loading', vape.VapeButton and 'Press the button in the top right to open GUI' or 'Press '..table.concat(vape.GUIBind.Keys, ' + '):upper()..' to open GUI', 5)
-		end
-	end
+    local loadMethod=type(core.Load)=='function' and core.Load or baseLoad
+    if type(loadMethod)~='function' then error('[Tenacity] No usable profile loader.',0) end
+
+    if loadMethod==baseLoad and not core.Libraries.additions then
+        local ok,err=pcall(function()
+            local init=compile(read('tenacity/libraries/additions.lua'),'@tenacity/libraries/additions.lua')()
+            init(core)
+        end)
+        if not ok then core:CreateNotification('Additional modules',tostring(err),12,'alert') end
+        loadMethod=core.Load
+    end
+
+    loadMethod(core)
+    loading:SetLoadingProgress(1,'Tenacity is ready')
+    core:HideLoadingScreen()
+
+    task.spawn(function()
+        repeat
+            task.wait(30)
+            if shared.Tenacity~=core or not core.Loaded then break end
+            core:Save()
+        until not core.Loaded
+    end)
+
+    local queued=false
+    core:Clean(Players.LocalPlayer.OnTeleport:Connect(function()
+        if queued or shared.TenacityIndependent then return end
+        queued=true
+        core:Save()
+        local teleportScript=[[
+            shared.TenacityReload=true
+            local ok,source=pcall(readfile,'tenacity/loader.lua')
+            if ok then
+                assert(loadstring(source,'@tenacity/loader.lua'))()
+            else
+                assert(loadstring(game:HttpGet('https://raw.githubusercontent.com/expectedbadthings/TenacityForRoblox/main/loader.lua',true),'@TenacityForRoblox/loader.lua'))()
+            end
+        ]]
+        if shared.TenacityDeveloper then teleportScript='shared.TenacityDeveloper=true\n'..teleportScript end
+        if shared.TenacityCustomProfile then teleportScript='shared.TenacityCustomProfile='..string.format('%q',shared.TenacityCustomProfile)..'\n'..teleportScript end
+        queue_on_teleport(teleportScript)
+    end))
+
+    if not shared.TenacityReload and core.Categories and core.Settings.GUI
+        and core.Settings.GUI.Options['GUI bind indicator'] and core.Settings.GUI.Options['GUI bind indicator'].Enabled then
+        local bind=core.GUIBind and table.concat(core.GUIBind.Keys,' + '):upper() or 'RSHIFT'
+        core:CreateNotification('Tenacity','Loaded — press '..bind..' to open the ClickGUI.',5)
+    end
 end
 
-if not isfolder('newvape/assets/'..gui) then
-	makefolder('newvape/assets/'..gui)
-end
-vape = loadstring(downloadFile('newvape/guis/'..gui..'.lua'), 'gui')()
-if type(vape) ~= 'table' then
-	error('[illusionHD] GUI file did not return the Vape table.', 0)
-end
-baseVapeLoad = vape.Load
-if type(baseVapeLoad) ~= 'function' then
-	error('[illusionHD] GUI file is missing vape:Load(). Re-upload guis/new.lua.', 0)
-end
-shared.vape = vape
-loading:SetTheme(vape.Libraries.uipallet, vape.GUIColor)
-
-
-vape.HideLoadingScreen = function(_, immediate)
-	loading:HideLoadingScreen(immediate)
-end
-vape:Clean(function()
-	loading:HideLoadingScreen(true)
-end)
-loading:SetLoadingProgress(0.5, 'Preparing game modules')
-
-if not shared.VapeIndependent then
-	loadstring(downloadFile('newvape/games/universal.lua'), 'universal')()
-	local gamePath = 'newvape/games/'..game.PlaceId..'.lua'
-	if not shared.VapeDeveloper or isfile(gamePath) then
-		local source = downloadFile(gamePath, nil, true)
-		if source then loadstring(source, tostring(game.PlaceId))(...) end
-	end
-	finishLoading()
+loading:SetLoadingProgress(.48,'Loading modules')
+if not shared.TenacityIndependent then
+    compile(read('tenacity/games/universal.lua'),'@tenacity/games/universal.lua')()
+    local gamePath='tenacity/games/'..game.PlaceId..'.lua'
+    if not shared.TenacityDeveloper or isfile(gamePath) then
+        local source=read(gamePath,nil,true)
+        if source then compile(source,'@'..gamePath)(...) end
+    end
+    finish()
 else
-	vape.Init = finishLoading
-	return vape
+    core.Init=finish
+    return core
 end
