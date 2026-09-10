@@ -1,65 +1,4 @@
--- Femboy Shaders
-
--- Femboy Shaders: cosmetic-only shader presets
--- These presets only modify local Lighting/post-processing visuals.
-local FemboyShaderPresets = {
-    Dreamy = {
-        Brightness = 2,
-        Contrast = 0.12,
-        Saturation = 0.18,
-        BloomIntensity = 0.28,
-        BloomSize = 24,
-        BloomThreshold = 1.05,
-        ColorShift = Color3.fromRGB(255, 205, 245),
-    },
-    Neon = {
-        Brightness = 1.5,
-        Contrast = 0.28,
-        Saturation = 0.35,
-        BloomIntensity = 0.55,
-        BloomSize = 32,
-        BloomThreshold = 0.85,
-        ColorShift = Color3.fromRGB(210, 225, 255),
-    },
-    Soft = {
-        Brightness = 2.5,
-        Contrast = 0.04,
-        Saturation = 0.08,
-        BloomIntensity = 0.16,
-        BloomSize = 18,
-        BloomThreshold = 1.2,
-        ColorShift = Color3.fromRGB(255, 235, 250),
-    },
-}
-
-local function ApplyFemboyShaderPreset(name)
-    local preset = FemboyShaderPresets[name]
-    if not preset then return end
-
-    local lighting = game:GetService("Lighting")
-    lighting.Brightness = preset.Brightness
-    lighting.ColorShift_Top = preset.ColorShift
-
-    local color = lighting:FindFirstChild("FemboyShaderColor")
-    if not color then
-        color = Instance.new("ColorCorrectionEffect")
-        color.Name = "FemboyShaderColor"
-        color.Parent = lighting
-    end
-    color.Contrast = preset.Contrast
-    color.Saturation = preset.Saturation
-    color.Brightness = 0
-
-    local bloom = lighting:FindFirstChild("FemboyShaderBloom")
-    if not bloom then
-        bloom = Instance.new("BloomEffect")
-        bloom.Name = "FemboyShaderBloom"
-        bloom.Parent = lighting
-    end
-    bloom.Intensity = preset.BloomIntensity
-    bloom.Size = preset.BloomSize
-    bloom.Threshold = preset.BloomThreshold
-end
+-- FemboyShaders is registered as a Vape Render module below.
 
 -- Cosmetic-only Lua build; gameplay-affecting cheats and automation have been removed.
 -- Retained: visual/cosmetic modules only (shaders, viewmodel/gun cosmetics,
@@ -137,7 +76,7 @@ local debrisService = cloneref(game:GetService('Debris'))
 local gameCamera = workspace.CurrentCamera
 local lplr = playersService.LocalPlayer
 
-local vape = shared.Tenacity or shared.vape
+local vape = shared.vape
 local impactVisuals = assert(loadstring(downloadFile('newvape/libraries/frontlines-effects.lua'), 'Frontlines effects'))()(vape)
 local entitylib = vape.Libraries.entity
 local whitelist = vape.Libraries.whitelist
@@ -146,13 +85,8 @@ local targetinfo = vape.Libraries.targetinfo
 local sessioninfo = vape.Libraries.sessioninfo
 local getvapeasset = vape.Libraries.getvapeasset
 local drawingactor = loadstring(downloadFile('newvape/libraries/drawing.lua'), 'drawing')(...)
-local function notif(title, message, duration, kind)
-	local client = shared.Tenacity or vape or shared.vape
-	if client and type(client.CreateNotification) == 'function' then
-		if title == 'Vape' then title = 'Tenacity' end
-		return client:CreateNotification(title, message, duration, kind)
-	end
-	warn(('[Tenacity] %s: %s'):format(tostring(title or 'Notification'), tostring(message or '')))
+local function notif(...)
+	return vape:CreateNotification(...)
 end
 
 if not select(1, ...) and game.PlaceId == 5938036553 then
@@ -184,11 +118,11 @@ if not select(1, ...) and game.PlaceId == 5938036553 then
 					return
 				end
 			end
-			notif('Tenacity', 'Failed to find actor', 10, 'alert')
+			notif('Vape', 'Failed to find actor', 10, 'alert')
 		end)
 	else
 		vape.Load = function()
-			notif('Tenacity', 'Missing actor functions.', 10, 'alert')
+			notif('Vape', 'Missing actor functions.', 10, 'alert')
 		end
 	end
 
@@ -612,6 +546,289 @@ frontlines.ResolveBulletHit = function(origin, velocity)
 end
 
 entitylib.start()
+
+
+-- FEMBOY_SHADERS_BEGIN
+run(function()
+	-- Frontlines FemboyShaders: local-only pastel/pride post-processing.
+	local lighting = game:GetService('Lighting')
+	local render = game:GetService('RunService')
+	local rgb = Color3.fromRGB
+
+	local FemboyShaders, Preset, Intensity, BloomPower, Saturation, HazePower
+	local RainbowShift, RainbowSpeed, DreamyDOF, GodRays, CustomTime, Time
+	local active, ready = false, false
+	local effects = {}
+	local original = {}
+	local animationConnection
+
+	local presetNames = {
+		'Femboy Dream', 'Trans Pride', 'Cotton Candy', 'Bi Panic',
+		'Lesbian Sunset', 'Pink Overdose', 'Rainbow Slay'
+	}
+
+	local presets = {
+		['Femboy Dream'] = {
+			Top=rgb(255,178,225), Bottom=rgb(125,210,255), Tint=rgb(255,224,246),
+			Ambient=rgb(95,73,121), Outdoor=rgb(172,137,190), Fog=rgb(223,188,238),
+			Air=rgb(238,202,255), Decay=rgb(135,174,255), Clock=17.8, Brightness=3.0,
+			Exposure=.08, Contrast=.10, Saturation=.30, Bloom=.72, Threshold=.82, Size=46,
+			Rays=.10, Spread=.94, Density=.27, Haze=2.1, Glare=.55, DOF=.10
+		},
+		['Trans Pride'] = {
+			Top=rgb(91,206,250), Bottom=rgb(245,169,184), Tint=rgb(244,216,232),
+			Ambient=rgb(87,102,142), Outdoor=rgb(151,175,205), Fog=rgb(196,220,240),
+			Air=rgb(211,231,255), Decay=rgb(245,169,184), Clock=15.4, Brightness=3.35,
+			Exposure=.12, Contrast=.06, Saturation=.36, Bloom=.82, Threshold=.76, Size=50,
+			Rays=.13, Spread=.96, Density=.24, Haze=1.8, Glare=.72, DOF=.08
+		},
+		['Cotton Candy'] = {
+			Top=rgb(255,158,215), Bottom=rgb(159,203,255), Tint=rgb(255,214,242),
+			Ambient=rgb(104,78,127), Outdoor=rgb(181,143,203), Fog=rgb(228,188,237),
+			Air=rgb(247,205,255), Decay=rgb(136,191,255), Clock=18.3, Brightness=2.9,
+			Exposure=.14, Contrast=.05, Saturation=.42, Bloom=.95, Threshold=.68, Size=54,
+			Rays=.12, Spread=.98, Density=.31, Haze=2.5, Glare=.8, DOF=.14
+		},
+		['Bi Panic'] = {
+			Top=rgb(214,2,112), Bottom=rgb(0,56,168), Tint=rgb(220,166,255),
+			Ambient=rgb(74,38,105), Outdoor=rgb(127,75,160), Fog=rgb(156,91,189),
+			Air=rgb(196,119,224), Decay=rgb(67,86,200), Clock=19.1, Brightness=2.4,
+			Exposure=.05, Contrast=.19, Saturation=.55, Bloom=.88, Threshold=.70, Size=52,
+			Rays=.08, Spread=.97, Density=.34, Haze=2.9, Glare=.55, DOF=.12
+		},
+		['Lesbian Sunset'] = {
+			Top=rgb(255,100,79), Bottom=rgb(163,2,98), Tint=rgb(255,196,174),
+			Ambient=rgb(104,49,74), Outdoor=rgb(180,91,91), Fog=rgb(236,135,144),
+			Air=rgb(255,177,150), Decay=rgb(179,83,142), Clock=18.0, Brightness=3.05,
+			Exposure=.02, Contrast=.14, Saturation=.50, Bloom=.84, Threshold=.75, Size=48,
+			Rays=.17, Spread=.93, Density=.31, Haze=2.4, Glare=.92, DOF=.11
+		},
+		['Pink Overdose'] = {
+			Top=rgb(255,45,185), Bottom=rgb(255,151,220), Tint=rgb(255,188,234),
+			Ambient=rgb(121,47,107), Outdoor=rgb(213,96,174), Fog=rgb(255,139,216),
+			Air=rgb(255,166,230), Decay=rgb(192,92,255), Clock=17.2, Brightness=3.5,
+			Exposure=.17, Contrast=.22, Saturation=.68, Bloom=1.10, Threshold=.58, Size=56,
+			Rays=.18, Spread=.99, Density=.36, Haze=3.1, Glare=1.1, DOF=.16
+		},
+		['Rainbow Slay'] = {
+			Top=rgb(255,74,138), Bottom=rgb(99,163,255), Tint=rgb(255,216,245),
+			Ambient=rgb(88,66,118), Outdoor=rgb(173,132,194), Fog=rgb(219,177,236),
+			Air=rgb(237,195,255), Decay=rgb(116,168,255), Clock=16.8, Brightness=3.25,
+			Exposure=.11, Contrast=.13, Saturation=.62, Bloom=1.0, Threshold=.62, Size=56,
+			Rays=.15, Spread=.98, Density=.30, Haze=2.6, Glare=.9, DOF=.13
+		}
+	}
+
+	local rainbow = {
+		rgb(255,90,120), rgb(255,174,72), rgb(255,236,95), rgb(118,238,126),
+		rgb(91,206,250), rgb(125,126,255), rgb(203,104,255), rgb(245,169,184)
+	}
+
+	local lightingProperties = {
+		'Brightness', 'ExposureCompensation', 'Ambient', 'OutdoorAmbient', 'ColorShift_Top',
+		'ColorShift_Bottom', 'ClockTime', 'FogColor', 'FogStart', 'FogEnd',
+		'EnvironmentDiffuseScale', 'EnvironmentSpecularScale', 'ShadowSoftness'
+	}
+
+	local function safeSet(object, key, value)
+		pcall(function() object[key] = value end)
+	end
+
+	local function makeEffect(class, name)
+		local object = Instance.new(class)
+		object.Name = 'FemboyShaders_'..name
+		object.Parent = lighting
+		effects[name] = object
+		return object
+	end
+
+	local function stopAnimation()
+		if animationConnection then
+			animationConnection:Disconnect()
+			animationConnection = nil
+		end
+	end
+
+	local function restore()
+		active = false
+		stopAnimation()
+		for _, effect in pairs(effects) do
+			pcall(function() effect:Destroy() end)
+		end
+		table.clear(effects)
+		for property, value in pairs(original) do
+			safeSet(lighting, property, value)
+		end
+		table.clear(original)
+	end
+
+	local function applyStatic()
+		if not active or not ready then return end
+		local p = presets[Preset.Value] or presets[presetNames[1]]
+		local strength = Intensity.Value / 100
+		local bloomScale = BloomPower.Value / 100
+		local satScale = Saturation.Value / 100
+		local hazeScale = HazePower.Value / 100
+		local clock = CustomTime.Enabled and Time.Value or p.Clock
+
+		safeSet(lighting, 'Brightness', math.clamp(p.Brightness * (.55 + strength * .55), 0, 8))
+		safeSet(lighting, 'ExposureCompensation', math.clamp(p.Exposure * strength, -2, 2))
+		safeSet(lighting, 'Ambient', p.Ambient:Lerp(rgb(255,190,235), math.clamp((strength - 1) * .16, 0, .25)))
+		safeSet(lighting, 'OutdoorAmbient', p.Outdoor)
+		safeSet(lighting, 'ColorShift_Top', p.Top)
+		safeSet(lighting, 'ColorShift_Bottom', p.Bottom)
+		safeSet(lighting, 'ClockTime', clock)
+		safeSet(lighting, 'FogColor', p.Fog)
+		safeSet(lighting, 'FogStart', 260 / math.max(hazeScale, .25))
+		safeSet(lighting, 'FogEnd', 3600 / math.max(hazeScale, .25))
+		safeSet(lighting, 'EnvironmentDiffuseScale', .78)
+		safeSet(lighting, 'EnvironmentSpecularScale', 1)
+		safeSet(lighting, 'ShadowSoftness', .72)
+
+		local color = effects.Color
+		color.Brightness = .018 * strength
+		color.Contrast = math.clamp(p.Contrast * strength, -1, 1)
+		color.Saturation = math.clamp(p.Saturation * satScale * strength, -1, 1)
+		color.TintColor = rgb(255,255,255):Lerp(p.Tint, math.clamp(.48 + strength * .2, 0, .9))
+
+		local bloom = effects.Bloom
+		bloom.Intensity = math.clamp(p.Bloom * bloomScale * strength, 0, 5)
+		bloom.Threshold = p.Threshold
+		bloom.Size = p.Size
+
+		local halo = effects.Halo
+		halo.Intensity = math.clamp(p.Bloom * .48 * bloomScale * strength, 0, 3)
+		halo.Threshold = math.max(.45, p.Threshold - .18)
+		halo.Size = 56
+
+		local rays = effects.Rays
+		rays.Enabled = GodRays.Enabled
+		rays.Intensity = GodRays.Enabled and math.clamp(p.Rays * strength, 0, 1) or 0
+		rays.Spread = p.Spread
+
+		local atmosphere = effects.Atmosphere
+		atmosphere.Density = math.clamp(p.Density * hazeScale, 0, .65)
+		atmosphere.Offset = .08
+		atmosphere.Color = p.Air
+		atmosphere.Decay = p.Decay
+		atmosphere.Haze = math.clamp(p.Haze * hazeScale, 0, 10)
+		atmosphere.Glare = math.clamp(p.Glare * hazeScale, 0, 10)
+
+		local dof = effects.DOF
+		dof.Enabled = DreamyDOF.Enabled
+		dof.NearIntensity = .025
+		dof.FarIntensity = math.clamp(p.DOF * strength, 0, 1)
+		dof.FocusDistance = 85
+		dof.InFocusRadius = 72
+	end
+
+	local function startAnimation()
+		stopAnimation()
+		if not RainbowShift.Enabled then return end
+		local started = os.clock()
+		animationConnection = render.RenderStepped:Connect(function()
+			if not active or not RainbowShift.Enabled then return end
+			local speed = RainbowSpeed.Value / 10
+			local phase = ((os.clock() - started) * speed) % #rainbow
+			local base = math.floor(phase)
+			local blend = phase - base
+			blend = (1 - math.cos(blend * math.pi)) * .5
+			local a = rainbow[(base % #rainbow) + 1]
+			local b = rainbow[((base + 1) % #rainbow) + 1]
+			local c = a:Lerp(b, blend)
+			local nextColor = rainbow[((base + 2) % #rainbow) + 1]
+			lighting.ColorShift_Top = c
+			lighting.ColorShift_Bottom = c:Lerp(nextColor, .58)
+			effects.Color.TintColor = rgb(255,255,255):Lerp(c, .32)
+			effects.Atmosphere.Color = rgb(245,220,255):Lerp(c, .24)
+		end)
+	end
+
+	local function changed()
+		task.defer(function()
+			if active and ready then
+				applyStatic()
+				startAnimation()
+			end
+		end)
+	end
+
+	local function start()
+		if active or not ready then return end
+		active = true
+		for _, property in ipairs(lightingProperties) do
+			local ok, value = pcall(function() return lighting[property] end)
+			if ok then original[property] = value end
+		end
+
+		makeEffect('ColorCorrectionEffect', 'Color')
+		makeEffect('BloomEffect', 'Bloom')
+		makeEffect('BloomEffect', 'Halo')
+		makeEffect('SunRaysEffect', 'Rays')
+		makeEffect('Atmosphere', 'Atmosphere')
+		makeEffect('DepthOfFieldEffect', 'DOF')
+		applyStatic()
+		startAnimation()
+		notif('FemboyShaders', 'FEMBOY OVERDRIVE ENABLED :3  pastel levels are critical', 5)
+	end
+
+	FemboyShaders = vape.Categories.Render:CreateModule({
+		Name = 'FemboyShaders',
+		Tooltip = 'Aggressively pastel Frontlines lighting with pride palettes, bloom, haze and rainbow cycling.',
+		Function = function(enabled)
+			if enabled then
+				task.defer(function()
+					if FemboyShaders.Enabled then start() end
+				end)
+			else
+				restore()
+			end
+		end
+	})
+
+	Preset = FemboyShaders:CreateDropdown({
+		Name='Preset', List=presetNames, Default='Femboy Dream', Function=changed
+	})
+	Intensity = FemboyShaders:CreateSlider({
+		Name='Femboy Intensity', Min=25, Max=250, Default=135, Suffix='%', Function=changed
+	})
+	BloomPower = FemboyShaders:CreateSlider({
+		Name='Sparkle Bloom', Min=0, Max=300, Default=150, Suffix='%', Function=changed
+	})
+	Saturation = FemboyShaders:CreateSlider({
+		Name='Fruit Saturation', Min=0, Max=250, Default=135, Suffix='%', Function=changed
+	})
+	HazePower = FemboyShaders:CreateSlider({
+		Name='Pastel Haze', Min=0, Max=250, Default=120, Suffix='%', Function=changed
+	})
+	RainbowShift = FemboyShaders:CreateToggle({
+		Name='Rainbow Shift', Default=true, Function=changed
+	})
+	RainbowSpeed = FemboyShaders:CreateSlider({
+		Name='Rainbow Speed', Min=1, Max=30, Default=8, Decimal=10, Function=changed,
+		Darker=true
+	})
+	GodRays = FemboyShaders:CreateToggle({
+		Name='Sparkle Rays', Default=true, Function=changed
+	})
+	DreamyDOF = FemboyShaders:CreateToggle({
+		Name='Dreamy DOF', Default=false, Function=changed
+	})
+	CustomTime = FemboyShaders:CreateToggle({
+		Name='Custom Time', Default=false, Function=changed
+	})
+	Time = FemboyShaders:CreateSlider({
+		Name='Time', Min=0, Max=24, Default=18, Decimal=10, Function=changed, Darker=true
+	})
+	ready = true
+
+	vape:Clean(function()
+		restore()
+	end)
+end)
+-- FEMBOY_SHADERS_END
+
+
 
 
 
@@ -4709,427 +4926,3 @@ run(function()
 	VerticalPosition = AmmoHUD:CreateSlider({Name = 'Vertical Position', Min = 10, Max = 90, Default = 60, Suffix = '%'})
 	Background = AmmoHUD:CreateToggle({Name = 'Background', Default = true})
 end)
-
--- GAYMODE_BEGIN
--- Maximum local visual chaos. The module toggle is intentionally sticky for the current session;
--- Uninjecting/rejoining still provides a guaranteed escape hatch.
-run(function()
-	local GayMode
-	local Gayness, CameraChaos, ScreenObstruction, PlayerGlow, FloatingSpam
-	local renderName = 'TenacityGayModeCamera'
-	local rearming = false
-	local active = false
-	local originalFov
-	local lastCamera
-	local lastOffset = CFrame.identity
-	local overlay
-	local highlights = {}
-	local billboards = {}
-	local floaters = {}
-	local cards = {}
-	local elapsed = 0
-	local cardElapsed = 0
-	local slogans = {
-		'🌈 MAXIMUM GAY MODE 🌈',
-		'✨ SLAY ✨',
-		'💖 PRIDE 💖',
-		'🌸 FRUITY OVERDRIVE 🌸',
-		'💅 YASSIFICATION COMPLETE 💅',
-		'🩷🩵💜 ABSOLUTE SERVE 💜🩵🩷',
-		'⭐ SPARKLE PRIVILEGES REVOKED ⭐'
-	}
-	local tiny = {'🌈', '💖', '✨', '💅', '🌸', 'SLAY', 'PRIDE', ':3', '★', '♥'}
-
-	local function hsv(t, offset)
-		return Color3.fromHSV((t * 0.085 + (offset or 0)) % 1, 0.72, 1)
-	end
-
-	local function safeNotif(message, duration)
-		pcall(function()
-			notif('Tenacity', message, duration or 6, 'warning')
-		end)
-	end
-
-	local function destroyObject(object)
-		if object then pcall(function() object:Destroy() end) end
-	end
-
-	local function clearCharacterVisuals()
-		for character, highlight in pairs(highlights) do
-			destroyObject(highlight)
-			highlights[character] = nil
-		end
-		for character, billboard in pairs(billboards) do
-			destroyObject(billboard)
-			billboards[character] = nil
-		end
-	end
-
-	local function decorateCharacter(character)
-		if not active or not PlayerGlow.Enabled or not character or highlights[character] then return end
-		local highlight = Instance.new('Highlight')
-		highlight.Name = 'TenacityGayModeHighlight'
-		highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-		highlight.FillTransparency = 0.42
-		highlight.OutlineTransparency = 0.05
-		highlight.Parent = character
-		highlights[character] = highlight
-
-		local root = character:FindFirstChild('Head') or character:FindFirstChild('HumanoidRootPart') or character.PrimaryPart
-		if root then
-			local billboard = Instance.new('BillboardGui')
-			billboard.Name = 'TenacityGayModeBillboard'
-			billboard.Adornee = root
-			billboard.AlwaysOnTop = true
-			billboard.Size = UDim2.fromOffset(170, 38)
-			billboard.StudsOffset = Vector3.new(0, 3.6, 0)
-			billboard.Parent = character
-			local label = Instance.new('TextLabel')
-			label.Size = UDim2.fromScale(1, 1)
-			label.BackgroundTransparency = 1
-			label.Font = Enum.Font.GothamBlack
-			label.Text = '🌈 SLAY 🌈'
-			label.TextScaled = true
-			label.TextStrokeTransparency = 0.2
-			label.Parent = billboard
-			billboards[character] = billboard
-		end
-	end
-
-	local function refreshCharacters()
-		if not PlayerGlow.Enabled then
-			clearCharacterVisuals()
-			return
-		end
-		for _, player in ipairs(playersService:GetPlayers()) do
-			if player.Character then decorateCharacter(player.Character) end
-		end
-	end
-
-	local function makeEdge(parent, name, size, position)
-		local frame = Instance.new('Frame')
-		frame.Name = name
-		frame.Size = size
-		frame.Position = position
-		frame.BorderSizePixel = 0
-		frame.ZIndex = 1000002
-		frame.Parent = parent
-		local gradient = Instance.new('UIGradient')
-		gradient.Name = 'Rainbow'
-		gradient.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 70, 190)),
-			ColorSequenceKeypoint.new(0.25, Color3.fromRGB(255, 180, 70)),
-			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(90, 255, 170)),
-			ColorSequenceKeypoint.new(0.75, Color3.fromRGB(80, 170, 255)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(195, 90, 255))
-		})
-		gradient.Parent = frame
-		return frame, gradient
-	end
-
-	local function createOverlay()
-		local root = Instance.new('Frame')
-		root.Name = 'TenacityGayMode'
-		root.Size = UDim2.fromScale(1, 1)
-		root.Position = UDim2.fromScale(0, 0)
-		root.BackgroundColor3 = Color3.fromRGB(255, 80, 190)
-		root.BackgroundTransparency = 0.82
-		root.BorderSizePixel = 0
-		root.Active = false
-		root.ZIndex = 1000000
-		root.Parent = vape.gui
-		overlay = root
-		GayMode:Clean(root)
-
-		local wash = Instance.new('UIGradient')
-		wash.Name = 'PrideWash'
-		wash.Rotation = 25
-		wash.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 55, 150)),
-			ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 145, 60)),
-			ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 245, 90)),
-			ColorSequenceKeypoint.new(0.6, Color3.fromRGB(70, 235, 155)),
-			ColorSequenceKeypoint.new(0.8, Color3.fromRGB(70, 155, 255)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(190, 75, 255))
-		})
-		wash.Parent = root
-
-		local border = {}
-		border[#border + 1] = {makeEdge(root, 'Top', UDim2.new(1, 0, 0, 10), UDim2.fromOffset(0, 0))}
-		border[#border + 1] = {makeEdge(root, 'Bottom', UDim2.new(1, 0, 0, 10), UDim2.new(0, 0, 1, -10))}
-		border[#border + 1] = {makeEdge(root, 'Left', UDim2.new(0, 10, 1, 0), UDim2.fromOffset(0, 0))}
-		border[#border + 1] = {makeEdge(root, 'Right', UDim2.new(0, 10, 1, 0), UDim2.new(1, -10, 0, 0))}
-		root:SetAttribute('GayBorderCount', #border)
-
-		local banner = Instance.new('TextLabel')
-		banner.Name = 'Banner'
-		banner.AnchorPoint = Vector2.new(0.5, 0)
-		banner.Position = UDim2.new(0.5, 0, 0.03, 0)
-		banner.Size = UDim2.new(0.7, 0, 0, 72)
-		banner.BackgroundColor3 = Color3.fromRGB(20, 12, 30)
-		banner.BackgroundTransparency = 0.18
-		banner.BorderSizePixel = 0
-		banner.Font = Enum.Font.GothamBlack
-		banner.Text = '🌈 MAXIMUM GAY MODE 🌈'
-		banner.TextColor3 = Color3.new(1, 1, 1)
-		banner.TextScaled = true
-		banner.TextStrokeTransparency = 0.15
-		banner.ZIndex = 1000003
-		banner.Parent = root
-		local corner = Instance.new('UICorner')
-		corner.CornerRadius = UDim.new(0, 18)
-		corner.Parent = banner
-		local stroke = Instance.new('UIStroke')
-		stroke.Thickness = 3
-		stroke.Transparency = 0.05
-		stroke.Parent = banner
-
-		local sub = Instance.new('TextLabel')
-		sub.Name = 'SubBanner'
-		sub.AnchorPoint = Vector2.new(0.5, 0)
-		sub.Position = UDim2.new(0.5, 0, 0.13, 0)
-		sub.Size = UDim2.new(0.76, 0, 0, 34)
-		sub.BackgroundTransparency = 1
-		sub.Font = Enum.Font.GothamBold
-		sub.Text = 'JuniorBooyah has been sentenced to MAXIMUM SPARKLE MODE :3'
-		sub.TextColor3 = Color3.new(1, 1, 1)
-		sub.TextScaled = true
-		sub.TextStrokeTransparency = 0.25
-		sub.ZIndex = 1000003
-		sub.Parent = root
-
-		for i = 1, 34 do
-			local label = Instance.new('TextLabel')
-			label.Name = 'Floater'..i
-			label.AnchorPoint = Vector2.new(0.5, 0.5)
-			label.Size = UDim2.fromOffset(math.random(45, 120), math.random(28, 65))
-			label.Position = UDim2.fromScale(math.random(), math.random())
-			label.BackgroundTransparency = 1
-			label.Font = Enum.Font.GothamBlack
-			label.Text = tiny[math.random(1, #tiny)]
-			label.TextScaled = true
-			label.TextStrokeTransparency = 0.3
-			label.Rotation = math.random(-25, 25)
-			label.ZIndex = 1000001
-			label.Parent = root
-			floaters[#floaters + 1] = {
-				Object = label,
-				X = math.random(),
-				Y = math.random(),
-				Speed = 0.018 + math.random() * 0.035,
-				Phase = math.random() * math.pi * 2,
-				Scale = 0.8 + math.random() * 0.8
-			}
-		end
-	end
-
-	local function spawnCard(t)
-		if not overlay or not overlay.Parent or #cards > 7 then return end
-		local card = Instance.new('TextLabel')
-		card.AnchorPoint = Vector2.new(0.5, 0.5)
-		card.Size = UDim2.fromOffset(math.random(260, 430), math.random(56, 90))
-		card.Position = UDim2.fromScale(0.2 + math.random() * 0.6, 0.25 + math.random() * 0.55)
-		card.BackgroundColor3 = hsv(t, math.random())
-		card.BackgroundTransparency = 0.1
-		card.BorderSizePixel = 0
-		card.Font = Enum.Font.GothamBlack
-		card.Text = slogans[math.random(1, #slogans)]
-		card.TextColor3 = Color3.new(1, 1, 1)
-		card.TextScaled = true
-		card.TextStrokeTransparency = 0.2
-		card.Rotation = math.random(-12, 12)
-		card.ZIndex = 1000004
-		card.Parent = overlay
-		local corner = Instance.new('UICorner')
-		corner.CornerRadius = UDim.new(0, 16)
-		corner.Parent = card
-		local stroke = Instance.new('UIStroke')
-		stroke.Thickness = 3
-		stroke.Color = Color3.new(1, 1, 1)
-		stroke.Transparency = 0.15
-		stroke.Parent = card
-		cards[#cards + 1] = {Object = card, Born = t, Lifetime = 1.8 + math.random() * 1.7, BaseSize = card.Size}
-	end
-
-	local function restoreCamera()
-		pcall(function()
-			local camera = lastCamera
-			if camera and camera.Parent then
-				camera.CFrame = camera.CFrame * lastOffset:Inverse()
-				if originalFov then camera.FieldOfView = originalFov end
-			end
-		end)
-		lastOffset = CFrame.identity
-		lastCamera = nil
-		originalFov = nil
-	end
-
-	local function stop()
-		active = false
-		pcall(function() runService:UnbindFromRenderStep(renderName) end)
-		restoreCamera()
-		clearCharacterVisuals()
-		table.clear(floaters)
-		table.clear(cards)
-		overlay = nil
-	end
-
-	local function start()
-		if active then return end
-		active = true
-		elapsed = 0
-		cardElapsed = 0
-		createOverlay()
-		refreshCharacters()
-		safeNotif('JuniorBooyah has been sentenced to MAXIMUM GAY MODE 🌈', 8)
-
-		GayMode:Clean(playersService.PlayerAdded:Connect(function(player)
-			GayMode:Clean(player.CharacterAdded:Connect(function(character)
-				task.defer(function() decorateCharacter(character) end)
-			end))
-		end))
-		for _, player in ipairs(playersService:GetPlayers()) do
-			GayMode:Clean(player.CharacterAdded:Connect(function(character)
-				task.defer(function() decorateCharacter(character) end)
-			end))
-		end
-
-		runService:BindToRenderStep(renderName, Enum.RenderPriority.Camera.Value + 25, function(dt)
-			if not active or not GayMode.Enabled then return end
-			local t = tick()
-			local amount = Gayness.Value / 100
-			local camera = workspace.CurrentCamera
-			if camera then
-				if camera ~= lastCamera then
-					restoreCamera()
-					lastCamera = camera
-					originalFov = camera.FieldOfView
-				end
-				if CameraChaos.Enabled then
-					local base = camera.CFrame * lastOffset:Inverse()
-					local pitch = math.rad(math.sin(t * 1.7) * 2.4 * amount)
-					local yaw = math.rad(math.sin(t * 1.23 + 1.2) * 2.1 * amount)
-					local roll = math.rad(math.sin(t * 2.05) * 6.5 * amount)
-					lastOffset = CFrame.Angles(pitch, yaw, roll)
-					camera.CFrame = base * lastOffset
-					camera.FieldOfView = math.clamp((originalFov or 70) + math.sin(t * 2.4) * 19 * amount, 35, 120)
-				else
-					restoreCamera()
-					lastCamera = camera
-					originalFov = camera.FieldOfView
-				end
-			end
-
-			if overlay and overlay.Parent then
-				overlay.BackgroundTransparency = ScreenObstruction.Enabled and math.clamp(0.88 - 0.12 * amount + math.sin(t * 1.4) * 0.025, 0.55, 0.92) or 1
-				local wash = overlay:FindFirstChild('PrideWash')
-				if wash then wash.Rotation = (t * 18) % 360 end
-				local banner = overlay:FindFirstChild('Banner')
-				if banner then
-					banner.Rotation = math.sin(t * 2.3) * 2.5 * amount
-					banner.TextColor3 = hsv(t, 0.05)
-					local stroke = banner:FindFirstChildOfClass('UIStroke')
-					if stroke then stroke.Color = hsv(t, 0.55) end
-				end
-				local sub = overlay:FindFirstChild('SubBanner')
-				if sub then sub.TextColor3 = hsv(t, 0.32) end
-			end
-
-			if FloatingSpam.Enabled then
-				for i, data in ipairs(floaters) do
-					local obj = data.Object
-					if obj and obj.Parent then
-						local y = (data.Y - (t * data.Speed * amount)) % 1.15
-						local x = math.clamp(data.X + math.sin(t * (0.8 + data.Speed * 8) + data.Phase) * 0.055, 0.03, 0.97)
-						obj.Position = UDim2.fromScale(x, y)
-						obj.Rotation = math.sin(t * 1.8 + data.Phase) * 28
-						obj.TextColor3 = hsv(t, i / #floaters)
-						obj.Visible = true
-					end
-				end
-			else
-				for _, data in ipairs(floaters) do if data.Object then data.Object.Visible = false end end
-			end
-
-			for character, highlight in pairs(highlights) do
-				if not character.Parent or not PlayerGlow.Enabled then
-					destroyObject(highlight)
-					highlights[character] = nil
-				else
-					highlight.FillColor = hsv(t, 0.12)
-					highlight.OutlineColor = hsv(t, 0.62)
-				end
-			end
-			for character, billboard in pairs(billboards) do
-				if not character.Parent or not PlayerGlow.Enabled then
-					destroyObject(billboard)
-					billboards[character] = nil
-				else
-					local label = billboard:FindFirstChildOfClass('TextLabel')
-					if label then label.TextColor3 = hsv(t, 0.38) end
-				end
-			end
-
-			cardElapsed += dt
-			if ScreenObstruction.Enabled and cardElapsed >= math.max(0.28, 0.9 / math.max(amount, 0.5)) then
-				cardElapsed = 0
-				spawnCard(t)
-			end
-			for i = #cards, 1, -1 do
-				local data = cards[i]
-				local age = t - data.Born
-				local obj = data.Object
-				if not obj or not obj.Parent or age >= data.Lifetime then
-					destroyObject(obj)
-					table.remove(cards, i)
-				else
-					local pulse = 1 + math.sin(age * 7) * 0.04
-					obj.Size = UDim2.new(data.BaseSize.X.Scale * pulse, data.BaseSize.X.Offset * pulse, data.BaseSize.Y.Scale * pulse, data.BaseSize.Y.Offset * pulse)
-					obj.BackgroundColor3 = hsv(t, i * 0.11)
-					obj.TextTransparency = math.clamp((age - data.Lifetime + 0.4) / 0.4, 0, 1)
-				end
-			end
-		end)
-		GayMode:Clean(function()
-			pcall(function() runService:UnbindFromRenderStep(renderName) end)
-			restoreCamera()
-		end)
-	end
-
-	GayMode = vape.Categories.Render:CreateModule({
-		Name = 'GayMode',
-		Tooltip = 'Maximum local pride chaos. The toggle immediately re-arms itself; Uninject/rejoin is the emergency exit.',
-		Function = function(callback)
-			if callback then
-				start()
-				return
-			end
-
-			stop()
-			-- Intentionally sticky for this session. Do not fight global cleanup/uninject.
-			if vape and vape.Loaded ~= nil and vape.gui and vape.gui.Parent and not rearming then
-				rearming = true
-				task.defer(function()
-					task.wait(0.08)
-					if vape and vape.Loaded ~= nil and vape.gui and vape.gui.Parent and GayMode and not GayMode.Enabled then
-						safeNotif('Cute attempt. GayMode refuses to stay off 💅', 4)
-						pcall(function() GayMode:Toggle() end)
-					end
-					rearming = false
-				end)
-			end
-		end
-	})
-
-	Gayness = GayMode:CreateSlider({Name = 'Gayness', Min = 100, Max = 500, Default = 300, Suffix = '%'})
-	CameraChaos = GayMode:CreateToggle({Name = 'Camera Chaos', Default = true})
-	ScreenObstruction = GayMode:CreateToggle({Name = 'Screen Obstruction', Default = true})
-	PlayerGlow = GayMode:CreateToggle({Name = 'Rainbow Everyone', Default = true, Function = function(enabled)
-		if active then
-			if enabled then refreshCharacters() else clearCharacterVisuals() end
-		end
-	end})
-	FloatingSpam = GayMode:CreateToggle({Name = 'Floating Gay Spam', Default = true})
-end)
--- GAYMODE_END
-
