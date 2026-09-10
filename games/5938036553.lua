@@ -1,65 +1,135 @@
 -- Femboy Shaders
-
--- Femboy Shaders: cosmetic-only shader presets
--- These presets only modify local Lighting/post-processing visuals.
+-- Loud, pastel/rainbow cosmetic shader presets. These only affect the local Lighting pipeline.
 local FemboyShaderPresets = {
-    Dreamy = {
-        Brightness = 2,
-        Contrast = 0.12,
-        Saturation = 0.18,
-        BloomIntensity = 0.28,
-        BloomSize = 24,
-        BloomThreshold = 1.05,
-        ColorShift = Color3.fromRGB(255, 205, 245),
+    ['Pride Parade'] = {
+        Primary = Color3.fromRGB(255, 76, 170),
+        Secondary = Color3.fromRGB(76, 190, 255),
+        Ambient = Color3.fromRGB(91, 53, 112),
+        Outdoor = Color3.fromRGB(154, 121, 184),
+        Time = 17.65,
+        Brightness = 3.2,
+        Exposure = 0.12,
+        Contrast = 0.24,
+        Saturation = 0.52,
+        Bloom = 1.15,
+        BloomThreshold = 0.72,
+        BloomSize = 56,
+        Rays = 0.11,
+        RaysSpread = 0.92,
+        Atmosphere = 0.23,
+        Haze = 2.3,
     },
-    Neon = {
-        Brightness = 1.5,
-        Contrast = 0.28,
-        Saturation = 0.35,
-        BloomIntensity = 0.55,
-        BloomSize = 32,
-        BloomThreshold = 0.85,
-        ColorShift = Color3.fromRGB(210, 225, 255),
+    ['Femboy Dream'] = {
+        Primary = Color3.fromRGB(255, 156, 226),
+        Secondary = Color3.fromRGB(164, 203, 255),
+        Ambient = Color3.fromRGB(95, 67, 120),
+        Outdoor = Color3.fromRGB(179, 142, 196),
+        Time = 18.2,
+        Brightness = 3.0,
+        Exposure = 0.15,
+        Contrast = 0.16,
+        Saturation = 0.42,
+        Bloom = 1.28,
+        BloomThreshold = 0.64,
+        BloomSize = 56,
+        Rays = 0.08,
+        RaysSpread = 0.96,
+        Atmosphere = 0.26,
+        Haze = 2.8,
     },
-    Soft = {
-        Brightness = 2.5,
-        Contrast = 0.04,
-        Saturation = 0.08,
-        BloomIntensity = 0.16,
-        BloomSize = 18,
-        BloomThreshold = 1.2,
-        ColorShift = Color3.fromRGB(255, 235, 250),
+    ['Trans Rights'] = {
+        Primary = Color3.fromRGB(91, 206, 250),
+        Secondary = Color3.fromRGB(245, 169, 184),
+        Ambient = Color3.fromRGB(92, 102, 135),
+        Outdoor = Color3.fromRGB(169, 170, 197),
+        Time = 16.9,
+        Brightness = 3.25,
+        Exposure = 0.14,
+        Contrast = 0.13,
+        Saturation = 0.36,
+        Bloom = 1.0,
+        BloomThreshold = 0.78,
+        BloomSize = 52,
+        Rays = 0.09,
+        RaysSpread = 0.9,
+        Atmosphere = 0.2,
+        Haze = 2.0,
+    },
+    ['Bi Panic'] = {
+        Primary = Color3.fromRGB(214, 2, 112),
+        Secondary = Color3.fromRGB(0, 56, 168),
+        Accent = Color3.fromRGB(155, 79, 150),
+        Ambient = Color3.fromRGB(74, 34, 91),
+        Outdoor = Color3.fromRGB(112, 79, 143),
+        Time = 19.1,
+        Brightness = 2.7,
+        Exposure = 0.08,
+        Contrast = 0.3,
+        Saturation = 0.58,
+        Bloom = 1.2,
+        BloomThreshold = 0.68,
+        BloomSize = 56,
+        Rays = 0.055,
+        RaysSpread = 0.98,
+        Atmosphere = 0.28,
+        Haze = 3.0,
+    },
+    ['Lesbian Sunset'] = {
+        Primary = Color3.fromRGB(255, 82, 103),
+        Secondary = Color3.fromRGB(255, 154, 86),
+        Accent = Color3.fromRGB(213, 45, 133),
+        Ambient = Color3.fromRGB(104, 50, 82),
+        Outdoor = Color3.fromRGB(175, 92, 112),
+        Time = 18.55,
+        Brightness = 3.1,
+        Exposure = 0.1,
+        Contrast = 0.22,
+        Saturation = 0.54,
+        Bloom = 1.18,
+        BloomThreshold = 0.7,
+        BloomSize = 56,
+        Rays = 0.14,
+        RaysSpread = 0.93,
+        Atmosphere = 0.24,
+        Haze = 2.4,
+    },
+    ['Cotton Candy'] = {
+        Primary = Color3.fromRGB(255, 190, 235),
+        Secondary = Color3.fromRGB(183, 221, 255),
+        Ambient = Color3.fromRGB(111, 83, 134),
+        Outdoor = Color3.fromRGB(192, 163, 211),
+        Time = 17.9,
+        Brightness = 3.45,
+        Exposure = 0.2,
+        Contrast = 0.08,
+        Saturation = 0.3,
+        Bloom = 1.35,
+        BloomThreshold = 0.58,
+        BloomSize = 56,
+        Rays = 0.1,
+        RaysSpread = 1,
+        Atmosphere = 0.2,
+        Haze = 2.6,
+    },
+    ['Rainbow Hyperpop'] = {
+        Primary = Color3.fromRGB(255, 55, 190),
+        Secondary = Color3.fromRGB(55, 235, 255),
+        Ambient = Color3.fromRGB(83, 40, 116),
+        Outdoor = Color3.fromRGB(138, 100, 171),
+        Time = 20.1,
+        Brightness = 3.0,
+        Exposure = 0.17,
+        Contrast = 0.35,
+        Saturation = 0.72,
+        Bloom = 1.55,
+        BloomThreshold = 0.5,
+        BloomSize = 56,
+        Rays = 0.075,
+        RaysSpread = 1,
+        Atmosphere = 0.31,
+        Haze = 3.4,
     },
 }
-
-local function ApplyFemboyShaderPreset(name)
-    local preset = FemboyShaderPresets[name]
-    if not preset then return end
-
-    local lighting = game:GetService("Lighting")
-    lighting.Brightness = preset.Brightness
-    lighting.ColorShift_Top = preset.ColorShift
-
-    local color = lighting:FindFirstChild("FemboyShaderColor")
-    if not color then
-        color = Instance.new("ColorCorrectionEffect")
-        color.Name = "FemboyShaderColor"
-        color.Parent = lighting
-    end
-    color.Contrast = preset.Contrast
-    color.Saturation = preset.Saturation
-    color.Brightness = 0
-
-    local bloom = lighting:FindFirstChild("FemboyShaderBloom")
-    if not bloom then
-        bloom = Instance.new("BloomEffect")
-        bloom.Name = "FemboyShaderBloom"
-        bloom.Parent = lighting
-    end
-    bloom.Intensity = preset.BloomIntensity
-    bloom.Size = preset.BloomSize
-    bloom.Threshold = preset.BloomThreshold
-end
 
 -- Cosmetic-only Lua build; gameplay-affecting cheats and automation have been removed.
 -- Retained: visual/cosmetic modules only (shaders, viewmodel/gun cosmetics,
@@ -613,7 +683,226 @@ end
 
 entitylib.start()
 
+-- FemboyShaders is intentionally its own renderer instead of a dead preset table.
+-- It owns only effects whose names start with "FemboyShaders_" and restores every
+-- Lighting property it changes when disabled.
+run(function()
+    local lighting = game:GetService('Lighting')
+    local rgb = Color3.fromRGB
 
+    local FemboyShaders, Mode, Intensity, RainbowSpeed, BloomAmount, AtmosphereAmount
+    local RainbowCycle, Pulse, GodRays, DreamyDOF
+    local active = false
+    local heartbeat
+    local owned = {}
+    local effects = {}
+    local original = {}
+    local properties = {
+        'Ambient', 'OutdoorAmbient', 'Brightness', 'ExposureCompensation', 'ClockTime',
+        'ColorShift_Top', 'ColorShift_Bottom', 'FogColor', 'FogStart', 'FogEnd'
+    }
+
+    local function safeSet(object, key, value)
+        pcall(function() object[key] = value end)
+    end
+
+    local function make(className, key, values)
+        local object = Instance.new(className)
+        object.Name = 'FemboyShaders_'..key
+        for property, value in pairs(values or {}) do
+            safeSet(object, property, value)
+        end
+        object.Parent = lighting
+        owned[object] = true
+        effects[key] = object
+        return object
+    end
+
+    local function getPreset()
+        return FemboyShaderPresets[Mode and Mode.Value or 'Pride Parade'] or FemboyShaderPresets['Pride Parade']
+    end
+
+    local function currentAccent(preset, now)
+        local amount = Intensity and Intensity.Value / 100 or 1
+        local secondary = preset.Secondary or preset.Primary
+        local accent = preset.Accent or secondary
+        local phase = (math.sin(now * 1.3) + 1) * 0.5
+        local base = preset.Primary:Lerp(secondary, phase)
+        if RainbowCycle and RainbowCycle.Enabled then
+            local speed = math.max((RainbowSpeed and RainbowSpeed.Value or 35) / 20, 0.05)
+            local hue = (now * speed * 0.08) % 1
+            local rainbow = Color3.fromHSV(hue, math.clamp(0.72 * amount, 0.35, 1), 1)
+            if Mode and Mode.Value == 'Rainbow Hyperpop' or Mode and Mode.Value == 'Pride Parade' then
+                base = rainbow
+            else
+                base = base:Lerp(rainbow, math.clamp(0.28 * amount, 0, 0.62))
+            end
+        end
+        if preset.Accent then
+            base = base:Lerp(accent, (math.sin(now * 0.7 + 1.7) + 1) * 0.12)
+        end
+        return base
+    end
+
+    local function applyStatic()
+        if not active then return end
+        local preset = getPreset()
+        local amount = math.clamp((Intensity and Intensity.Value or 100) / 100, 0, 2)
+        local bloomScale = math.clamp((BloomAmount and BloomAmount.Value or 100) / 100, 0, 2.5)
+        local atmosphereScale = math.clamp((AtmosphereAmount and AtmosphereAmount.Value or 100) / 100, 0, 2.5)
+
+        lighting.Ambient = rgb(35, 31, 48):Lerp(preset.Ambient, math.min(amount, 1))
+        lighting.OutdoorAmbient = rgb(85, 82, 98):Lerp(preset.Outdoor, math.min(amount, 1))
+        lighting.Brightness = 2 + (preset.Brightness - 2) * amount
+        lighting.ExposureCompensation = preset.Exposure * amount
+        lighting.ClockTime = preset.Time
+        lighting.FogColor = preset.Secondary:Lerp(rgb(210, 215, 235), 0.48)
+        lighting.FogStart = 500 / math.max(atmosphereScale, 0.25)
+        lighting.FogEnd = 5000 / math.max(atmosphereScale, 0.25)
+
+        local correction = effects.Color
+        if correction then
+            correction.Contrast = math.clamp(preset.Contrast * amount, -1, 1)
+            correction.Saturation = math.clamp(preset.Saturation * amount, -1, 1)
+            correction.Brightness = 0.02 * amount
+        end
+
+        local bloom = effects.Bloom
+        if bloom then
+            bloom.Intensity = preset.Bloom * bloomScale * math.max(amount, 0.15)
+            bloom.Size = preset.BloomSize
+            bloom.Threshold = preset.BloomThreshold
+        end
+
+        local atmosphere = effects.Atmosphere
+        if atmosphere then
+            atmosphere.Density = math.clamp(preset.Atmosphere * atmosphereScale, 0, 0.65)
+            atmosphere.Haze = math.clamp(preset.Haze * atmosphereScale, 0, 10)
+            atmosphere.Glare = math.clamp(0.18 * atmosphereScale * amount, 0, 2)
+            atmosphere.Offset = 0.08
+        end
+
+        local rays = effects.Rays
+        if rays then
+            rays.Enabled = not GodRays or GodRays.Enabled
+            rays.Intensity = preset.Rays * amount
+            rays.Spread = preset.RaysSpread
+        end
+
+        local dof = effects.DOF
+        if dof then
+            dof.Enabled = DreamyDOF and DreamyDOF.Enabled or false
+            dof.NearIntensity = 0.02
+            dof.FarIntensity = 0.08 + 0.08 * amount
+            dof.FocusDistance = 75
+            dof.InFocusRadius = 62
+        end
+    end
+
+    local function animate(now)
+        if not active then return end
+        local preset = getPreset()
+        local amount = math.clamp((Intensity and Intensity.Value or 100) / 100, 0, 2)
+        local accent = currentAccent(preset, now)
+        local soft = accent:Lerp(Color3.new(1, 1, 1), 0.18)
+        lighting.ColorShift_Top = soft
+        lighting.ColorShift_Bottom = preset.Secondary:Lerp(accent, 0.4)
+
+        if effects.Color then
+            effects.Color.TintColor = Color3.new(1, 1, 1):Lerp(soft, math.clamp(0.24 * amount, 0, 0.52))
+        end
+        if effects.Atmosphere then
+            effects.Atmosphere.Color = soft:Lerp(rgb(220, 228, 255), 0.42)
+            effects.Atmosphere.Decay = preset.Secondary:Lerp(rgb(74, 60, 105), 0.6)
+        end
+
+        if Pulse and Pulse.Enabled then
+            local pulse = 0.5 + 0.5 * math.sin(now * 2.4)
+            lighting.ExposureCompensation = preset.Exposure * amount + pulse * 0.055 * amount
+            if effects.Bloom then
+                local bloomScale = math.clamp((BloomAmount and BloomAmount.Value or 100) / 100, 0, 2.5)
+                effects.Bloom.Intensity = preset.Bloom * bloomScale * math.max(amount, 0.15) * (0.9 + pulse * 0.22)
+            end
+        end
+    end
+
+    local function stop()
+        active = false
+        if heartbeat then heartbeat:Disconnect(); heartbeat = nil end
+        for object in pairs(owned) do
+            pcall(function() object:Destroy() end)
+        end
+        table.clear(owned)
+        table.clear(effects)
+        for key, value in pairs(original) do
+            safeSet(lighting, key, value)
+        end
+        table.clear(original)
+    end
+
+    local function start()
+        if active then return end
+        for _, key in ipairs(properties) do
+            original[key] = lighting[key]
+        end
+        active = true
+        make('ColorCorrectionEffect', 'Color', {TintColor = Color3.new(1, 1, 1)})
+        make('BloomEffect', 'Bloom', {Intensity = 0})
+        make('SunRaysEffect', 'Rays', {Intensity = 0, Spread = 0.9})
+        make('Atmosphere', 'Atmosphere', {Density = 0, Haze = 0, Glare = 0})
+        make('DepthOfFieldEffect', 'DOF', {Enabled = false})
+        applyStatic()
+        animate(tick())
+
+        -- The requested callout, shown once per enable instead of spamming every frame.
+        notif('Tenacity', 'JuniorBooyah exposed: certified twink femboy :3', 8, 'info')
+
+        local accumulator = 0
+        heartbeat = runService.RenderStepped:Connect(function(dt)
+            if not active then return end
+            accumulator += dt
+            if accumulator < 1 / 30 then return end
+            accumulator = 0
+            animate(tick())
+        end)
+    end
+
+    local function changed()
+        if active then
+            applyStatic()
+            animate(tick())
+        end
+    end
+
+    FemboyShaders = vape.Categories.Render:CreateModule({
+        Name = 'FemboyShaders',
+        Tooltip = 'Aggressively pastel/rainbow local shaders with animated pride lighting, bloom and atmosphere.',
+        Function = function(enabled)
+            if enabled then
+                start()
+            else
+                stop()
+            end
+        end
+    })
+
+    Mode = FemboyShaders:CreateDropdown({
+        Name = 'Gay Level',
+        List = {'Pride Parade', 'Femboy Dream', 'Trans Rights', 'Bi Panic', 'Lesbian Sunset', 'Cotton Candy', 'Rainbow Hyperpop'},
+        Default = 'Pride Parade',
+        Function = changed
+    })
+    Intensity = FemboyShaders:CreateSlider({Name = 'Fruitiness', Min = 0, Max = 200, Default = 135, Suffix = '%', Function = changed})
+    RainbowSpeed = FemboyShaders:CreateSlider({Name = 'Rainbow Speed', Min = 1, Max = 100, Default = 42, Suffix = '%', Function = changed})
+    BloomAmount = FemboyShaders:CreateSlider({Name = 'Sparkle Bloom', Min = 0, Max = 200, Default = 135, Suffix = '%', Function = changed})
+    AtmosphereAmount = FemboyShaders:CreateSlider({Name = 'Pastel Haze', Min = 0, Max = 200, Default = 115, Suffix = '%', Function = changed})
+    RainbowCycle = FemboyShaders:CreateToggle({Name = 'Rainbow Cycle', Default = true, Function = changed})
+    Pulse = FemboyShaders:CreateToggle({Name = 'Slay Pulse', Default = true, Function = changed})
+    GodRays = FemboyShaders:CreateToggle({Name = 'Divine Gay Rays', Default = true, Function = changed})
+    DreamyDOF = FemboyShaders:CreateToggle({Name = 'Dreamy DOF', Default = false, Function = changed})
+
+    vape:Clean(stop)
+end)
 
 
 run(function()
