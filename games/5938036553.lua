@@ -137,7 +137,7 @@ local debrisService = cloneref(game:GetService('Debris'))
 local gameCamera = workspace.CurrentCamera
 local lplr = playersService.LocalPlayer
 
-local vape = shared.vape
+local vape = shared.Tenacity or shared.vape
 local impactVisuals = assert(loadstring(downloadFile('newvape/libraries/frontlines-effects.lua'), 'Frontlines effects'))()(vape)
 local entitylib = vape.Libraries.entity
 local whitelist = vape.Libraries.whitelist
@@ -146,8 +146,13 @@ local targetinfo = vape.Libraries.targetinfo
 local sessioninfo = vape.Libraries.sessioninfo
 local getvapeasset = vape.Libraries.getvapeasset
 local drawingactor = loadstring(downloadFile('newvape/libraries/drawing.lua'), 'drawing')(...)
-local function notif(...)
-	return vape:CreateNotification(...)
+local function notif(title, message, duration, kind)
+	local client = shared.Tenacity or vape or shared.vape
+	if client and type(client.CreateNotification) == 'function' then
+		if title == 'Vape' then title = 'Tenacity' end
+		return client:CreateNotification(title, message, duration, kind)
+	end
+	warn(('[Tenacity] %s: %s'):format(tostring(title or 'Notification'), tostring(message or '')))
 end
 
 if not select(1, ...) and game.PlaceId == 5938036553 then
@@ -179,11 +184,11 @@ if not select(1, ...) and game.PlaceId == 5938036553 then
 					return
 				end
 			end
-			notif('Vape', 'Failed to find actor', 10, 'alert')
+			notif('Tenacity', 'Failed to find actor', 10, 'alert')
 		end)
 	else
 		vape.Load = function()
-			notif('Vape', 'Missing actor functions.', 10, 'alert')
+			notif('Tenacity', 'Missing actor functions.', 10, 'alert')
 		end
 	end
 
