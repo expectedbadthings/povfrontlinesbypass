@@ -1,4 +1,4 @@
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--Tenacity cached source file.
 local entitylib = {
 	isAlive = false,
 	character = {},
@@ -52,16 +52,6 @@ local function getMousePosition()
 	end
 
 	return inputService.GetMouseLocation(inputService)
-end
-
-local function loopClean(tbl)
-	for i, v in tbl do
-		if type(v) == 'table' then
-			loopClean(v)
-		end
-
-		tbl[i] = nil
-	end
 end
 
 local function waitForChildOfType(obj, name, timeout, prop, namecheck)
@@ -464,7 +454,7 @@ entitylib.kill = function()
 	end
 
 	entitylib.IgnoreObject:Destroy()
-	loopClean(entitylib)
+	table.clear(entitylib)
 end
 
 entitylib.refresh = function()

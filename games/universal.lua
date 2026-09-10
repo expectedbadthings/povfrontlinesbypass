@@ -1,8 +1,8 @@
 -- Local customization: Frontlines additive Legit speed support.
 local loadstring = function(...)
 	local res, err = loadstring(...)
-	if err and vape then
-		vape:CreateNotification('Vape', 'Failed to load : '..err, 30, 'alert')
+	if err and tenacity then
+		tenacity:CreateNotification('Tenacity', 'Failed to load : '..err, 30, 'alert')
 	end
 	return res
 end
@@ -13,16 +13,16 @@ local isfile = isfile or function(file)
 	return suc and res ~= nil and res ~= ''
 end
 local function downloadFile(path, func)
-	if shared.VapeRuntime then return shared.VapeRuntime.Read(path, func) end
+	if shared.TenacityRuntime then return shared.TenacityRuntime.Read(path, func) end
 	if not isfile(path) then
 		local suc, res = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/expectedbadthings/povfrontlinesbypass/'..readfile('newvape/profiles/commit.txt')..'/'..select(1, path:gsub('newvape/', '')), true)
+			return game:HttpGet('https://raw.githubusercontent.com/expectedbadthings/TenacityForRoblox/'..readfile('tenacity/profiles/commit.txt')..'/'..select(1, path:gsub('tenacity/', '')), true)
 		end)
 		if not suc or res == '404: Not Found' then
 			error(res)
 		end
 		if path:find('.lua') then
-			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res
+			res = '--Tenacity cached source file.\n'..res
 		end
 		writefile(path, res)
 	end
@@ -60,11 +60,11 @@ end
 local gameCamera = workspace.CurrentCamera or workspace:FindFirstChildWhichIsA('Camera')
 local lplr = playersService.LocalPlayer
 
-local vape = shared.vape
-local tween = vape.Libraries.tween
-local targetinfo = vape.Libraries.targetinfo
-local getfontbounds = vape.Libraries.getfontbounds
-local getvapeasset = vape.Libraries.getvapeasset
+local tenacity = shared.Tenacity
+local tween = tenacity.Libraries.tween
+local targetinfo = tenacity.Libraries.targetinfo
+local getfontbounds = tenacity.Libraries.getfontbounds
+local gettenacityasset = tenacity.Libraries.gettenacityasset
 
 
 -- GUI compatibility bridge -------------------------------------------------
@@ -72,10 +72,10 @@ local getvapeasset = vape.Libraries.getvapeasset
 -- expected by universal.lua. Keep universal compatible with those builds
 -- while retaining live GUI-accent updates.
 do
-	vape.HUDAccentObjects = vape.HUDAccentObjects or setmetatable({}, {__mode = 'k'})
+	tenacity.HUDAccentObjects = tenacity.HUDAccentObjects or setmetatable({}, {__mode = 'k'})
 
-	if type(vape.GetGUIColorRGB) ~= 'function' then
-		function vape:GetGUIColorRGB()
+	if type(tenacity.GetGUIColorRGB) ~= 'function' then
+		function tenacity:GetGUIColorRGB()
 			local guiColor = self.GUIColor
 			if type(guiColor) == 'table'
 				and type(guiColor.Hue) == 'number'
@@ -88,8 +88,8 @@ do
 		end
 	end
 
-	if type(vape.RegisterHUDAccent) ~= 'function' then
-		function vape:RegisterHUDAccent(object, property)
+	if type(tenacity.RegisterHUDAccent) ~= 'function' then
+		function tenacity:RegisterHUDAccent(object, property)
 			if typeof(object) ~= 'Instance' then return object end
 
 			property = property or (
@@ -115,8 +115,8 @@ do
 		end
 	end
 
-	if type(vape.StyleHUDCard) ~= 'function' then
-		function vape:StyleHUDCard(object)
+	if type(tenacity.StyleHUDCard) ~= 'function' then
+		function tenacity:StyleHUDCard(object)
 			if typeof(object) ~= 'Instance' or not object:IsA('GuiObject') then
 				return object
 			end
@@ -176,12 +176,12 @@ do
 
 	-- Keep registered HUD accents updated even if the underlying GUI's own
 	-- UpdateGUIQueue exits early while the ClickGUI itself is closed.
-	if not vape._HUDAccentUpdateHooked then
-		vape._HUDAccentUpdateHooked = true
+	if not tenacity._HUDAccentUpdateHooked then
+		tenacity._HUDAccentUpdateHooked = true
 
-		local oldUpdateGUIQueue = vape.UpdateGUIQueue
+		local oldUpdateGUIQueue = tenacity.UpdateGUIQueue
 		if type(oldUpdateGUIQueue) == 'function' then
-			vape.UpdateGUIQueue = function(self, hue, sat, val, ...)
+			tenacity.UpdateGUIQueue = function(self, hue, sat, val, ...)
 				local results = table.pack(oldUpdateGUIQueue(self, hue, sat, val, ...))
 				local accentColor = Color3.fromHSV(hue, sat, val)
 
@@ -214,7 +214,7 @@ local function addBlur(parent)
 	blur.Size = UDim2.new(1, 89, 1, 52)
 	blur.Position = UDim2.fromOffset(-48, -31)
 	blur.BackgroundTransparency = 1
-	blur.Image = getvapeasset('newvape/assets/new/blur.png')
+	blur.Image = gettenacityasset('tenacity/assets/new/blur.png')
 	blur.ScaleType = Enum.ScaleType.Slice
 	blur.SliceCenter = Rect.new(52, 31, 261, 502)
 	blur.Parent = parent
@@ -236,10 +236,10 @@ local function calculateMoveVector(vec)
 end
 
 local function isFriend(plr, recolor)
-	if vape.Categories.Friends.Options['Use friends'].Enabled then
-		local friend = table.find(vape.Categories.Friends.ListEnabled, plr.Name) and true
+	if tenacity.Categories.Friends.Options['Use friends'].Enabled then
+		local friend = table.find(tenacity.Categories.Friends.ListEnabled, plr.Name) and true
 		if recolor then
-			friend = friend and vape.Categories.Friends.Options['Recolor visuals'].Enabled
+			friend = friend and tenacity.Categories.Friends.Options['Recolor visuals'].Enabled
 		end
 		return friend
 	end
@@ -247,7 +247,7 @@ local function isFriend(plr, recolor)
 end
 
 local function isTarget(plr)
-	return table.find(vape.Categories.Targets.ListEnabled, plr.Name) and true
+	return table.find(tenacity.Categories.Targets.ListEnabled, plr.Name) and true
 end
 
 local function canClick()
@@ -264,7 +264,7 @@ local function canClick()
 			return false
 		end
 	end
-	return (not vape.gui.ScaledGui.ClickGui.Visible) and (not inputService:GetFocusedTextBox())
+	return (not tenacity.gui.ScaledGui.ClickGui.Visible) and (not inputService:GetFocusedTextBox())
 end
 
 local function getTableSize(tab)
@@ -278,7 +278,7 @@ local function getTool()
 end
 
 local function notif(...)
-	return vape:CreateNotification(...)
+	return tenacity:CreateNotification(...)
 end
 
 local function removeTags(str)
@@ -298,12 +298,12 @@ end
 local visited, attempted, tpSwitch = {}, {}, false
 local cacheExpire, cache = tick()
 local function serverHop(pointer, filter)
-	visited = shared.vapeserverhoplist and shared.vapeserverhoplist:split('/') or {}
+	visited = shared.TenacityServerHopList and shared.TenacityServerHopList:split('/') or {}
 	if not table.find(visited, game.JobId) then
 		table.insert(visited, game.JobId)
 	end
 	if not pointer then
-		notif('Vape', 'Searching for an available server.', 2)
+		notif('Tenacity', 'Searching for an available server.', 2)
 	end
 
 	local suc, httpdata = pcall(function()
@@ -316,7 +316,7 @@ local function serverHop(pointer, filter)
 				cacheExpire, cache = tick() + 60, httpdata
 				table.insert(attempted, v.id)
 
-				notif('Vape', 'Found! Teleporting.', 5)
+				notif('Tenacity', 'Found! Teleporting.', 5)
 				teleportService:TeleportToPlaceInstance(game.PlaceId, v.id)
 				return
 			end
@@ -325,17 +325,17 @@ local function serverHop(pointer, filter)
 		if data.nextPageCursor then
 			serverHop(data.nextPageCursor, filter)
 		else
-			notif('Vape', 'Failed to find an available server.', 5, 'warning')
+			notif('Tenacity', 'Failed to find an available server.', 5, 'warning')
 		end
 	else
-		notif('Vape', 'Failed to grab servers. ('..(data and data.errors[1].message or 'no data')..')', 5, 'warning')
+		notif('Tenacity', 'Failed to grab servers. ('..(data and data.errors[1].message or 'no data')..')', 5, 'warning')
 	end
 end
 
-vape:Clean(lplr.OnTeleport:Connect(function()
+tenacity:Clean(lplr.OnTeleport:Connect(function()
 	if not tpSwitch then
 		tpSwitch = true
-		queue_on_teleport("shared.vapeserverhoplist = '"..table.concat(visited, '/').."'\nshared.vapeserverhopprevious = '"..game.JobId.."'")
+		queue_on_teleport("shared.TenacityServerHopList = '"..table.concat(visited, '/').."'\nshared.TenacityServerHopPrevious = '"..game.JobId.."'")
 	end
 end))
 
@@ -371,9 +371,9 @@ local function motorMove(target, cf)
 	task.delay(0, part.Destroy, part)
 end
 
-local hash = loadstring(downloadFile('newvape/libraries/hash.lua'), 'hash')()
-local prediction = loadstring(downloadFile('newvape/libraries/prediction.lua'), 'prediction')()
-entitylib = loadstring(downloadFile('newvape/libraries/entity.lua'), 'entitylibrary')()
+local hash = loadstring(downloadFile('tenacity/libraries/hash.lua'), 'hash')()
+local prediction = loadstring(downloadFile('tenacity/libraries/prediction.lua'), 'prediction')()
+entitylib = loadstring(downloadFile('tenacity/libraries/entity.lua'), 'entitylibrary')()
 local whitelist = {
 	alreadychecked = {},
 	customtags = {},
@@ -389,11 +389,11 @@ local whitelist = {
 	localprio = 0,
 	said = {}
 }
-vape.Libraries.entity = entitylib
-vape.Libraries.whitelist = whitelist
-vape.Libraries.prediction = prediction
-vape.Libraries.hash = hash
-vape.Libraries.auraanims = {
+tenacity.Libraries.entity = entitylib
+tenacity.Libraries.whitelist = whitelist
+tenacity.Libraries.prediction = prediction
+tenacity.Libraries.hash = hash
+tenacity.Libraries.auraanims = {
 	Normal = {
 		{CFrame = CFrame.new(-0.17, -0.14, -0.12) * CFrame.Angles(math.rad(-53), math.rad(50), math.rad(-64)), Time = 0.1},
 		{CFrame = CFrame.new(-0.55, -0.59, -0.1) * CFrame.Angles(math.rad(-161), math.rad(54), math.rad(-6)), Time = 0.08},
@@ -502,7 +502,7 @@ run(function()
 		if entity.NPC then return true end
 		if isFriend(entity.Player) then return false end
 		if not select(2, whitelist:get(entity.Player)) then return false end
-		if vape.Settings.Modules.Options['Teams by server'].Enabled then
+		if tenacity.Settings.Modules.Options['Teams by server'].Enabled then
 			if not lplr.Team then return true end
 			if not entity.Player.Team then return true end
 			if entity.Player.Team ~= lplr.Team then return true end
@@ -513,21 +513,21 @@ run(function()
 
 	entitylib.getEntityColor = function(entity)
 		entity = entity.Player
-		if not (entity and vape.Settings.Modules.Options['Use team color'].Enabled) then return end
+		if not (entity and tenacity.Settings.Modules.Options['Use team color'].Enabled) then return end
 		if isFriend(entity, true) then
-			return Color3.fromHSV(vape.Categories.Friends.Options['Friends color'].Hue, vape.Categories.Friends.Options['Friends color'].Sat, vape.Categories.Friends.Options['Friends color'].Value)
+			return Color3.fromHSV(tenacity.Categories.Friends.Options['Friends color'].Hue, tenacity.Categories.Friends.Options['Friends color'].Sat, tenacity.Categories.Friends.Options['Friends color'].Value)
 		end
 		return tostring(entity.TeamColor) ~= 'White' and entity.TeamColor.Color or nil
 	end
 
-	vape:Clean(function()
+	tenacity:Clean(function()
 		entitylib.kill()
 		entitylib = nil
 	end)
-	vape:Clean(vape.Categories.Friends.Update.Event:Connect(function() entitylib.refresh() end))
-	vape:Clean(vape.Categories.Targets.Update.Event:Connect(function() entitylib.refresh() end))
-	vape:Clean(entitylib.Events.LocalAdded:Connect(updateVelocity))
-	vape:Clean(workspace:GetPropertyChangedSignal('CurrentCamera'):Connect(function()
+	tenacity:Clean(tenacity.Categories.Friends.Update.Event:Connect(function() entitylib.refresh() end))
+	tenacity:Clean(tenacity.Categories.Targets.Update.Event:Connect(function() entitylib.refresh() end))
+	tenacity:Clean(entitylib.Events.LocalAdded:Connect(updateVelocity))
+	tenacity:Clean(workspace:GetPropertyChangedSignal('CurrentCamera'):Connect(function()
 		gameCamera = workspace.CurrentCamera or workspace:FindFirstChildWhichIsA('Camera')
 	end))
 end)
@@ -599,9 +599,9 @@ run(function()
 			self:hook()
 
 			if self.localprio == 0 then
-				olduninject = vape.Uninject
-				vape.Uninject = function()
-					notif('Vape', 'No escaping the private members :)', 10)
+				olduninject = tenacity.Uninject
+				tenacity.Uninject = function()
+					notif('Tenacity', 'No escaping the private members :)', 10)
 				end
 			end
 		end
@@ -656,7 +656,7 @@ run(function()
 			return oldchat(data, ...)
 		end)
 
-		vape:Clean(function()
+		tenacity:Clean(function()
 			hookfunction(func, oldchat)
 		end)
 	end
@@ -669,7 +669,7 @@ run(function()
 			if getcallbackvalue and restorefunction and hookfunction then
 				local old
 				task.spawn(function()
-					vape:Clean(function()
+					tenacity:Clean(function()
 						if old then
 							restorefunction(old)
 							old = nil
@@ -707,7 +707,7 @@ run(function()
 						end
 
 						task.wait(0.1)
-					until vape.Loaded == nil
+					until tenacity.Loaded == nil
 				end)
 			end
 		elseif replicatedStorage:FindFirstChild('DefaultChatSystemChatEvents') then
@@ -790,7 +790,7 @@ run(function()
 		if success then
 			return sendToast({
 				toastTitle = text,
-				iconImage = getvapeasset('newvape/assets/new/vape.png'),
+				iconImage = gettenacityasset('tenacity/assets/tenacity/modernlogo.png'),
 				swipeUpDismiss = true,
 				onActivated = function() end
 			})
@@ -802,7 +802,7 @@ run(function()
 		container.AnchorPoint = Vector2.new(0.5, 0)
 		container.BackgroundTransparency = 1
 		container.Text = ''
-		container.Parent = vape.gui
+		container.Parent = tenacity.gui
 		local constraint = Instance.new('UISizeConstraint')
 		constraint.MinSize = Vector2.new(24, 60)
 		constraint.MaxSize = Vector2.new(600, math.huge)
@@ -861,7 +861,7 @@ run(function()
 		iconframe.Parent = mainframe
 		local icon = Instance.new('ImageLabel')
 		icon.Size = UDim2.fromOffset(36, 36)
-		icon.Image = getvapeasset('newvape/assets/new/vape.png')
+		icon.Image = gettenacityasset('tenacity/assets/tenacity/modernlogo.png')
 		icon.BackgroundTransparency = 1
 		icon.Parent = iconframe
 		constraint.MaxSize = Vector2.new(math.max(getfontbounds(text, 20, textlabel.FontFace).X + 80, 600), math.huge)
@@ -871,7 +871,7 @@ run(function()
 		})
 
 		task.delay(20, function()
-			if vape.Loaded ~= nil then
+			if tenacity.Loaded ~= nil then
 				tween:Tween(container, TweenInfo.new(0.3), {
 					Position = UDim2.new(0.5, 0, 0, -60)
 				})
@@ -897,7 +897,7 @@ run(function()
 
 		if not first or whitelist.textdata ~= whitelist.olddata then
 			if not first then
-				whitelist.olddata = isfile('newvape/profiles/whitelist.json') and readfile('newvape/profiles/whitelist.json') or nil
+				whitelist.olddata = isfile('tenacity/profiles/whitelist.json') and readfile('tenacity/profiles/whitelist.json') or nil
 			end
 
 			local suc, res = pcall(function()
@@ -919,14 +919,14 @@ run(function()
 				whitelist.connection = playersService.PlayerAdded:Connect(function(v)
 					whitelist:playeradded(v, true)
 				end)
-				vape:Clean(whitelist.connection)
+				tenacity:Clean(whitelist.connection)
 			end
 
 			for _, v in playersService:GetPlayers() do
 				whitelist:playeradded(v)
 			end
 
-			if entitylib.Running and vape.Loaded then
+			if entitylib.Running and tenacity.Loaded then
 				entitylib.refresh()
 			end
 
@@ -941,12 +941,12 @@ run(function()
 				end
 				whitelist.olddata = whitelist.textdata
 				pcall(function()
-					writefile('newvape/profiles/whitelist.json', whitelist.textdata)
+					writefile('tenacity/profiles/whitelist.json', whitelist.textdata)
 				end)
 			end
 
-			if whitelist.data.KillVape then
-				vape:Uninject()
+			if whitelist.data.KillTenacity then
+				tenacity:Uninject()
 				return true
 			end
 
@@ -1018,13 +1018,13 @@ run(function()
 		toggle = function(args)
 			if #args < 1 then return end
 			if args[1]:lower() == 'all' then
-				for i, v in vape.Modules do
+				for i, v in tenacity.Modules do
 					if i ~= 'Panic' and i ~= 'ServerHop' and i ~= 'Rejoin' then
 						v:Toggle()
 					end
 				end
 			else
-				for i, v in vape.Modules do
+				for i, v in tenacity.Modules do
 					if i:lower() == args[1]:lower() then
 						v:Toggle()
 						break
@@ -1043,12 +1043,12 @@ run(function()
 		end,
 		uninject = function()
 			if olduninject then
-				if vape.ThreadFix then
+				if tenacity.ThreadFix then
 					setthreadidentity(8)
 				end
-				olduninject(vape)
+				olduninject(tenacity)
 			else
-				vape:Uninject()
+				tenacity:Uninject()
 			end
 		end,
 		void = function()
@@ -1065,10 +1065,10 @@ run(function()
 			end
 
 			task.wait(10)
-		until vape.Loaded == nil
+		until tenacity.Loaded == nil
 	end)
 
-	vape:Clean(function()
+	tenacity:Clean(function()
 		table.clear(whitelist.commands)
 		table.clear(whitelist.data)
 		table.clear(whitelist)
@@ -1097,7 +1097,7 @@ run(function()
 		return num
 	end
 	
-	AimAssist = vape.Categories.Combat:CreateModule({
+	AimAssist = tenacity:Module('Combat', {
 		Name = 'AimAssist',
 		Function = function(callback)
 			if CircleObject then
@@ -1112,7 +1112,7 @@ run(function()
 						CircleObject.Position = inputService:GetMouseLocation()
 					end
 	
-					if rightClicked and not vape.gui.ScaledGui.ClickGui.Visible then
+					if rightClicked and not tenacity.gui.ScaledGui.ClickGui.Visible then
 						ent = entitylib.EntityMouse({
 							Range = FOV.Value,
 							Part = Part.Value,
@@ -1161,12 +1161,12 @@ run(function()
 		end,
 		Tooltip = 'Smoothly aims to closest valid target'
 	})
-	Targets = AimAssist:CreateTargets({Players = true})
-	Part = AimAssist:CreateDropdown({
+	Targets = AimAssist:Setting({Type='targets', Players = true})
+	Part = AimAssist:Setting({Type='dropdown', 
 		Name = 'Part',
 		List = {'RootPart', 'Head'}
 	})
-	FOV = AimAssist:CreateSlider({
+	FOV = AimAssist:Setting({Type='slider', 
 		Name = 'FOV',
 		Min = 0,
 		Max = 1000,
@@ -1177,20 +1177,20 @@ run(function()
 			end
 		end
 	})
-	Speed = AimAssist:CreateSlider({
+	Speed = AimAssist:Setting({Type='slider', 
 		Name = 'Speed',
 		Min = 0,
 		Max = 30,
 		Default = 15
 	})
-	AimAssist:CreateToggle({
+	AimAssist:Setting({Type='toggle', 
 		Name = 'Range Circle',
 		Function = function(callback)
 			if callback then
 				CircleObject = Drawing.new('Circle')
 				CircleObject.Filled = CircleFilled.Enabled
 				CircleObject.Color = Color3.fromHSV(CircleColor.Hue, CircleColor.Sat, CircleColor.Value)
-				CircleObject.Position = vape.gui.AbsoluteSize / 2
+				CircleObject.Position = tenacity.gui.AbsoluteSize / 2
 				CircleObject.Radius = FOV.Value
 				CircleObject.NumSides = 100
 				CircleObject.Transparency = 1 - CircleTransparency.Value
@@ -1206,7 +1206,7 @@ run(function()
 			CircleFilled.Object.Visible = callback
 		end
 	})
-	CircleColor = AimAssist:CreateColorSlider({
+	CircleColor = AimAssist:Setting({Type='color', 
 		Name = 'Circle Color',
 		Function = function(hue, sat, val)
 			if CircleObject then
@@ -1216,7 +1216,7 @@ run(function()
 		Darker = true,
 		Visible = false
 	})
-	CircleTransparency = AimAssist:CreateSlider({
+	CircleTransparency = AimAssist:Setting({Type='slider', 
 		Name = 'Transparency',
 		Min = 0,
 		Max = 1,
@@ -1230,7 +1230,7 @@ run(function()
 		Darker = true,
 		Visible = false
 	})
-	CircleFilled = AimAssist:CreateToggle({
+	CircleFilled = AimAssist:Setting({Type='toggle', 
 		Name = 'Circle Filled',
 		Function = function(callback)
 			if CircleObject then
@@ -1240,7 +1240,7 @@ run(function()
 		Darker = true,
 		Visible = false
 	})
-	RightClick = AimAssist:CreateToggle({
+	RightClick = AimAssist:Setting({Type='toggle', 
 		Name = 'Require right click',
 		Function = function()
 			if AimAssist.Enabled then
@@ -1249,7 +1249,7 @@ run(function()
 			end
 		end
 	})
-	ShowTarget = AimAssist:CreateToggle({
+	ShowTarget = AimAssist:Setting({Type='toggle', 
 		Name = 'Show target info'
 	})
 end)
@@ -1259,7 +1259,7 @@ run(function()
 	local Mode
 	local CPS
 	
-	AutoClicker = vape.Categories.Combat:CreateModule({
+	AutoClicker = tenacity:Module('Combat', {
 		Name = 'AutoClicker',
 		Function = function(callback)
 			if callback then
@@ -1271,7 +1271,7 @@ run(function()
 						end
 					else
 						if mouse1click and (isrbxactive or iswindowactive)() then
-							if not vape.gui.ScaledGui.ClickGui.Visible then
+							if not tenacity.gui.ScaledGui.ClickGui.Visible then
 								(Mode.Value == 'Click' and mouse1click or mouse2click)()
 							end
 						end
@@ -1283,12 +1283,12 @@ run(function()
 		end,
 		Tooltip = 'Automatically clicks for you'
 	})
-	Mode = AutoClicker:CreateDropdown({
+	Mode = AutoClicker:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Tool', 'Click', 'RightClick'},
 		Tooltip = 'Tool - Automatically uses roblox tools (eg. swords)\nClick - Left click\nRightClick - Right click'
 	})
-	CPS = AutoClicker:CreateTwoSlider({
+	CPS = AutoClicker:Setting({Type='range', 
 		Name = 'CPS',
 		Min = 1,
 		Max = 20,
@@ -1307,7 +1307,7 @@ run(function()
 	Overlay.FilterType = Enum.RaycastFilterType.Include
 	local modified = {}
 	
-	Reach = vape.Categories.Combat:CreateModule({
+	Reach = tenacity:Module('Combat', {
 		Name = 'Reach',
 		Function = function(callback)
 			if callback then
@@ -1360,8 +1360,8 @@ run(function()
 		end,
 		Tooltip = 'Extends tool attack reach'
 	})
-	Targets = Reach:CreateTargets({Players = true})
-	Mode = Reach:CreateDropdown({
+	Targets = Reach:Setting({Type='targets', Players = true})
+	Mode = Reach:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'TouchInterest', 'Resize'},
 		Function = function(val)
@@ -1369,7 +1369,7 @@ run(function()
 		end,
 		Tooltip = 'TouchInterest - Reports fake collision events to the server\nResize - Physically modifies the tools size'
 	})
-	Value = Reach:CreateSlider({
+	Value = Reach:Setting({Type='slider', 
 		Name = 'Range',
 		Min = 0,
 		Max = 2,
@@ -1378,7 +1378,7 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	Chance = Reach:CreateSlider({
+	Chance = Reach:Setting({Type='slider', 
 		Name = 'Chance',
 		Min = 0,
 		Max = 100,
@@ -1452,7 +1452,7 @@ run(function()
 		end
 		if not ok then
 			stopActor(session)
-			vape:CreateNotification('SilentAim', tostring(message or 'Arsenal actor hook failed.'), 8, 'alert')
+			tenacity:CreateNotification('SilentAim', tostring(message or 'Arsenal actor hook failed.'), 8, 'alert')
 			task.defer(function()
 				if actorSerial == session.id and SilentAim.Enabled and Method.Value == 'Arsenal' then SilentAim:Toggle() end
 			end)
@@ -1616,7 +1616,7 @@ run(function()
 	Hooks.ViewportPointToRay = table.clone(Hooks.ScreenPointToRay)
 	Hooks.ViewportPointToRay.Hook = Instance.new('Camera').ViewportPointToRay
 
-	SilentAim = vape.Categories.Combat:CreateModule({
+	SilentAim = tenacity:Module('Combat', {
 		Name = 'SilentAim',
 		Function = function(callback)
 			if CircleObject then
@@ -1629,10 +1629,10 @@ run(function()
 				activeRun = {cancelled = false}
 				SilentAim:Clean(function() activeRun.cancelled = true end)
 				if Method.Value == 'Arsenal' then
-					local additions = vape.Libraries.additions
+					local additions = tenacity.Libraries.additions
 					local api = additions and additions.aim
 					if not api or not api.ars then
-						vape:CreateNotification('SilentAim', 'Arsenal mode needs the additions bundle and must be used in Arsenal.', 8, 'alert')
+						tenacity:CreateNotification('SilentAim', 'Arsenal mode needs the additions bundle and must be used in Arsenal.', 8, 'alert')
 						task.defer(function() if SilentAim.Enabled and Method.Value == 'Arsenal' then SilentAim:Toggle() end end)
 						return
 					end
@@ -1744,10 +1744,10 @@ run(function()
 		end,
 		Tooltip = 'Silently adjusts your aim towards the enemy'
 	})
-	Target = SilentAim:CreateTargets({
+	Target = SilentAim:Setting({Type='targets', 
 		Players = true
 	})
-	Mode = SilentAim:CreateDropdown({
+	Mode = SilentAim:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Mouse', 'Position'},
 		Function = function(val)
@@ -1757,7 +1757,7 @@ run(function()
 		end,
 		Tooltip = 'Mouse - Checks for entities near the mouses position\nPosition - Checks for entities near the local character'
 	})
-	Method = SilentAim:CreateDropdown({
+	Method = SilentAim:Setting({Type='dropdown', 
 		Name = 'Method',
 		List = {'FindPartOnRay', 'FindPartOnRayWithIgnoreList', 'FindPartOnRayWithWhitelist', 'ScreenPointToRay', 'ViewportPointToRay', 'Raycast', 'Ray', 'Arsenal'},
 		Default = game.PlaceId == 286090429 and 'Arsenal' or 'FindPartOnRay',
@@ -1771,17 +1771,17 @@ run(function()
 		end,
 		Tooltip = 'FindPartOnRay* - Deprecated methods of raycasting used in old games\nRaycast - The modern raycast method\n*PointToRay - Method to generate a ray from a screen position\nRay - Used in old games\nArsenal - Uses the Arsenal actor aim helper'
 	})
-	RayMethod = SilentAim:CreateDropdown({
+	RayMethod = SilentAim:Setting({Type='dropdown', 
 		Name = 'Raycast Type',
 		List = {'All', 'Exclude', 'Include'},
 		Darker = true,
 		Visible = false
 	})
-	IgnoredScripts = SilentAim:CreateTextList({
+	IgnoredScripts = SilentAim:Setting({Type='list', 
 		Name = 'Ignored Scripts',
 		Default = {'CameraModule'}
 	})
-	Range = SilentAim:CreateSlider({
+	Range = SilentAim:Setting({Type='slider', 
 		Name = 'Range',
 		Min = 1,
 		Max = 1000,
@@ -1795,21 +1795,21 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	HitChance = SilentAim:CreateSlider({
+	HitChance = SilentAim:Setting({Type='slider', 
 		Name = 'Hit Chance',
 		Min = 0,
 		Max = 100,
 		Default = 100,
 		Suffix = '%'
 	})
-	HeadshotChance = SilentAim:CreateSlider({
+	HeadshotChance = SilentAim:Setting({Type='slider', 
 		Name = 'Headshot Chance',
 		Min = 0,
 		Max = 100,
 		Default = 65,
 		Suffix = '%'
 	})
-	AutoFire = SilentAim:CreateToggle({
+	AutoFire = SilentAim:Setting({Type='toggle', 
 		Name = 'AutoFire',
 		Function = function(callback)
 			AutoFireShootDelay.Object.Visible = callback
@@ -1817,7 +1817,7 @@ run(function()
 			AutoFirePosition.Object.Visible = callback
 		end
 	})
-	AutoFireShootDelay = SilentAim:CreateSlider({
+	AutoFireShootDelay = SilentAim:Setting({Type='slider', 
 		Name = 'Next Shot Delay',
 		Min = 0,
 		Max = 1,
@@ -1828,14 +1828,14 @@ run(function()
 			return val == 1 and 'second' or 'seconds'
 		end
 	})
-	AutoFireMode = SilentAim:CreateDropdown({
+	AutoFireMode = SilentAim:Setting({Type='dropdown', 
 		Name = 'Origin',
 		List = {'RootPart', 'Camera'},
 		Visible = false,
 		Darker = true,
 		Tooltip = 'Determines the position to check for before shooting'
 	})
-	AutoFirePosition = SilentAim:CreateTextBox({
+	AutoFirePosition = SilentAim:Setting({Type='text', 
 		Name = 'Offset',
 		Function = function()
 			local success, cf = pcall(function()
@@ -1850,8 +1850,8 @@ run(function()
 		Visible = false,
 		Darker = true
 	})
-	Wallbang = SilentAim:CreateToggle({Name = 'Wallbang'})
-	FunctionHook = SilentAim:CreateToggle({
+	Wallbang = SilentAim:Setting({Type='toggle', Name = 'Wallbang'})
+	FunctionHook = SilentAim:Setting({Type='toggle', 
 		Name = 'Function hook',
 		Function = function()
 			if SilentAim.Enabled then
@@ -1861,7 +1861,7 @@ run(function()
 		end,
 		Tooltip = 'Hook the function used for index calling (used on some games)'
 	})
-	OthHook = SilentAim:CreateToggle({
+	OthHook = SilentAim:Setting({Type='toggle', 
 		Name = 'Oth hook',
 		Function = function()
 			if SilentAim.Enabled then
@@ -1871,14 +1871,14 @@ run(function()
 		end,
 		Tooltip = 'Hook the function using a less detected method (useful on some games)'
 	})
-	SilentAim:CreateToggle({
+	SilentAim:Setting({Type='toggle', 
 		Name = 'Range Circle',
 		Function = function(callback)
 			if callback then
 				CircleObject = Drawing.new('Circle')
 				CircleObject.Filled = CircleFilled.Enabled
 				CircleObject.Color = Color3.fromHSV(CircleColor.Hue, CircleColor.Sat, CircleColor.Value)
-				CircleObject.Position = vape.gui.AbsoluteSize / 2
+				CircleObject.Position = tenacity.gui.AbsoluteSize / 2
 				CircleObject.Radius = Range.Value
 				CircleObject.NumSides = 100
 				CircleObject.Transparency = 1 - CircleTransparency.Value
@@ -1894,7 +1894,7 @@ run(function()
 			CircleFilled.Object.Visible = callback
 		end
 	})
-	CircleColor = SilentAim:CreateColorSlider({
+	CircleColor = SilentAim:Setting({Type='color', 
 		Name = 'Circle Color',
 		Function = function(hue, sat, val)
 			if CircleObject then
@@ -1904,7 +1904,7 @@ run(function()
 		Darker = true,
 		Visible = false
 	})
-	CircleTransparency = SilentAim:CreateSlider({
+	CircleTransparency = SilentAim:Setting({Type='slider', 
 		Name = 'Transparency',
 		Min = 0,
 		Max = 1,
@@ -1918,7 +1918,7 @@ run(function()
 		Darker = true,
 		Visible = false
 	})
-	CircleFilled = SilentAim:CreateToggle({
+	CircleFilled = SilentAim:Setting({Type='toggle', 
 		Name = 'Circle Filled',
 		Function = function(callback)
 			if CircleObject then
@@ -1928,14 +1928,14 @@ run(function()
 		Darker = true,
 		Visible = false
 	})
-	Projectile = SilentAim:CreateToggle({
+	Projectile = SilentAim:Setting({Type='toggle', 
 		Name = 'Projectile',
 		Function = function(callback)
 			ProjectileSpeed.Object.Visible = callback
 			ProjectileGravity.Object.Visible = callback
 		end
 	})
-	ProjectileSpeed = SilentAim:CreateSlider({
+	ProjectileSpeed = SilentAim:Setting({Type='slider', 
 		Name = 'Speed',
 		Min = 1,
 		Max = 1000,
@@ -1946,7 +1946,7 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	ProjectileGravity = SilentAim:CreateSlider({
+	ProjectileGravity = SilentAim:Setting({Type='slider', 
 		Name = 'Gravity',
 		Min = 0,
 		Max = 192.6,
@@ -1978,7 +1978,7 @@ run(function()
 		end
 	end
 	
-	TriggerBot = vape.Categories.Combat:CreateModule({
+	TriggerBot = tenacity:Module('Combat', {
 		Name = 'TriggerBot',
 		Function = function(callback)
 			if callback then
@@ -2017,11 +2017,11 @@ run(function()
 		end,
 		Tooltip = 'Shoots people that enter your crosshair'
 	})
-	Targets = TriggerBot:CreateTargets({
+	Targets = TriggerBot:Setting({Type='targets', 
 		Players = true,
 		NPCs = true
 	})
-	ShootDelay = TriggerBot:CreateSlider({
+	ShootDelay = TriggerBot:Setting({Type='slider', 
 		Name = 'Next Shot Delay',
 		Min = 0,
 		Max = 1,
@@ -2031,7 +2031,7 @@ run(function()
 		end,
 		Tooltip = 'The delay set after shooting a target'
 	})
-	Distance = TriggerBot:CreateSlider({
+	Distance = TriggerBot:Setting({Type='slider', 
 		Name = 'Distance',
 		Min = 0,
 		Max = 1000,
@@ -2053,7 +2053,7 @@ run(function()
 	rayCheck.RespectCanCollide = true
 	local part
 	
-	AntiFall = vape.Categories.Blatant:CreateModule({
+	AntiFall = tenacity:Module('Movement', {
 		Name = 'AntiFall',
 		Function = function(callback)
 			if callback then
@@ -2116,7 +2116,7 @@ run(function()
 		end,
 		Tooltip = 'Help\'s you with your Parkinson\'s\nPrevents you from falling into the void.'
 	})
-	Method = AntiFall:CreateDropdown({
+	Method = AntiFall:Setting({Type='dropdown', 
 		Name = 'Method',
 		List = {'Part', 'Classic'},
 		Function = function(val)
@@ -2132,7 +2132,7 @@ run(function()
 		end,
 		Tooltip = 'Part - Moves a part under you that does various methods to stop you from falling\nClassic - Teleports you out of the void after reaching the part destroy plane'
 	})
-	Mode = AntiFall:CreateDropdown({
+	Mode = AntiFall:Setting({Type='dropdown', 
 		Name = 'Move Mode',
 		List = {'Impulse', 'Velocity', 'Collide'},
 		Darker = true,
@@ -2149,7 +2149,7 @@ run(function()
 			table.insert(materials, material.Name)
 		end
 	end
-	Material = AntiFall:CreateDropdown({
+	Material = AntiFall:Setting({Type='dropdown', 
 		Name = 'Material',
 		List = materials,
 		Darker = true,
@@ -2159,7 +2159,7 @@ run(function()
 			end
 		end
 	})
-	Color = AntiFall:CreateColorSlider({
+	Color = AntiFall:Setting({Type='color', 
 		Name = 'Color',
 		DefaultOpacity = 0.5,
 		Darker = true,
@@ -2170,7 +2170,7 @@ run(function()
 			end
 		end
 	})
-	Value = AntiFall:CreateSlider({
+	Value = AntiFall:Setting({Type='slider', 
 		Name = 'Bounce velocity',
 		Min = 0,
 		Max = 200,
@@ -2276,7 +2276,7 @@ run(function()
 		end
 	}
 
-	Fly = vape.Categories.Blatant:CreateModule({
+	Fly = tenacity:Module('Movement', {
 		Name = 'Fly',
 		Function = function(callback)
 			if Platform then
@@ -2360,7 +2360,7 @@ run(function()
 		end,
 		Tooltip = 'Makes you go zoom.'
 	})
-	Mode = Fly:CreateDropdown({
+	Mode = Fly:Setting({Type='dropdown', 
 		Name = 'Speed Mode',
 		List = SpeedMethodList,
 		Function = function(val)
@@ -2375,7 +2375,7 @@ run(function()
 		end,
 		Tooltip = 'Velocity - Uses smooth physics based movement\nImpulse - Same as velocity while using forces instead\nCFrame - Directly adjusts the position of the root\nTP - Large teleports within intervals\nPulse - Controllable bursts of speed\nWalkSpeed - The classic mode of speed, usually detected on most games.'
 	})
-	FloatMode = Fly:CreateDropdown({
+	FloatMode = Fly:Setting({Type='dropdown', 
 		Name = 'Float Mode',
 		List = {'Velocity', 'Impulse', 'CFrame', 'Bounce', 'Floor', 'Jump', 'TP'},
 		Function = function(val)
@@ -2408,28 +2408,28 @@ run(function()
 			table.insert(states, v.Name)
 		end
 	end
-	State = Fly:CreateDropdown({
+	State = Fly:Setting({Type='dropdown', 
 		Name = 'Humanoid State',
 		List = states
 	})
-	MoveMethod = Fly:CreateDropdown({
+	MoveMethod = Fly:Setting({Type='dropdown', 
 		Name = 'Move Mode',
 		List = {'MoveDirection', 'Direct'},
 		Tooltip = 'MoveDirection - Uses the games input vector for movement\nDirect - Directly calculate our own input vector'
 	})
-	UpKey = Fly:CreateBind({
+	UpKey = Fly:Setting({Type='bind', 
 		Name = 'Up Key',
 		Default = {'Space'},
 		Hold = true,
 		Tooltip = 'Keybind to fly upwards'
 	})
-	DownKey = Fly:CreateBind({
+	DownKey = Fly:Setting({Type='bind', 
 		Name = 'Down Key',
 		Default = {'LeftControl'},
 		Hold = true,
 		Tooltip = 'Keybind to fly downwards'
 	})
-	Options.Value = Fly:CreateSlider({
+	Options.Value = Fly:Setting({Type='slider', 
 		Name = 'Speed',
 		Min = 1,
 		Max = 150,
@@ -2438,7 +2438,7 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	VerticalValue = Fly:CreateSlider({
+	VerticalValue = Fly:Setting({Type='slider', 
 		Name = 'Vertical Speed',
 		Min = 1,
 		Max = 150,
@@ -2447,7 +2447,7 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	Options.TPFrequency = Fly:CreateSlider({
+	Options.TPFrequency = Fly:Setting({Type='slider', 
 		Name = 'TP Frequency',
 		Min = 0,
 		Max = 1,
@@ -2458,7 +2458,7 @@ run(function()
 			return val == 1 and 'second' or 'seconds'
 		end
 	})
-	Options.PulseLength = Fly:CreateSlider({
+	Options.PulseLength = Fly:Setting({Type='slider', 
 		Name = 'Pulse Length',
 		Min = 0,
 		Max = 1,
@@ -2469,7 +2469,7 @@ run(function()
 			return val == 1 and 'second' or 'seconds'
 		end
 	})
-	Options.PulseDelay = Fly:CreateSlider({
+	Options.PulseDelay = Fly:Setting({Type='slider', 
 		Name = 'Pulse Delay',
 		Min = 0,
 		Max = 1,
@@ -2480,7 +2480,7 @@ run(function()
 			return val == 1 and 'second' or 'seconds'
 		end
 	})
-	BounceLength = Fly:CreateSlider({
+	BounceLength = Fly:Setting({Type='slider', 
 		Name = 'Bounce Length',
 		Min = 0,
 		Max = 30,
@@ -2490,7 +2490,7 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	BounceDelay = Fly:CreateSlider({
+	BounceDelay = Fly:Setting({Type='slider', 
 		Name = 'Bounce Delay',
 		Min = 0,
 		Max = 1,
@@ -2501,7 +2501,7 @@ run(function()
 			return val == 1 and 'second' or 'seconds'
 		end
 	})
-	FloatTPGround = Fly:CreateSlider({
+	FloatTPGround = Fly:Setting({Type='slider', 
 		Name = 'Ground',
 		Min = 0,
 		Max = 1,
@@ -2513,7 +2513,7 @@ run(function()
 			return val == 1 and 'second' or 'seconds'
 		end
 	})
-	FloatTPAir = Fly:CreateSlider({
+	FloatTPAir = Fly:Setting({Type='slider', 
 		Name = 'Air',
 		Min = 0,
 		Max = 5,
@@ -2525,14 +2525,14 @@ run(function()
 			return val == 1 and 'second' or 'seconds'
 		end
 	})
-	WallCheck = Fly:CreateToggle({
+	WallCheck = Fly:Setting({Type='toggle', 
 		Name = 'Wall Check',
 		Default = true,
 		Darker = true,
 		Visible = false
 	})
 	Options.WallCheck = WallCheck
-	PlatformStanding = Fly:CreateToggle({
+	PlatformStanding = Fly:Setting({Type='toggle', 
 		Name = 'PlatformStand',
 		Function = function(callback)
 			if Fly.Enabled then
@@ -2541,7 +2541,7 @@ run(function()
 		end,
 		Tooltip = 'Forces the character to look infront of the camera'
 	})
-	CustomProperties = Fly:CreateToggle({
+	CustomProperties = Fly:Setting({Type='toggle', 
 		Name = 'Custom Properties',
 		Function = function()
 			if Fly.Enabled then
@@ -2588,7 +2588,7 @@ run(function()
 		end
 	end
 	
-	HighJump = vape.Categories.Blatant:CreateModule({
+	HighJump = tenacity:Module('Movement', {
 		Name = 'HighJump',
 		Function = function(callback)
 			if callback then
@@ -2609,12 +2609,12 @@ run(function()
 		end,
 		Tooltip = 'Lets you jump higher'
 	})
-	Mode = HighJump:CreateDropdown({
+	Mode = HighJump:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Impulse', 'Velocity', 'CFrame', 'Instant'},
 		Tooltip = 'Velocity - Uses smooth movement to boost you upward\nImpulse - Same as velocity while using forces instead\nCFrame - Directly adjusts the position upward\nInstant - Teleports you to the peak of the jump'
 	})
-	Value = HighJump:CreateSlider({
+	Value = HighJump:Setting({Type='slider', 
 		Name = 'Velocity',
 		Min = 1,
 		Max = 150,
@@ -2623,7 +2623,7 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	AutoDisable = HighJump:CreateToggle({
+	AutoDisable = HighJump:Setting({Type='toggle', 
 		Name = 'Auto Disable',
 		Default = true
 	})
@@ -2636,7 +2636,7 @@ run(function()
 	local Expand
 	local modified = {}
 	
-	HitBoxes = vape.Categories.Blatant:CreateModule({
+	HitBoxes = tenacity:Module('Movement', {
 		Name = 'HitBoxes',
 		Function = function(callback)
 			if callback then
@@ -2664,12 +2664,12 @@ run(function()
 		end,
 		Tooltip = 'Expands entities hitboxes'
 	})
-	Targets = HitBoxes:CreateTargets({Players = true})
-	TargetPart = HitBoxes:CreateDropdown({
+	Targets = HitBoxes:Setting({Type='targets', Players = true})
+	TargetPart = HitBoxes:Setting({Type='dropdown', 
 		Name = 'Part',
 		List = {'RootPart', 'Head'}
 	})
-	Expand = HitBoxes:CreateSlider({
+	Expand = HitBoxes:Setting({Type='slider', 
 		Name = 'Expand amount',
 		Min = 0,
 		Max = 2,
@@ -2702,7 +2702,7 @@ run(function()
 		end
 	end
 	
-	Invisible = vape.Categories.Blatant:CreateModule({
+	Invisible = tenacity:Module('Movement', {
 		Name = 'Invisible',
 		Function = function(callback)
 			if callback then
@@ -2761,7 +2761,7 @@ run(function()
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
 	
-	Jesus = vape.Categories.Blatant:CreateModule({
+	Jesus = tenacity:Module('Movement', {
 		Name = 'Jesus',
 		Function = function(callback)
 			if callback then
@@ -2823,7 +2823,7 @@ run(function()
 		return tool and tool:FindFirstChildWhichIsA('TouchTransmitter', true) or nil, tool
 	end
 	
-	Killaura = vape.Categories.Blatant:CreateModule({
+	Killaura = tenacity:Module('Movement', {
 		Name = 'Killaura',
 		Function = function(callback)
 			if callback then
@@ -2912,17 +2912,17 @@ run(function()
 		end,
 		Tooltip = 'Attack players around you\nwithout aiming at them.'
 	})
-	Targets = Killaura:CreateTargets({
+	Targets = Killaura:Setting({Type='targets', 
 		Players = true
 	})
-	CPS = Killaura:CreateTwoSlider({
+	CPS = Killaura:Setting({Type='range', 
 		Name = 'Attacks per Second',
 		Min = 1,
 		Max = 20,
 		DefaultMin = 12,
 		DefaultMax = 12
 	})
-	SwingRange = Killaura:CreateSlider({
+	SwingRange = Killaura:Setting({Type='slider', 
 		Name = 'Swing range',
 		Min = 1,
 		Max = 30,
@@ -2931,7 +2931,7 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	AttackRange = Killaura:CreateSlider({
+	AttackRange = Killaura:Setting({Type='slider', 
 		Name = 'Attack range',
 		Min = 1,
 		Max = 30,
@@ -2940,25 +2940,25 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	AngleSlider = Killaura:CreateSlider({
+	AngleSlider = Killaura:Setting({Type='slider', 
 		Name = 'Max angle',
 		Min = 1,
 		Max = 360,
 		Default = 90
 	})
-	Max = Killaura:CreateSlider({
+	Max = Killaura:Setting({Type='slider', 
 		Name = 'Max targets',
 		Min = 1,
 		Max = 10,
 		Default = 10
 	})
-	Mouse = Killaura:CreateToggle({
+	Mouse = Killaura:Setting({Type='toggle', 
 		Name = 'Require mouse down'
 	})
-	Lunge = Killaura:CreateToggle({
+	Lunge = Killaura:Setting({Type='toggle', 
 		Name = 'Sword lunge only'
 	})
-	Killaura:CreateToggle({
+	Killaura:Setting({Type='toggle', 
 		Name = 'Show target',
 		Function = function(callback)
 			BoxSwingColor.Object.Visible = callback
@@ -2972,7 +2972,7 @@ run(function()
 					box.CFrame = CFrame.new(0, -0.5, 0)
 					box.Size = Vector3.new(3, 5, 3)
 					box.ZIndex = 0
-					box.Parent = vape.holder
+					box.Parent = tenacity.holder
 					Boxes[i] = box
 				end
 			else
@@ -2983,20 +2983,20 @@ run(function()
 			end
 		end
 	})
-	BoxSwingColor = Killaura:CreateColorSlider({
+	BoxSwingColor = Killaura:Setting({Type='color', 
 		Name = 'Target Color',
 		Darker = true,
 		DefaultHue = 0.6,
 		DefaultOpacity = 0.5,
 		Visible = false
 	})
-	BoxAttackColor = Killaura:CreateColorSlider({
+	BoxAttackColor = Killaura:Setting({Type='color', 
 		Name = 'Attack Color',
 		Darker = true,
 		DefaultOpacity = 0.5,
 		Visible = false
 	})
-	Killaura:CreateToggle({
+	Killaura:Setting({Type='toggle', 
 		Name = 'Target particles',
 		Function = function(callback)
 			ParticleTexture.Object.Visible = callback
@@ -3039,7 +3039,7 @@ run(function()
 			end
 		end
 	})
-	ParticleTexture = Killaura:CreateTextBox({
+	ParticleTexture = Killaura:Setting({Type='text', 
 		Name = 'Texture',
 		Default = 'rbxassetid://14736249347',
 		Function = function()
@@ -3050,7 +3050,7 @@ run(function()
 		Darker = true,
 		Visible = false
 	})
-	ParticleColor1 = Killaura:CreateColorSlider({
+	ParticleColor1 = Killaura:Setting({Type='color', 
 		Name = 'Color Begin',
 		Function = function(hue, sat, val)
 			for _, particle in Particles do
@@ -3063,7 +3063,7 @@ run(function()
 		Darker = true,
 		Visible = false
 	})
-	ParticleColor2 = Killaura:CreateColorSlider({
+	ParticleColor2 = Killaura:Setting({Type='color', 
 		Name = 'Color End',
 		Function = function(hue, sat, val)
 			for _, particle in Particles do
@@ -3076,7 +3076,7 @@ run(function()
 		Darker = true,
 		Visible = false
 	})
-	ParticleSize = Killaura:CreateSlider({
+	ParticleSize = Killaura:Setting({Type='slider', 
 		Name = 'Size',
 		Min = 0,
 		Max = 1,
@@ -3090,7 +3090,7 @@ run(function()
 		Darker = true,
 		Visible = false
 	})
-	Face = Killaura:CreateToggle({
+	Face = Killaura:Setting({Type='toggle', 
 		Name = 'Face target'
 	})
 end)
@@ -3100,7 +3100,7 @@ run(function()
 	local Value
 	local AutoDisable
 	
-	LongJump = vape.Categories.Blatant:CreateModule({
+	LongJump = tenacity:Module('Movement', {
 		Name = 'LongJump',
 		Function = function(callback)
 			if callback then
@@ -3140,12 +3140,12 @@ run(function()
 		end,
 		Tooltip = 'Lets you jump farther'
 	})
-	Mode = LongJump:CreateDropdown({
+	Mode = LongJump:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Velocity', 'Impulse', 'CFrame'},
 		Tooltip = 'Velocity - Uses smooth physics based movement\nImpulse - Same as velocity while using forces instead\nCFrame - Directly adjusts the position of the root'
 	})
-	Value = LongJump:CreateSlider({
+	Value = LongJump:Setting({Type='slider', 
 		Name = 'Speed',
 		Min = 1,
 		Max = 150,
@@ -3154,7 +3154,7 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	AutoDisable = LongJump:CreateToggle({
+	AutoDisable = LongJump:Setting({Type='toggle', 
 		Name = 'Auto Disable',
 		Default = true
 	})
@@ -3187,7 +3187,7 @@ run(function()
 		return obj
 	end
 	
-	MouseTP = vape.Categories.Blatant:CreateModule({
+	MouseTP = tenacity:Module('Movement', {
 		Name = 'MouseTP',
 		Function = function(callback)
 			if callback then
@@ -3252,11 +3252,11 @@ run(function()
 		end,
 		Tooltip = 'Teleports to a selected position.'
 	})
-	Mode = MouseTP:CreateDropdown({
+	Mode = MouseTP:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Mouse', 'Player', 'Waypoint'}
 	})
-	MovementMode = MouseTP:CreateDropdown({
+	MovementMode = MouseTP:Setting({Type='dropdown', 
 		Name = 'Movement',
 		List = {'CFrame', 'Motor', 'Lerp'},
 		Function = function(val)
@@ -3264,7 +3264,7 @@ run(function()
 			Delay.Object.Visible = val == 'Lerp'
 		end
 	})
-	Length = MouseTP:CreateSlider({
+	Length = MouseTP:Setting({Type='slider', 
 		Name = 'Length',
 		Min = 0,
 		Max = 150,
@@ -3274,7 +3274,7 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	Delay = MouseTP:CreateSlider({
+	Delay = MouseTP:Setting({Type='slider', 
 		Name = 'Delay',
 		Min = 0,
 		Max = 1,
@@ -3374,7 +3374,7 @@ run(function()
 	}
 	Functions.Motor = Functions.CFrame
 	
-	Phase = vape.Categories.Blatant:CreateModule({
+	Phase = tenacity:Module('Movement', {
 		Name = 'Phase',
 		Function = function(callback)
 			if callback then
@@ -3403,7 +3403,7 @@ run(function()
 		end,
 		Tooltip = 'Lets you Phase/Clip through walls. (Hold shift to use Phase over spider)'
 	})
-	Mode = Phase:CreateDropdown({
+	Mode = Phase:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Part', 'Character', 'CFrame', 'Motor', 'FFlag'},
 		Function = function(val)
@@ -3419,7 +3419,7 @@ run(function()
 		end,
 		Tooltip = 'Part - Modifies parts collision status around you\nCharacter - Modifies the local collision status of the character\nCFrame - Teleports you past parts\nMotor - Same as CFrame with a bypass\nFFlag - Directly adjusts all physics collisions'
 	})
-	StudLimit = Phase:CreateSlider({
+	StudLimit = Phase:Setting({Type='slider', 
 		Name = 'Wall Size',
 		Min = 1,
 		Max = 20,
@@ -3443,7 +3443,7 @@ run(function()
 	local CustomModes = {}
 	local w, s, a, d = 0, 0, 0, 0
 	
-	Speed = vape.Categories.Blatant:CreateModule({
+	Speed = tenacity:Module('Movement', {
 		Name = 'Speed',
 		Function = function(callback)
 			frictionTable.Speed = callback and CustomProperties.Enabled or nil
@@ -3496,7 +3496,7 @@ run(function()
 		end,
 		Tooltip = 'Increases your movement with various methods.'
 	})
-	Mode = Speed:CreateDropdown({
+	Mode = Speed:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = SpeedMethodList,
 		Function = function(val)
@@ -3513,12 +3513,12 @@ run(function()
 		Tooltip = 'Velocity - Uses smooth physics based movement\nImpulse - Same as velocity while using forces instead\nCFrame - Directly adjusts the position of the root\nTP - Large teleports within intervals\nPulse - Controllable bursts of speed\nWalkSpeed - The classic mode of speed, usually detected on most games.'
 	})
 	Options = {
-		MoveMethod = Speed:CreateDropdown({
+		MoveMethod = Speed:Setting({Type='dropdown', 
 			Name = 'Move Mode',
 			List = {'MoveDirection', 'Direct'},
 			Tooltip = 'MoveDirection - Uses the games input vector for movement\nDirect - Directly calculate our own input vector'
 		}),
-		Value = Speed:CreateSlider({
+		Value = Speed:Setting({Type='slider', 
 			Name = 'Speed',
 			Min = 1,
 			Max = 150,
@@ -3527,7 +3527,7 @@ run(function()
 				return val == 1 and 'stud' or 'studs'
 			end
 		}),
-		TPFrequency = Speed:CreateSlider({
+		TPFrequency = Speed:Setting({Type='slider', 
 			Name = 'TP Frequency',
 			Min = 0,
 			Max = 1,
@@ -3538,7 +3538,7 @@ run(function()
 				return val == 1 and 'second' or 'seconds'
 			end
 		}),
-		PulseLength = Speed:CreateSlider({
+		PulseLength = Speed:Setting({Type='slider', 
 			Name = 'Pulse Length',
 			Min = 0,
 			Max = 1,
@@ -3549,7 +3549,7 @@ run(function()
 				return val == 1 and 'second' or 'seconds'
 			end
 		}),
-		PulseDelay = Speed:CreateSlider({
+		PulseDelay = Speed:Setting({Type='slider', 
 			Name = 'Pulse Delay',
 			Min = 0,
 			Max = 1,
@@ -3560,7 +3560,7 @@ run(function()
 				return val == 1 and 'second' or 'seconds'
 			end
 		}),
-		WallCheck = Speed:CreateToggle({
+		WallCheck = Speed:Setting({Type='toggle', 
 			Name = 'Wall Check',
 			Default = true,
 			Darker = true,
@@ -3570,7 +3570,7 @@ run(function()
 		rayCheck = RaycastParams.new()
 	}
 	Options.rayCheck.RespectCanCollide = true
-	CustomProperties = Speed:CreateToggle({
+	CustomProperties = Speed:Setting({Type='toggle', 
 		Name = 'Custom Properties',
 		Function = function()
 			if Speed.Enabled then
@@ -3580,13 +3580,13 @@ run(function()
 		end,
 		Default = true
 	})
-	AutoJump = Speed:CreateToggle({
+	AutoJump = Speed:Setting({Type='toggle', 
 		Name = 'AutoJump',
 		Function = function(callback)
 			AutoJumpCustom.Object.Visible = callback
 		end
 	})
-	AutoJumpCustom = Speed:CreateToggle({
+	AutoJumpCustom = Speed:Setting({Type='toggle', 
 		Name = 'Custom Jump',
 		Function = function(callback)
 			AutoJumpValue.Object.Visible = callback
@@ -3595,7 +3595,7 @@ run(function()
 		Darker = true,
 		Visible = false
 	})
-	AutoJumpValue = Speed:CreateSlider({
+	AutoJumpValue = Speed:Setting({Type='slider', 
 		Name = 'Jump Power',
 		Min = 1,
 		Max = 50,
@@ -3623,7 +3623,7 @@ run(function()
 	rayCheck.RespectCanCollide = true
 	local Active, Truss
 	
-	Spider = vape.Categories.Blatant:CreateModule({
+	Spider = tenacity:Module('Movement', {
 		Name = 'Spider',
 		Function = function(callback)
 			if callback then
@@ -3686,7 +3686,7 @@ run(function()
 		end,
 		Tooltip = 'Lets you climb up walls. (Hold shift to use Phase over spider)'
 	})
-	Mode = Spider:CreateDropdown({
+	Mode = Spider:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Velocity', 'Impulse', 'CFrame', 'Part'},
 		Function = function(val)
@@ -3706,7 +3706,7 @@ run(function()
 		end,
 		Tooltip = 'Velocity - Uses smooth movement to boost you upward\nImpulse - Same as velocity while using forces instead\nCFrame - Directly adjusts the position upward\nPart - Positions a climbable part infront of you'
 	})
-	Value = Spider:CreateSlider({
+	Value = Spider:Setting({Type='slider', 
 		Name = 'Speed',
 		Min = 0,
 		Max = 100,
@@ -3716,7 +3716,7 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	State = Spider:CreateToggle({
+	State = Spider:Setting({Type='toggle', 
 		Name = 'Climb State',
 		Darker = true
 	})
@@ -3731,7 +3731,7 @@ run(function()
 	local Value
 	local AngularVelocity
 	
-	SpinBot = vape.Categories.Blatant:CreateModule({
+	SpinBot = tenacity:Module('Movement', {
 		Name = 'SpinBot',
 		Function = function(callback)
 			if callback then
@@ -3772,7 +3772,7 @@ run(function()
 		end,
 		Tooltip = 'Makes your character spin around in circles (does not work in first person)'
 	})
-	Mode = SpinBot:CreateDropdown({
+	Mode = SpinBot:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'CFrame', 'RotVelocity', 'BodyMover'},
 		Function = function(val)
@@ -3785,20 +3785,20 @@ run(function()
 		end,
 		Tooltip = 'CFrame - Directly adjusts your characters angle\nRotVelocity - Sets the rotation velocity so that you spin\nBodyMover - Uses body movers to edit your rotation velocity'
 	})
-	Value = SpinBot:CreateSlider({
+	Value = SpinBot:Setting({Type='slider', 
 		Name = 'Speed',
 		Min = 1,
 		Max = 100,
 		Default = 40
 	})
-	XToggle = SpinBot:CreateToggle({
+	XToggle = SpinBot:Setting({Type='toggle', 
 		Name = 'Spin X'
 	})
-	YToggle = SpinBot:CreateToggle({
+	YToggle = SpinBot:Setting({Type='toggle', 
 		Name = 'Spin Y',
 		Default = true
 	})
-	ZToggle = SpinBot:CreateToggle({
+	ZToggle = SpinBot:Setting({Type='toggle', 
 		Name = 'Spin Z'
 	})
 end)
@@ -3808,7 +3808,7 @@ run(function()
 	local terrain = cloneref(workspace:FindFirstChildWhichIsA('Terrain'))
 	local lastpos = Region3.new(Vector3.zero, Vector3.zero)
 	
-	Swim = vape.Categories.Blatant:CreateModule({
+	Swim = tenacity:Module('Movement', {
 		Name = 'Swim',
 		Function = function(callback)
 			if callback then
@@ -3849,7 +3849,7 @@ run(function()
 	rayCheck.RespectCanCollide = true
 	local module, old
 	
-	TargetStrafe = vape.Categories.Blatant:CreateModule({
+	TargetStrafe = tenacity:Module('Movement', {
 		Name = 'TargetStrafe',
 		Function = function(callback)
 			if callback then
@@ -3861,7 +3861,7 @@ run(function()
 				end
 	
 				old = module.moveFunction
-				local flymod, ang, oldent = vape.Modules.Fly or {Enabled = false}
+				local flymod, ang, oldent = tenacity.Modules.Fly or {Enabled = false}
 				module.moveFunction = function(self, vec, face)
 					local wallcheck = Targets.Walls.Enabled
 					local ent = not inputService:IsKeyDown(Enum.KeyCode.S) and entitylib.EntityPosition({
@@ -3929,11 +3929,11 @@ run(function()
 		end,
 		Tooltip = 'Automatically strafes around the opponent'
 	})
-	Targets = TargetStrafe:CreateTargets({
+	Targets = TargetStrafe:Setting({Type='targets', 
 		Players = true,
 		Walls = true
 	})
-	SearchRange = TargetStrafe:CreateSlider({
+	SearchRange = TargetStrafe:Setting({Type='slider', 
 		Name = 'Search Range',
 		Min = 1,
 		Max = 30,
@@ -3942,7 +3942,7 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	StrafeRange = TargetStrafe:CreateSlider({
+	StrafeRange = TargetStrafe:Setting({Type='slider', 
 		Name = 'Strafe Range',
 		Min = 1,
 		Max = 30,
@@ -3951,7 +3951,7 @@ run(function()
 			return val == 1 and 'stud' or 'studs'
 		end
 	})
-	YFactor = TargetStrafe:CreateSlider({
+	YFactor = TargetStrafe:Setting({Type='slider', 
 		Name = 'Y Factor',
 		Min = 0,
 		Max = 100,
@@ -3964,7 +3964,7 @@ run(function()
 	local Timer
 	local Value
 	
-	Timer = vape.Categories.Blatant:CreateModule({
+	Timer = tenacity:Module('Movement', {
 		Name = 'Timer',
 		Function = function(callback)
 			if callback then
@@ -3979,7 +3979,7 @@ run(function()
 		end,
 		Tooltip = 'Change the game speed.'
 	})
-	Value = Timer:CreateSlider({
+	Value = Timer:Setting({Type='slider', 
 		Name = 'Value',
 		Min = 1,
 		Max = 3,
@@ -3997,7 +3997,7 @@ run(function()
 	local DistanceLimit
 	local Reference = {}
 	local Folder = Instance.new('Folder')
-	Folder.Parent = vape.gui
+	Folder.Parent = tenacity.gui
 
 	local function setArrowColor(data, col)
 		data.Core.ImageColor3 = col
@@ -4015,7 +4015,7 @@ run(function()
 		if not Targets.Players.Enabled and ent.Player then return end
 		if not Targets.NPCs.Enabled and ent.NPC then return end
 		if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
-		if vape.ThreadFix then setthreadidentity(8) end
+		if tenacity.ThreadFix then setthreadidentity(8) end
 
 		local col = entitylib.getEntityColor(ent) or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
 		local arrow = Instance.new('ImageLabel')
@@ -4026,7 +4026,7 @@ run(function()
 		arrow.BackgroundTransparency = 1
 		arrow.BorderSizePixel = 0
 		arrow.Visible = false
-		arrow.Image = getvapeasset('newvape/assets/new/arrow.png')
+		arrow.Image = gettenacityasset('tenacity/assets/new/arrow.png')
 		arrow.ImageColor3 = col
 		arrow.ZIndex = 3
 		arrow.Parent = Folder
@@ -4055,7 +4055,7 @@ run(function()
 	local function Removed(ent)
 		local data = Reference[ent]
 		if data then
-			if vape.ThreadFix then setthreadidentity(8) end
+			if tenacity.ThreadFix then setthreadidentity(8) end
 			Reference[ent] = nil
 			for _, obj in data do obj:Destroy() end
 		end
@@ -4096,7 +4096,7 @@ run(function()
 		end
 	end
 
-	Arrows = vape.Categories.Render:CreateModule({
+	Arrows = tenacity:Module('Render', {
 		Name = 'Arrows',
 		Function = function(callback)
 			if callback then
@@ -4109,7 +4109,7 @@ run(function()
 					if Reference[ent] then Removed(ent) end
 					Added(ent)
 				end))
-				Arrows:Clean(vape.Categories.Friends.ColorUpdate.Event:Connect(function()
+				Arrows:Clean(tenacity.Categories.Friends.ColorUpdate.Event:Connect(function()
 					ColorFunc(Color.Hue, Color.Sat, Color.Value)
 				end))
 				Arrows:Clean(runService.RenderStepped:Connect(Loop))
@@ -4119,26 +4119,26 @@ run(function()
 		end,
 		Tooltip = 'Draws arrows on screen when entities\nare out of your field of view.'
 	})
-	Targets = Arrows:CreateTargets({
+	Targets = Arrows:Setting({Type='targets', 
 		Players = true,
 		Function = function()
 			if Arrows.Enabled then Arrows:Toggle(); Arrows:Toggle() end
 		end
 	})
-	Mode = Arrows:CreateDropdown({
+	Mode = Arrows:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Classic', 'Modern'},
 		Function = function()
 			if Arrows.Enabled then Arrows:Toggle(); Arrows:Toggle() end
 		end
 	})
-	Color = Arrows:CreateColorSlider({
+	Color = Arrows:Setting({Type='color', 
 		Name = 'Player Color',
 		Function = function(hue, sat, val)
 			if Arrows.Enabled then ColorFunc(hue, sat, val) end
 		end,
 	})
-	Teammates = Arrows:CreateToggle({
+	Teammates = Arrows:Setting({Type='toggle', 
 		Name = 'Priority Only',
 		Function = function()
 			if Arrows.Enabled then Arrows:Toggle(); Arrows:Toggle() end
@@ -4146,11 +4146,11 @@ run(function()
 		Default = true,
 		Tooltip = 'Hides teammates & non targetable entities'
 	})
-	Distance = Arrows:CreateToggle({
+	Distance = Arrows:Setting({Type='toggle', 
 		Name = 'Distance Check',
 		Function = function(callback) DistanceLimit.Object.Visible = callback end
 	})
-	DistanceLimit = Arrows:CreateTwoSlider({
+	DistanceLimit = Arrows:Setting({Type='range', 
 		Name = 'Player Distance',
 		Min = 0,
 		Max = 256,
@@ -4173,7 +4173,7 @@ run(function()
 	local Walls
 	local Reference = {}
 	local Folder = Instance.new('Folder')
-	Folder.Parent = vape.holder
+	Folder.Parent = tenacity.holder
 
 	local function bodyParts(ent)
 		local parts = {}
@@ -4205,7 +4205,7 @@ run(function()
 		if not Targets.Players.Enabled and ent.Player then return end
 		if not Targets.NPCs.Enabled and ent.NPC then return end
 		if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
-		if vape.ThreadFix then setthreadidentity(8) end
+		if tenacity.ThreadFix then setthreadidentity(8) end
 
 		local col = entitylib.getEntityColor(ent) or Color3.fromHSV(FillColor.Hue, FillColor.Sat, FillColor.Value)
 		local outline = Color3.fromHSV(OutlineColor.Hue, OutlineColor.Sat, OutlineColor.Value)
@@ -4249,7 +4249,7 @@ run(function()
 				image.Position = UDim2.fromScale(0.5, 0.5)
 				image.Size = UDim2.fromScale(0.76, 0.76)
 				image.BackgroundTransparency = 1
-				image.Image = getvapeasset('newvape/assets/new/face1.png')
+				image.Image = gettenacityasset('tenacity/assets/new/face1.png')
 				image.ImageColor3 = Color3.new(1, 1, 1)
 				image.Parent = face
 				data.Face = face
@@ -4262,7 +4262,7 @@ run(function()
 	local function Removed(ent)
 		local data = Reference[ent]
 		if not data then return end
-		if vape.ThreadFix then setthreadidentity(8) end
+		if tenacity.ThreadFix then setthreadidentity(8) end
 		Reference[ent] = nil
 		if data.Main then data.Main:Destroy() end
 		if data.Face then data.Face:Destroy() end
@@ -4282,7 +4282,7 @@ run(function()
 		end
 	end
 
-	Chams = vape.Categories.Render:CreateModule({
+	Chams = tenacity:Module('Render', {
 		Name = 'Chams',
 		Function = function(callback)
 			if callback then
@@ -4291,7 +4291,7 @@ run(function()
 					if Reference[ent] then Removed(ent) end
 					Added(ent)
 				end))
-				Chams:Clean(vape.Categories.Friends.ColorUpdate.Event:Connect(function()
+				Chams:Clean(tenacity.Categories.Friends.ColorUpdate.Event:Connect(function()
 					for ent, data in Reference do
 						applyColor(ent, data, entitylib.getEntityColor(ent) or Color3.fromHSV(FillColor.Hue, FillColor.Sat, FillColor.Value))
 					end
@@ -4306,13 +4306,13 @@ run(function()
 		end,
 		Tooltip = 'Render players through walls'
 	})
-	Targets = Chams:CreateTargets({
+	Targets = Chams:Setting({Type='targets', 
 		Players = true,
 		Function = function()
 			if Chams.Enabled then Chams:Toggle(); Chams:Toggle() end
 		end
 	})
-	Mode = Chams:CreateDropdown({
+	Mode = Chams:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Highlight', 'BoxHandles', 'Modern'},
 		Function = function(val)
@@ -4321,14 +4321,14 @@ run(function()
 			if Chams.Enabled then Chams:Toggle(); Chams:Toggle() end
 		end
 	})
-	FillColor = Chams:CreateColorSlider({
+	FillColor = Chams:Setting({Type='color', 
 		Name = 'Color',
 		Function = function(hue, sat, val)
 			local col = Color3.fromHSV(hue, sat, val)
 			for ent, data in Reference do applyColor(ent, data, entitylib.getEntityColor(ent) or col) end
 		end
 	})
-	OutlineColor = Chams:CreateColorSlider({
+	OutlineColor = Chams:Setting({Type='color', 
 		Name = 'Outline Color',
 		DefaultSat = 0,
 		Function = function(hue, sat, val)
@@ -4338,7 +4338,7 @@ run(function()
 		end,
 		Darker = true
 	})
-	FillTransparency = Chams:CreateSlider({
+	FillTransparency = Chams:Setting({Type='slider', 
 		Name = 'Transparency',
 		Min = 0,
 		Max = 1,
@@ -4351,7 +4351,7 @@ run(function()
 		end,
 		Decimal = 10
 	})
-	OutlineTransparency = Chams:CreateSlider({
+	OutlineTransparency = Chams:Setting({Type='slider', 
 		Name = 'Outline Transparency',
 		Min = 0,
 		Max = 1,
@@ -4364,7 +4364,7 @@ run(function()
 		Decimal = 10,
 		Darker = true
 	})
-	Walls = Chams:CreateToggle({
+	Walls = Chams:Setting({Type='toggle', 
 		Name = 'Render Walls',
 		Function = function(callback)
 			for _, data in Reference do
@@ -4377,7 +4377,7 @@ run(function()
 		end,
 		Default = true
 	})
-	Teammates = Chams:CreateToggle({
+	Teammates = Chams:Setting({Type='toggle', 
 		Name = 'Priority Only',
 		Function = function()
 			if Chams.Enabled then Chams:Toggle(); Chams:Toggle() end
@@ -4414,7 +4414,7 @@ run(function()
 			if not Targets.Players.Enabled and ent.Player then return end
 			if not Targets.NPCs.Enabled and ent.NPC then return end
 			if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
-			if vape.ThreadFix then
+			if tenacity.ThreadFix then
 				setthreadidentity(8)
 			end
 			local EntityESP = {}
@@ -4480,7 +4480,7 @@ run(function()
 			if not Targets.Players.Enabled and ent.Player then return end
 			if not Targets.NPCs.Enabled and ent.NPC then return end
 			if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
-			if vape.ThreadFix then
+			if tenacity.ThreadFix then
 				setthreadidentity(8)
 			end
 			local EntityESP = {}
@@ -4509,7 +4509,7 @@ run(function()
 			if not Targets.Players.Enabled and ent.Player then return end
 			if not Targets.NPCs.Enabled and ent.NPC then return end
 			if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
-			if vape.ThreadFix then
+			if tenacity.ThreadFix then
 				setthreadidentity(8)
 			end
 			local EntityESP = {}
@@ -4537,7 +4537,7 @@ run(function()
 		if not Targets.Players.Enabled and ent.Player then return end
 		if not Targets.NPCs.Enabled and ent.NPC then return end
 		if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
-		if vape.ThreadFix then setthreadidentity(8) end
+		if tenacity.ThreadFix then setthreadidentity(8) end
 		local col = entitylib.getEntityColor(ent) or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
 		local data = {}
 		data.GlowOuter = Drawing.new('Square')
@@ -4600,7 +4600,7 @@ run(function()
 		Drawing2D = function(ent)
 			local EntityESP = Reference[ent]
 			if EntityESP then
-				if vape.ThreadFix then
+				if tenacity.ThreadFix then
 					setthreadidentity(8)
 				end
 				Reference[ent] = nil
@@ -4621,7 +4621,7 @@ run(function()
 		Drawing2D = function(ent)
 			local EntityESP = Reference[ent]
 			if EntityESP then
-				if vape.ThreadFix then
+				if tenacity.ThreadFix then
 					setthreadidentity(8)
 				end
 				
@@ -4873,7 +4873,7 @@ run(function()
 		end
 	end
 
-	ESP = vape.Categories.Render:CreateModule({
+	ESP = tenacity:Module('Render', {
 		Name = 'ESP',
 		Function = function(callback)
 			if callback then
@@ -4902,7 +4902,7 @@ run(function()
 					end
 				end
 				if ColorFunc[methodused] then
-					ESP:Clean(vape.Categories.Friends.ColorUpdate.Event:Connect(function()
+					ESP:Clean(tenacity.Categories.Friends.ColorUpdate.Event:Connect(function()
 						ColorFunc[methodused](Color.Hue, Color.Sat, Color.Value)
 					end))
 				end
@@ -4919,7 +4919,7 @@ run(function()
 		end,
 		Tooltip = 'Extra Sensory Perception\nRenders an ESP on players.'
 	})
-	Targets = ESP:CreateTargets({
+	Targets = ESP:Setting({Type='targets', 
 		Players = true,
 		Function = function()
 			if ESP.Enabled then
@@ -4928,7 +4928,7 @@ run(function()
 			end
 		end
 	})
-	Method = ESP:CreateDropdown({
+	Method = ESP:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'2D', '3D', 'Skeleton', 'Modern'},
 		Function = function(val)
@@ -4945,7 +4945,7 @@ run(function()
 			Background.Object.Visible = Name.Object.Visible and Name.Enabled
 		end,
 	})
-	Color = ESP:CreateColorSlider({
+	Color = ESP:Setting({Type='color', 
 		Name = 'Player Color',
 		Function = function(hue, sat, val)
 			if ESP.Enabled and ColorFunc[methodused] then
@@ -4953,7 +4953,7 @@ run(function()
 			end
 		end
 	})
-	BoundingBox = ESP:CreateToggle({
+	BoundingBox = ESP:Setting({Type='toggle', 
 		Name = 'Bounding Box',
 		Function = function()
 			if ESP.Enabled then
@@ -4964,7 +4964,7 @@ run(function()
 		Default = true,
 		Darker = true
 	})
-	Filled = ESP:CreateToggle({
+	Filled = ESP:Setting({Type='toggle', 
 		Name = 'Filled',
 		Function = function()
 			if ESP.Enabled then
@@ -4974,7 +4974,7 @@ run(function()
 		end,
 		Darker = true
 	})
-	HealthBar = ESP:CreateToggle({
+	HealthBar = ESP:Setting({Type='toggle', 
 		Name = 'Health Bar',
 		Function = function()
 			if ESP.Enabled then
@@ -4984,7 +4984,7 @@ run(function()
 		end,
 		Darker = true
 	})
-	Name = ESP:CreateToggle({
+	Name = ESP:Setting({Type='toggle', 
 		Name = 'Name',
 		Function = function(callback)
 			if ESP.Enabled then
@@ -4996,7 +4996,7 @@ run(function()
 		end,
 		Darker = true
 	})
-	DisplayName = ESP:CreateToggle({
+	DisplayName = ESP:Setting({Type='toggle', 
 		Name = 'Use Displayname',
 		Function = function()
 			if ESP.Enabled then
@@ -5007,7 +5007,7 @@ run(function()
 		Default = true,
 		Darker = true
 	})
-	Background = ESP:CreateToggle({
+	Background = ESP:Setting({Type='toggle', 
 		Name = 'Show Background',
 		Function = function()
 			if ESP.Enabled then
@@ -5017,7 +5017,7 @@ run(function()
 		end,
 		Darker = true
 	})
-	Teammates = ESP:CreateToggle({
+	Teammates = ESP:Setting({Type='toggle', 
 		Name = 'Priority Only',
 		Function = function()
 			if ESP.Enabled then
@@ -5028,13 +5028,13 @@ run(function()
 		Default = true,
 		Tooltip = 'Hides teammates & non targetable entities'
 	})
-	Distance = ESP:CreateToggle({
+	Distance = ESP:Setting({Type='toggle', 
 		Name = 'Distance Check',
 		Function = function(callback)
 			DistanceLimit.Object.Visible = callback
 		end
 	})
-	DistanceLimit = ESP:CreateTwoSlider({
+	DistanceLimit = ESP:Setting({Type='range', 
 		Name = 'Player Distance',
 		Min = 0,
 		Max = 256,
@@ -5064,7 +5064,7 @@ run(function()
 		flag = false
 	end
 	
-	Fullbright = vape.Categories.Render:CreateModule({
+	Fullbright = tenacity:Module('Render', {
 		Name = 'Fullbright',
 		Function = function(callback)
 			if callback then
@@ -5095,7 +5095,7 @@ run(function()
 		end,
 		Tooltip = 'Increase the lighting of the world around you.'
 	})
-	Mode = Fullbright:CreateDropdown({
+	Mode = Fullbright:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Lighting', 'PointLight'},
 		Function = function()
@@ -5122,11 +5122,11 @@ run(function()
 	local chairanim
 	local chair
 	
-	GamingChair = vape.Categories.Render:CreateModule({
+	GamingChair = tenacity:Module('Render', {
 		Name = 'GamingChair',
 		Function = function(callback)
 			if callback then
-				if vape.ThreadFix then
+				if tenacity.ThreadFix then
 					setthreadidentity(8)
 				end
 	
@@ -5139,12 +5139,12 @@ run(function()
 				chair.Material = Enum.Material.SmoothPlastic
 				chair.Parent = workspace
 				movingsound = Instance.new('Sound')
-				--movingsound.SoundId = downloadVapeAsset('vape/assets/ChairRolling.mp3')
+				--movingsound.SoundId = downloadTenacityAsset('tenacity/assets/ChairRolling.mp3')
 				movingsound.Volume = 0.4
 				movingsound.Looped = true
 				movingsound.Parent = workspace
 				flyingsound = Instance.new('Sound')
-				--flyingsound.SoundId = downloadVapeAsset('vape/assets/ChairFlying.mp3')
+				--flyingsound.SoundId = downloadTenacityAsset('tenacity/assets/ChairFlying.mp3')
 				flyingsound.Volume = 0.4
 				flyingsound.Looped = true
 				flyingsound.Parent = workspace
@@ -5236,7 +5236,7 @@ run(function()
 						chairfan.Velocity = Vector3.zero
 						chairfan.CFrame = chair.CFrame * CFrame.new(0.047, -1.873, 0) * CFrame.Angles(0, math.rad(tick() * 180 % 360), math.rad(180))
 						local moving = entitylib.character.Humanoid:GetState() == Enum.HumanoidStateType.Running and entitylib.character.Humanoid.MoveDirection ~= Vector3.zero
-						local flying = vape.Modules.Fly and vape.Modules.Fly.Enabled or vape.Modules.LongJump and vape.Modules.LongJump.Enabled or vape.Modules.InfiniteFly and vape.Modules.InfiniteFly.Enabled
+						local flying = tenacity.Modules.Fly and tenacity.Modules.Fly.Enabled or tenacity.Modules.LongJump and tenacity.Modules.LongJump.Enabled or tenacity.Modules.InfiniteFly and tenacity.Modules.InfiniteFly.Enabled
 						if movingsound.TimePosition > 1.9 then
 							movingsound.TimePosition = 0.2
 						end
@@ -5342,7 +5342,7 @@ run(function()
 		end,
 		Tooltip = 'Sit in the best gaming chair known to mankind.'
 	})
-	Color = GamingChair:CreateColorSlider({
+	Color = GamingChair:Setting({Type='color', 
 		Name = 'Color',
 		Function = function(h, s, v)
 			if chairhighlight then
@@ -5355,7 +5355,7 @@ end)
 run(function()
 	local Health
 	
-	Health = vape.Categories.Render:CreateModule({
+	Health = tenacity:Module('Render', {
 		Name = 'Health',
 		Function = function(callback)
 			if callback then
@@ -5367,7 +5367,7 @@ run(function()
 				label.Text = '100 ❤️'
 				label.TextSize = 18
 				label.Font = Enum.Font.Arial
-				label.Parent = vape.gui
+				label.Parent = tenacity.gui
 				Health:Clean(label)
 				
 				repeat
@@ -5399,7 +5399,7 @@ run(function()
 	local DistanceLimit
 	local Strings, Sizes, Reference = {}, {}, {}
 	local Folder = Instance.new('Folder')
-	Folder.Parent = vape.gui
+	Folder.Parent = tenacity.gui
 	local methodused
 	
 	local Added = {
@@ -5407,7 +5407,7 @@ run(function()
 			if not Targets.Players.Enabled and ent.Player then return end
 			if not Targets.NPCs.Enabled and ent.NPC then return end
 			if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
-			if vape.ThreadFix then
+			if tenacity.ThreadFix then
 				setthreadidentity(8)
 			end
 	
@@ -5476,7 +5476,7 @@ run(function()
 		if not Targets.Players.Enabled and ent.Player then return end
 		if not Targets.NPCs.Enabled and ent.NPC then return end
 		if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
-		if vape.ThreadFix then setthreadidentity(8) end
+		if tenacity.ThreadFix then setthreadidentity(8) end
 		Strings[ent] = ent.Player and whitelist:tag(ent.Player, true, true)..(DisplayName.Enabled and ent.Player.DisplayName or ent.Player.Name) or ent.Character.Name
 		if Health.Enabled then
 			local hp = Color3.fromHSV(math.clamp(ent.Health / ent.MaxHealth, 0, 1) / 2.5, 0.89, 0.75)
@@ -5543,7 +5543,7 @@ run(function()
 		Normal = function(ent)
 			local v = Reference[ent]
 			if v then
-				if vape.ThreadFix then
+				if tenacity.ThreadFix then
 					setthreadidentity(8)
 				end
 				Reference[ent] = nil
@@ -5555,7 +5555,7 @@ run(function()
 		Drawing = function(ent)
 			local v = Reference[ent]
 			if v then
-				if vape.ThreadFix then
+				if tenacity.ThreadFix then
 					setthreadidentity(8)
 				end
 				Reference[ent] = nil
@@ -5574,7 +5574,7 @@ run(function()
 	Removed.Modern = function(ent)
 		local data = Reference[ent]
 		if data then
-			if vape.ThreadFix then setthreadidentity(8) end
+			if tenacity.ThreadFix then setthreadidentity(8) end
 			Reference[ent] = nil
 			Strings[ent] = nil
 			Sizes[ent] = nil
@@ -5586,7 +5586,7 @@ run(function()
 		Normal = function(ent)
 			local nametag = Reference[ent]
 			if nametag then
-				if vape.ThreadFix then
+				if tenacity.ThreadFix then
 					setthreadidentity(8)
 				end
 				Sizes[ent] = nil
@@ -5609,7 +5609,7 @@ run(function()
 		Drawing = function(ent)
 			local nametag = Reference[ent]
 			if nametag then
-				if vape.ThreadFix then
+				if tenacity.ThreadFix then
 					setthreadidentity(8)
 				end
 				Sizes[ent] = nil
@@ -5764,7 +5764,7 @@ run(function()
 		end
 	end
 
-	NameTags = vape.Categories.Render:CreateModule({
+	NameTags = tenacity:Module('Render', {
 		Name = 'NameTags',
 		Function = function(callback)
 			if callback then
@@ -5793,7 +5793,7 @@ run(function()
 					end
 				end
 				if ColorFunc[methodused] then
-					NameTags:Clean(vape.Categories.Friends.ColorUpdate.Event:Connect(function()
+					NameTags:Clean(tenacity.Categories.Friends.ColorUpdate.Event:Connect(function()
 						ColorFunc[methodused](Color.Hue, Color.Sat, Color.Value)
 					end))
 				end
@@ -5810,7 +5810,7 @@ run(function()
 		end,
 		Tooltip = 'Renders nametags on entities through walls.'
 	})
-	Targets = NameTags:CreateTargets({
+	Targets = NameTags:Setting({Type='targets', 
 		Players = true,
 		Function = function()
 			if NameTags.Enabled then
@@ -5819,7 +5819,7 @@ run(function()
 			end
 		end
 	})
-	Mode = NameTags:CreateDropdown({
+	Mode = NameTags:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Classic', 'Modern'},
 		Function = function(val)
@@ -5827,7 +5827,7 @@ run(function()
 			if NameTags.Enabled then NameTags:Toggle(); NameTags:Toggle() end
 		end
 	})
-	FontOption = NameTags:CreateFont({
+	FontOption = NameTags:Setting({Type='font', 
 		Name = 'Font',
 		Blacklist = 'Arial',
 		Function = function()
@@ -5837,7 +5837,7 @@ run(function()
 			end
 		end
 	})
-	Color = NameTags:CreateColorSlider({
+	Color = NameTags:Setting({Type='color', 
 		Name = 'Player Color',
 		Function = function(hue, sat, val)
 			if NameTags.Enabled and ColorFunc[methodused] then
@@ -5845,7 +5845,7 @@ run(function()
 			end
 		end
 	})
-	Scale = NameTags:CreateSlider({
+	Scale = NameTags:Setting({Type='slider', 
 		Name = 'Scale',
 		Function = function()
 			if NameTags.Enabled then
@@ -5858,7 +5858,7 @@ run(function()
 		Max = 1.5,
 		Decimal = 10
 	})
-	Background = NameTags:CreateSlider({
+	Background = NameTags:Setting({Type='slider', 
 		Name = 'Transparency',
 		Function = function()
 			if NameTags.Enabled then
@@ -5871,7 +5871,7 @@ run(function()
 		Max = 1,
 		Decimal = 10
 	})
-	Stroke = NameTags:CreateSlider({
+	Stroke = NameTags:Setting({Type='slider', 
 		Name = 'Stroke Transparency',
 		Function = function()
 			if NameTags.Enabled then
@@ -5884,7 +5884,7 @@ run(function()
 		Max = 1,
 		Decimal = 10
 	})
-	Health = NameTags:CreateToggle({
+	Health = NameTags:Setting({Type='toggle', 
 		Name = 'Health',
 		Function = function()
 			if NameTags.Enabled then
@@ -5893,7 +5893,7 @@ run(function()
 			end
 		end
 	})
-	Distance = NameTags:CreateToggle({
+	Distance = NameTags:Setting({Type='toggle', 
 		Name = 'Distance',
 		Function = function()
 			if NameTags.Enabled then
@@ -5902,7 +5902,7 @@ run(function()
 			end
 		end
 	})
-	DisplayName = NameTags:CreateToggle({
+	DisplayName = NameTags:Setting({Type='toggle', 
 		Name = 'Use Displayname',
 		Function = function()
 			if NameTags.Enabled then
@@ -5912,7 +5912,7 @@ run(function()
 		end,
 		Default = true
 	})
-	Teammates = NameTags:CreateToggle({
+	Teammates = NameTags:Setting({Type='toggle', 
 		Name = 'Priority Only',
 		Function = function()
 			if NameTags.Enabled then
@@ -5923,7 +5923,7 @@ run(function()
 		Default = true,
 		Tooltip = 'Hides teammates & non targetable entities'
 	})
-	DrawingToggle = NameTags:CreateToggle({
+	DrawingToggle = NameTags:Setting({Type='toggle', 
 		Name = 'Drawing',
 		Function = function()
 			if NameTags.Enabled then
@@ -5933,13 +5933,13 @@ run(function()
 		end
 	})
 	DrawingToggle.Object.Visible = Mode.Value ~= 'Modern'
-	DistanceCheck = NameTags:CreateToggle({
+	DistanceCheck = NameTags:Setting({Type='toggle', 
 		Name = 'Distance Check',
 		Function = function(callback)
 			DistanceLimit.Object.Visible = callback
 		end
 	})
-	DistanceLimit = NameTags:CreateTwoSlider({
+	DistanceLimit = NameTags:Setting({Type='range', 
 		Name = 'Player Distance',
 		Min = 0,
 		Max = 256,
@@ -5960,7 +5960,7 @@ run(function()
 	local models = {}
 	
 	local function addMesh(ent)
-		if vape.ThreadFix then 
+		if tenacity.ThreadFix then 
 			setthreadidentity(8)
 		end
 		local root = ent.RootPart
@@ -5990,7 +5990,7 @@ run(function()
 		end
 	end
 	
-	PlayerModel = vape.Categories.Render:CreateModule({
+	PlayerModel = tenacity:Module('Render', {
 		Name = 'PlayerModel',
 		Function = function(callback)
 			if callback then 
@@ -6015,7 +6015,7 @@ run(function()
 		end,
 		Tooltip = 'Change the player models to a Mesh'
 	})
-	Scale = PlayerModel:CreateSlider({
+	Scale = PlayerModel:Setting({Type='slider', 
 		Name = 'Scale',
 		Min = 0,
 		Max = 2,
@@ -6028,7 +6028,7 @@ run(function()
 		end
 	})
 	for _, name in {'Rotation X', 'Rotation Y', 'Rotation Z'} do 
-		table.insert(Rots, PlayerModel:CreateSlider({
+		table.insert(Rots, PlayerModel:Setting({Type='slider', 
 			Name = name,
 			Min = 0,
 			Max = 360,
@@ -6041,7 +6041,7 @@ run(function()
 			end
 		}))
 	end
-	Local = PlayerModel:CreateToggle({
+	Local = PlayerModel:Setting({Type='toggle', 
 		Name = 'Local',
 		Function = function()
 			if PlayerModel.Enabled then 
@@ -6050,7 +6050,7 @@ run(function()
 			end
 		end
 	})
-	Mesh = PlayerModel:CreateTextBox({
+	Mesh = PlayerModel:Setting({Type='text', 
 		Name = 'Mesh',
 		Placeholder = 'mesh id',
 		Function = function()
@@ -6059,7 +6059,7 @@ run(function()
 			end
 		end
 	})
-	Texture = PlayerModel:CreateTextBox({
+	Texture = PlayerModel:Setting({Type='text', 
 		Name = 'Texture',
 		Placeholder = 'texture id',
 		Function = function()
@@ -6084,7 +6084,7 @@ run(function()
 		if not Targets.Players.Enabled and ent.Player then return end
 		if not Targets.NPCs.Enabled and ent.NPC then return end
 		if (not ent.Targetable) and (not ent.Friend) then return end
-		if vape.ThreadFix then
+		if tenacity.ThreadFix then
 			setthreadidentity(8)
 		end
 	
@@ -6107,7 +6107,7 @@ run(function()
 	local function Removed(ent)
 		local v = Reference[ent]
 		if v then
-			if vape.ThreadFix then
+			if tenacity.ThreadFix then
 				setthreadidentity(8)
 			end
 			Reference[ent] = nil
@@ -6115,9 +6115,9 @@ run(function()
 		end
 	end
 	
-	Radar = vape:CreateOverlay({
+	Radar = tenacity:CreateOverlay({
 		Name = 'Radar',
-		Icon = getvapeasset('newvape/assets/new/radar.png'),
+		Icon = gettenacityasset('tenacity/assets/new/radar.png'),
 		Size = UDim2.fromOffset(14, 14),
 		Position = UDim2.fromOffset(12, 13),
 		Function = function(callback)
@@ -6135,7 +6135,7 @@ run(function()
 					end
 					Added(ent)
 				end))
-				Radar:Clean(vape.Categories.Friends.ColorUpdate.Event:Connect(function()
+				Radar:Clean(tenacity.Categories.Friends.ColorUpdate.Event:Connect(function()
 					for ent, dot in Reference do
 						dot.BackgroundColor3 = entitylib.getEntityColor(ent) or Color3.fromHSV(PlayerColor.Hue, PlayerColor.Sat, PlayerColor.Value)
 					end
@@ -6252,7 +6252,7 @@ run(function()
 	local FillTransparency
 	local Reference = {}
 	local Folder = Instance.new('Folder')
-	Folder.Parent = vape.holder
+	Folder.Parent = tenacity.holder
 	
 	local function Add(v)
 		if not table.find(List.ListEnabled, v.Name) then return end
@@ -6270,7 +6270,7 @@ run(function()
 		end
 	end
 	
-	Search = vape.Categories.Render:CreateModule({
+	Search = tenacity:Module('Render', {
 		Name = 'Search',
 		Function = function(callback)
 			if callback then
@@ -6292,7 +6292,7 @@ run(function()
 		end,
 		Tooltip = 'Draws box around selected parts\nAdd parts in Search frame'
 	})
-	List = Search:CreateTextList({
+	List = Search:Setting({Type='list', 
 		Name = 'Parts',
 		Function = function()
 			if Search.Enabled then
@@ -6301,7 +6301,7 @@ run(function()
 			end
 		end
 	})
-	Color = Search:CreateColorSlider({
+	Color = Search:Setting({Type='color', 
 		Name = 'Color',
 		Function = function(hue, sat, val)
 			for _, v in Reference do
@@ -6309,7 +6309,7 @@ run(function()
 			end
 		end
 	})
-	FillTransparency = Search:CreateSlider({
+	FillTransparency = Search:Setting({Type='slider', 
 		Name = 'Transparency',
 		Min = 0,
 		Max = 1,
@@ -6339,9 +6339,9 @@ run(function()
 	local sessionTitle
 	local customLabel
 	
-	SessionInfo = vape:CreateOverlay({
+	SessionInfo = tenacity:CreateOverlay({
 		Name = 'Session Info',
-		Icon = getvapeasset('newvape/assets/new/textgui.png'),
+		Icon = gettenacityasset('tenacity/assets/new/textgui.png'),
 		Size = UDim2.fromOffset(16, 12),
 		Position = UDim2.fromOffset(12, 14),
 		Function = function(callback)
@@ -6350,22 +6350,22 @@ run(function()
 				SessionInfo:Clean(playersService.LocalPlayer.OnTeleport:Connect(function()
 					if not teleportedServers then
 						teleportedServers = true
-						queue_on_teleport("shared.vapesessioninfo = '"..httpService:JSONEncode(vape.Libraries.sessioninfo.Objects).."'")
+						queue_on_teleport("shared.TenacitySessionInfo = '"..httpService:JSONEncode(tenacity.Libraries.sessioninfo.Objects).."'")
 					end
 				end))
 	
-				if shared.vapesessioninfo then
-					for i, v in httpService:JSONDecode(shared.vapesessioninfo) do
-						if vape.Libraries.sessioninfo.Objects[i] and v.Saved then
-							vape.Libraries.sessioninfo.Objects[i].Value = v.Value
+				if shared.TenacitySessionInfo then
+					for i, v in httpService:JSONDecode(shared.TenacitySessionInfo) do
+						if tenacity.Libraries.sessioninfo.Objects[i] and v.Saved then
+							tenacity.Libraries.sessioninfo.Objects[i].Value = v.Value
 						end
 					end
 				end
 	
 				repeat
-					if vape.Libraries.sessioninfo then
+					if tenacity.Libraries.sessioninfo then
 						local entries = {}
-						for name, item in vape.Libraries.sessioninfo.Objects do
+						for name, item in tenacity.Libraries.sessioninfo.Objects do
 							if not table.find(Hide.ListEnabled, name) then
 								table.insert(entries, {Name = name, Item = item})
 							end
@@ -6382,7 +6382,7 @@ run(function()
 								local label = infolabel:Clone()
 								label.RichText = false
 								label.TextTransparency = 0
-								label:SetAttribute('VapeFadeBase_TextTransparency', nil)
+								label:SetAttribute('TenacityFadeBase_TextTransparency', nil)
 								label.TextStrokeTransparency = 1
 								label.Parent = infoholder
 								local value = label:Clone()
@@ -6503,11 +6503,11 @@ run(function()
 	infoholder.BackgroundColor3 = Color3.fromRGB(23, 26, 33)
 	infoholder.BackgroundTransparency = 0.5
 	infoholder.Parent = SessionInfo.Children
-	vape:Clean(SessionInfo.Children:GetPropertyChangedSignal('AbsolutePosition'):Connect(function()
-		if vape.ThreadFix then
+	tenacity:Clean(SessionInfo.Children:GetPropertyChangedSignal('AbsolutePosition'):Connect(function()
+		if tenacity.ThreadFix then
 			setthreadidentity(8)
 		end
-		local newside = SessionInfo.Children.AbsolutePosition.X > (vape.gui.AbsoluteSize.X / 2)
+		local newside = SessionInfo.Children.AbsolutePosition.X > (tenacity.gui.AbsoluteSize.X / 2)
 		infoholder.Position = UDim2.fromScale(newside and 1 or 0, 0)
 		infoholder.AnchorPoint = Vector2.new(newside and 1 or 0, 0)
 	end))
@@ -6541,13 +6541,13 @@ run(function()
 	sessionTitle.Parent = infoholder
 	customLabel = infolabel:Clone()
 	customLabel.Parent = infoholder
-	vape:StyleHUDCard(infoholder)
+	tenacity:StyleHUDCard(infoholder)
 	infostroke = Instance.new('UIStroke')
 	infostroke.Enabled = false
 	infostroke.Color = Color3.fromHSV(0.44, 1, 1)
 	infostroke.Parent = infoholder
 	addBlur(infoholder)
-	vape.Libraries.sessioninfo = {
+	tenacity.Libraries.sessioninfo = {
 		Objects = {},
 		AddItem = function(self, name, startvalue, func, saved)
 			func, saved = func or function(val) return val end, saved == nil or saved
@@ -6562,7 +6562,7 @@ run(function()
 			}
 		end
 	}
-	vape.Libraries.sessioninfo:AddItem('Time Played', os.clock(), function(value)
+	tenacity.Libraries.sessioninfo:AddItem('Time Played', os.clock(), function(value)
 		return os.date('!%X', math.floor(os.clock() - value))
 	end)
 end)
@@ -6609,9 +6609,9 @@ run(function()
 		return corner
 	end
 	
-	Spotify = vape:CreateOverlay({
+	Spotify = tenacity:CreateOverlay({
 		Name = 'Spotify',
-		Icon = getvapeasset('newvape/assets/new/spotify.png'),
+		Icon = gettenacityasset('tenacity/assets/new/spotify.png'),
 		Size = UDim2.fromOffset(16, 16),
 		Position = UDim2.fromOffset(12, 13),
 		Function = function(callback)
@@ -6706,8 +6706,8 @@ run(function()
 	duration.TextSize = 11
 	duration.TextXAlignment = Enum.TextXAlignment.Right
 	duration.Parent = holder
-	vape:StyleHUDCard(holder)
-	vape:RegisterHUDAccent(fill)
+	tenacity:StyleHUDCard(holder)
+	tenacity:RegisterHUDAccent(fill)
 	local playbackStatus = title:Clone()
 	playbackStatus.Name = 'PlaybackStatus'
 	playbackStatus.Position = UDim2.fromOffset(16, 14)
@@ -7125,17 +7125,17 @@ run(function()
 		end
 	
 		function SpotifyHandler:Start()
-			if not isfile('newvape/profiles/spotify.txt') then
+			if not isfile('tenacity/profiles/spotify.txt') then
 				notif('Spotify', 'Missing cookie! (dump sp_dc from the browser and write to profiles/spotify.txt)', 30, 'warning')
 				return
 			end
 	
 			self.Headers = {
-				Cookie = 'sp_dc='..readfile('newvape/profiles/spotify.txt')..';',
+				Cookie = 'sp_dc='..readfile('tenacity/profiles/spotify.txt')..';',
 				['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:154.0) Gecko/20100101 Firefox/154.0'
 			}
 	
-			local data = isfile('newvape/profiles/spotifydata.txt') and httpService:JSONDecode(readfile('newvape/profiles/spotifydata.txt')) or {expireTime = 0}
+			local data = isfile('tenacity/profiles/spotifydata.txt') and httpService:JSONDecode(readfile('tenacity/profiles/spotifydata.txt')) or {expireTime = 0}
 			if data.expireTime > os.time() then
 				self.Data = data
 			else
@@ -7148,7 +7148,7 @@ run(function()
 	
 				if success then
 					notif('Spotify', 'Logged in!', 10, 'info')
-					writefile('newvape/profiles/spotifydata.txt', httpService:JSONEncode(data))
+					writefile('tenacity/profiles/spotifydata.txt', httpService:JSONEncode(data))
 					self.Data = data
 				else
 					notif('Spotify', data, 10, 'alert')
@@ -7229,7 +7229,7 @@ run(function()
 		if not Targets.Players.Enabled and ent.Player then return end
 		if not Targets.NPCs.Enabled and ent.NPC then return end
 		if Teammates.Enabled and (not ent.Targetable) and (not ent.Friend) then return end
-		if vape.ThreadFix then setthreadidentity(8) end
+		if tenacity.ThreadFix then setthreadidentity(8) end
 		local col = entitylib.getEntityColor(ent) or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
 		local opacity = 1 - Transparency.Value
 		local core = Drawing.new('Line')
@@ -7271,7 +7271,7 @@ run(function()
 	local function Removed(ent)
 		local data = Reference[ent]
 		if data then
-			if vape.ThreadFix then setthreadidentity(8) end
+			if tenacity.ThreadFix then setthreadidentity(8) end
 			Reference[ent] = nil
 			for _, obj in data do pcall(function() obj.Visible = false; obj:Remove() end) end
 		end
@@ -7284,7 +7284,7 @@ run(function()
 	end
 
 	local function Loop()
-		local screenSize = vape.gui.AbsoluteSize
+		local screenSize = tenacity.gui.AbsoluteSize
 		local startVector = StartPosition.Value == 'Mouse' and inputService:GetMouseLocation() or Vector2.new(screenSize.X / 2, (StartPosition.Value == 'Middle' and screenSize.Y / 2 or screenSize.Y))
 		for ent, data in Reference do
 			local distance = entitylib.isAlive and (entitylib.character.RootPart.Position - ent.RootPart.Position).Magnitude
@@ -7317,14 +7317,14 @@ run(function()
 		end
 	end
 
-	Tracers = vape.Categories.Render:CreateModule({
+	Tracers = tenacity:Module('Render', {
 		Name = 'Tracers',
 		Function = function(callback)
 			if callback then
 				Tracers:Clean(entitylib.Events.EntityRemoved:Connect(Removed))
 				for _, ent in entitylib.List do if Reference[ent] then Removed(ent) end; Added(ent) end
 				Tracers:Clean(entitylib.Events.EntityAdded:Connect(function(ent) if Reference[ent] then Removed(ent) end; Added(ent) end))
-				Tracers:Clean(vape.Categories.Friends.ColorUpdate.Event:Connect(function() ColorFunc(Color.Hue, Color.Sat, Color.Value) end))
+				Tracers:Clean(tenacity.Categories.Friends.ColorUpdate.Event:Connect(function() ColorFunc(Color.Hue, Color.Sat, Color.Value) end))
 				Tracers:Clean(runService.RenderStepped:Connect(Loop))
 			else
 				for ent in Reference do Removed(ent) end
@@ -7332,12 +7332,12 @@ run(function()
 		end,
 		Tooltip = 'Renders tracers on players.'
 	})
-	Targets = Tracers:CreateTargets({Players = true, Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
-	Mode = Tracers:CreateDropdown({Name = 'Mode', List = {'Classic', 'Modern'}, Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
-	StartPosition = Tracers:CreateDropdown({Name = 'Start Position', List = {'Middle', 'Bottom', 'Mouse'}, Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
-	EndPosition = Tracers:CreateDropdown({Name = 'End Position', List = {'Head', 'Torso'}, Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
-	Color = Tracers:CreateColorSlider({Name = 'Player Color', Function = function(hue, sat, val) if Tracers.Enabled then ColorFunc(hue, sat, val) end end})
-	Transparency = Tracers:CreateSlider({
+	Targets = Tracers:Setting({Type='targets', Players = true, Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
+	Mode = Tracers:Setting({Type='dropdown', Name = 'Mode', List = {'Classic', 'Modern'}, Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
+	StartPosition = Tracers:Setting({Type='dropdown', Name = 'Start Position', List = {'Middle', 'Bottom', 'Mouse'}, Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
+	EndPosition = Tracers:Setting({Type='dropdown', Name = 'End Position', List = {'Head', 'Torso'}, Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
+	Color = Tracers:Setting({Type='color', Name = 'Player Color', Function = function(hue, sat, val) if Tracers.Enabled then ColorFunc(hue, sat, val) end end})
+	Transparency = Tracers:Setting({Type='slider', 
 		Name = 'Transparency', Min = 0, Max = 1, Decimal = 10,
 		Function = function(val)
 			local opacity = 1 - val
@@ -7347,11 +7347,11 @@ run(function()
 			end
 		end
 	})
-	DistanceColor = Tracers:CreateToggle({Name = 'Color by distance', Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
-	Distance = Tracers:CreateToggle({Name = 'Distance Check', Function = function(callback) DistanceLimit.Object.Visible = callback end})
-	DistanceLimit = Tracers:CreateTwoSlider({Name = 'Player Distance', Min = 0, Max = 256, DefaultMin = 0, DefaultMax = 64, Darker = true, Visible = false})
-	Behind = Tracers:CreateToggle({Name = 'Behind', Default = true})
-	Teammates = Tracers:CreateToggle({Name = 'Priority Only', Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end, Default = true, Tooltip = 'Hides teammates & non targetable entities'})
+	DistanceColor = Tracers:Setting({Type='toggle', Name = 'Color by distance', Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end})
+	Distance = Tracers:Setting({Type='toggle', Name = 'Distance Check', Function = function(callback) DistanceLimit.Object.Visible = callback end})
+	DistanceLimit = Tracers:Setting({Type='range', Name = 'Player Distance', Min = 0, Max = 256, DefaultMin = 0, DefaultMax = 64, Darker = true, Visible = false})
+	Behind = Tracers:Setting({Type='toggle', Name = 'Behind', Default = true})
+	Teammates = Tracers:Setting({Type='toggle', Name = 'Priority Only', Function = function() if Tracers.Enabled then Tracers:Toggle(); Tracers:Toggle() end end, Default = true, Tooltip = 'Hides teammates & non targetable entities'})
 end)
 
 run(function()
@@ -7364,7 +7364,7 @@ run(function()
 	local Background
 	local Stroke
 	WaypointFolder = Instance.new('Folder')
-	WaypointFolder.Parent = vape.holder
+	WaypointFolder.Parent = tenacity.holder
 
 	local function buildWaypoint(data)
 		local split = data:split('/')
@@ -7400,23 +7400,23 @@ run(function()
 		end
 	end
 
-	Waypoints = vape.Categories.Render:CreateModule({
+	Waypoints = tenacity:Module('Render', {
 		Name = 'Waypoints',
 		Function = function(callback)
 			if callback then for _, data in List.ListEnabled do buildWaypoint(data) end else WaypointFolder:ClearAllChildren() end
 		end,
 		Tooltip = 'Mark certain spots with a visual indicator'
 	})
-	Mode = Waypoints:CreateDropdown({Name = 'Mode', List = {'Classic', 'Modern'}, Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end})
-	FontOption = Waypoints:CreateFont({Name = 'Font', Blacklist = 'Arial', Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end})
-	List = Waypoints:CreateTextList({
+	Mode = Waypoints:Setting({Type='dropdown', Name = 'Mode', List = {'Classic', 'Modern'}, Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end})
+	FontOption = Waypoints:Setting({Type='font', Name = 'Font', Blacklist = 'Arial', Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end})
+	List = Waypoints:Setting({Type='list', 
 		Name = 'Points', Placeholder = '(name) | (x, y, z/name)',
 		Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end,
 		TextFunction = function(text)
 			if not text:find('/') then local pos = entitylib.character.RootPart.Position // 1; return pos.X..','..pos.Y..','..pos.Z..'/'..text end
 		end
 	})
-	Color = Waypoints:CreateColorSlider({
+	Color = Waypoints:Setting({Type='color', 
 		Name = 'Color',
 		Function = function(hue, sat, val)
 			local col = Color3.fromHSV(hue, sat, val)
@@ -7428,9 +7428,9 @@ run(function()
 			end
 		end
 	})
-	Scale = Waypoints:CreateSlider({Name = 'Scale', Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end, Default = 1, Min = 0.1, Max = 1.5, Decimal = 10})
-	Background = Waypoints:CreateSlider({Name = 'Transparency', Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end, Default = 0.5, Min = 0, Max = 1, Decimal = 10})
-	Stroke = Waypoints:CreateSlider({Name = 'Stroke Transparency', Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end, Default = 1, Min = 0, Max = 1, Decimal = 10})
+	Scale = Waypoints:Setting({Type='slider', Name = 'Scale', Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end, Default = 1, Min = 0.1, Max = 1.5, Decimal = 10})
+	Background = Waypoints:Setting({Type='slider', Name = 'Transparency', Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end, Default = 0.5, Min = 0, Max = 1, Decimal = 10})
+	Stroke = Waypoints:Setting({Type='slider', Name = 'Stroke Transparency', Function = function() if Waypoints.Enabled then Waypoints:Toggle(); Waypoints:Toggle() end end, Default = 1, Min = 0, Max = 1, Decimal = 10})
 end)
 
 run(function()
@@ -7468,7 +7468,7 @@ run(function()
 		end
 	end
 	
-	AnimationPlayer = vape.Categories.Utility:CreateModule({
+	AnimationPlayer = tenacity:Module('Misc', {
 		Name = 'AnimationPlayer',
 		Function = function(callback)
 			if callback then
@@ -7497,7 +7497,7 @@ run(function()
 		end,
 		Tooltip = 'Plays a specific animation of your choosing at a certain speed'
 	})
-	IDBox = AnimationPlayer:CreateTextBox({
+	IDBox = AnimationPlayer:Setting({Type='text', 
 		Name = 'Animation',
 		Placeholder = 'anim (num only)',
 		Function = function(enter)
@@ -7513,7 +7513,7 @@ run(function()
 			table.insert(prio, v.Name)
 		end
 	end
-	Priority = AnimationPlayer:CreateDropdown({
+	Priority = AnimationPlayer:Setting({Type='dropdown', 
 		Name = 'Priority',
 		List = prio,
 		Function = function(val)
@@ -7522,7 +7522,7 @@ run(function()
 			end
 		end
 	})
-	Speed = AnimationPlayer:CreateSlider({
+	Speed = AnimationPlayer:Setting({Type='slider', 
 		Name = 'Speed',
 		Function = function(val)
 			if track then
@@ -7534,7 +7534,7 @@ run(function()
 		Default = 1,
 		Decimal = 10
 	})
-	NoFetch = AnimationPlayer:CreateToggle({
+	NoFetch = AnimationPlayer:Setting({Type='toggle', 
 		Name = 'No Fetch',
 		Tooltip = 'Do not attempt to fetch the asset with GetObjects'
 	})
@@ -7543,7 +7543,7 @@ end)
 run(function()
 	local AntiRagdoll
 	
-	AntiRagdoll = vape.Categories.Utility:CreateModule({
+	AntiRagdoll = tenacity:Module('Misc', {
 		Name = 'AntiRagdoll',
 		Function = function(callback)
 			if entitylib.isAlive then
@@ -7564,7 +7564,7 @@ run(function()
 	local AutoRejoin
 	local Sort
 	
-	AutoRejoin = vape.Categories.Utility:CreateModule({
+	AutoRejoin = tenacity:Module('Misc', {
 		Name = 'AutoRejoin',
 		Function = function(callback)
 			if callback then
@@ -7579,7 +7579,7 @@ run(function()
 		end,
 		Tooltip = 'Automatically rejoins into a new server if you get disconnected / kicked'
 	})
-	Sort = AutoRejoin:CreateDropdown({
+	Sort = AutoRejoin:Setting({Type='dropdown', 
 		Name = 'Sort',
 		List = {'Descending', 'Ascending'},
 		Tooltip = 'Descending - Prefers full servers\nAscending - Prefers empty servers'
@@ -7593,7 +7593,7 @@ run(function()
 	local AutoSendLength
 	local oldphys, oldsend
 	
-	Blink = vape.Categories.Utility:CreateModule({
+	Blink = tenacity:Module('Misc', {
 		Name = 'Blink',
 		Function = function(callback)
 			if callback then
@@ -7628,19 +7628,19 @@ run(function()
 		end,
 		Tooltip = 'Chokes packets until disabled.'
 	})
-	Type = Blink:CreateDropdown({
+	Type = Blink:Setting({Type='dropdown', 
 		Name = 'Type',
 		List = {'Movement Only', 'All'},
 		Tooltip = 'Movement Only - Only chokes movement packets\nAll - Chokes remotes & movement'
 	})
-	AutoSend = Blink:CreateToggle({
+	AutoSend = Blink:Setting({Type='toggle', 
 		Name = 'Auto send',
 		Function = function(callback)
 			AutoSendLength.Object.Visible = callback
 		end,
 		Tooltip = 'Automatically send packets in intervals'
 	})
-	AutoSendLength = Blink:CreateSlider({
+	AutoSendLength = Blink:Setting({Type='slider', 
 		Name = 'Send threshold',
 		Min = 0,
 		Max = 1,
@@ -7662,7 +7662,7 @@ run(function()
 	local RandomList = {}
 	local oldchat
 	
-	ChatSpammer = vape.Categories.Utility:CreateModule({
+	ChatSpammer = tenacity:Module('Misc', {
 		Name = 'ChatSpammer',
 		Function = function(callback)
 			if callback then
@@ -7721,17 +7721,17 @@ run(function()
 		end,
 		Tooltip = 'Automatically types in chat'
 	})
-	Lines = ChatSpammer:CreateTextList({
+	Lines = ChatSpammer:Setting({Type='list', 
 		Name = 'Lines',
 		Function = function()
 			table.clear(RandomList)
 		end
 	})
-	Mode = ChatSpammer:CreateDropdown({
+	Mode = ChatSpammer:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Random', 'Order'}
 	})
-	Delay = ChatSpammer:CreateSlider({
+	Delay = ChatSpammer:Setting({Type='slider', 
 		Name = 'Delay',
 		Min = 0.1,
 		Max = 10,
@@ -7741,7 +7741,7 @@ run(function()
 			return val == 1 and 'second' or 'seconds'
 		end
 	})
-	Hide = ChatSpammer:CreateToggle({
+	Hide = ChatSpammer:Setting({Type='toggle', 
 		Name = 'Hide Flood Message',
 		Default = true,
 		Function = function()
@@ -7764,7 +7764,7 @@ run(function()
 		end
 	end
 	
-	Disabler = vape.Categories.Utility:CreateModule({
+	Disabler = tenacity:Module('Misc', {
 		Name = 'Disabler',
 		Function = function(callback)
 			if callback then
@@ -7779,11 +7779,11 @@ run(function()
 end)
 
 run(function()
-	vape.Categories.Utility:CreateModule({
+	tenacity:Module('Misc', {
 		Name = 'Panic',
 		Function = function(callback)
 			if callback then
-				for _, module in vape.Modules do
+				for _, module in tenacity.Modules do
 					if module.Enabled then
 						module:Toggle()
 					end
@@ -7797,7 +7797,7 @@ end)
 run(function()
 	local Rejoin
 	
-	Rejoin = vape.Categories.Utility:CreateModule({
+	Rejoin = tenacity:Module('Misc', {
 		Name = 'Rejoin',
 		Function = function(callback)
 			if callback then
@@ -7819,7 +7819,7 @@ run(function()
 	local ServerHop
 	local Sort
 	
-	ServerHop = vape.Categories.Utility:CreateModule({
+	ServerHop = tenacity:Module('Misc', {
 		Name = 'ServerHop',
 		Function = function(callback)
 			if callback then
@@ -7829,18 +7829,18 @@ run(function()
 		end,
 		Tooltip = 'Teleports into a unique server'
 	})
-	Sort = ServerHop:CreateDropdown({
+	Sort = ServerHop:Setting({Type='dropdown', 
 		Name = 'Sort',
 		List = {'Descending', 'Ascending'},
 		Tooltip = 'Descending - Prefers full servers\nAscending - Prefers empty servers'
 	})
-	ServerHop:CreateButton({
+	ServerHop:Setting({Type='button', 
 		Name = 'Rejoin Previous Server',
 		Function = function()
-			notif('ServerHop', shared.vapeserverhopprevious and 'Rejoining previous server...' or 'Cannot find previous server', 5)
+			notif('ServerHop', shared.TenacityServerHopPrevious and 'Rejoining previous server...' or 'Cannot find previous server', 5)
 	
-			if shared.vapeserverhopprevious then
-				teleportService:TeleportToPlaceInstance(game.PlaceId, shared.vapeserverhopprevious)
+			if shared.TenacityServerHopPrevious then
+				teleportService:TeleportToPlaceInstance(game.PlaceId, shared.TenacityServerHopPrevious)
 			end
 		end
 	})
@@ -7877,8 +7877,8 @@ run(function()
 	end
 	
 	local function playerAdded(plr)
-		if not vape.Loaded then
-			repeat task.wait() until vape.Loaded
+		if not tenacity.Loaded then
+			repeat task.wait() until tenacity.Loaded
 		end
 	
 		local user = table.find(Users.ListEnabled, tostring(plr.UserId))
@@ -7888,7 +7888,7 @@ run(function()
 	
 			if Mode.Value == 'Uninject' then
 				task.spawn(function()
-					vape:Uninject()
+					tenacity:Uninject()
 				end)
 	
 				game:GetService('StarterGui'):SetCore('SendNotification', {
@@ -7899,14 +7899,14 @@ run(function()
 			elseif Mode.Value == 'ServerHop' then
 				serverHop()
 			elseif Mode.Value == 'Profile' then
-				vape.Save = function() end
-				if vape.Profile ~= Profile.Value then
-					vape.Profile = Profile.Value
-					vape:Load(true, Profile.Value)
+				tenacity.Save = function() end
+				if tenacity.Profile ~= Profile.Value then
+					tenacity.Profile = Profile.Value
+					tenacity:Load(true, Profile.Value)
 				end
 			elseif Mode.Value == 'AutoConfig' then
-				vape.Save = function() end
-				for _, module in vape.Modules do
+				tenacity.Save = function() end
+				for _, module in tenacity.Modules do
 					if module.Enabled then
 						module:Toggle()
 					end
@@ -7915,7 +7915,7 @@ run(function()
 		end
 	end
 	
-	StaffDetector = vape.Categories.Utility:CreateModule({
+	StaffDetector = tenacity:Module('Misc', {
 		Name = 'StaffDetector',
 		Function = function(callback)
 			if callback then
@@ -7963,7 +7963,7 @@ run(function()
 		end,
 		Tooltip = 'Detects people with a staff rank ingame'
 	})
-	Mode = StaffDetector:CreateDropdown({
+	Mode = StaffDetector:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Uninject', 'ServerHop', 'Profile', 'AutoConfig', 'Notify'},
 		Function = function(val)
@@ -7972,21 +7972,21 @@ run(function()
 			end
 		end
 	})
-	Profile = StaffDetector:CreateTextBox({
+	Profile = StaffDetector:Setting({Type='text', 
 		Name = 'Profile',
 		Default = 'default',
 		Darker = true,
 		Visible = false
 	})
-	Users = StaffDetector:CreateTextList({
+	Users = StaffDetector:Setting({Type='list', 
 		Name = 'Users',
 		Placeholder = 'player (userid)'
 	})
-	Group = StaffDetector:CreateTextBox({
+	Group = StaffDetector:Setting({Type='text', 
 		Name = 'Group',
 		Placeholder = 'Group Id'
 	})
-	Role = StaffDetector:CreateTextBox({
+	Role = StaffDetector:Setting({Type='text', 
 		Name = 'Role',
 		Placeholder = 'Role Rank'
 	})
@@ -7997,7 +7997,7 @@ run(function()
 	local State
 	local hook
 	
-	StateSpoofer = vape.Categories.Utility:CreateModule({
+	StateSpoofer = tenacity:Module('Misc', {
 		Name = 'StateSpoofer',
 		Function = function(callback)
 			if callback then
@@ -8028,7 +8028,7 @@ run(function()
 			table.insert(states, v.Name)
 		end
 	end
-	State = StateSpoofer:CreateDropdown({
+	State = StateSpoofer:Setting({Type='dropdown', 
 		Name = 'Humanoid State',
 		List = states
 	})
@@ -8037,7 +8037,7 @@ end)
 run(function()
 	local connections = {}
 	
-	vape.Categories.World:CreateModule({
+	tenacity:Module('Exploit', {
 		Name = 'Anti-AFK',
 		Function = function(callback)
 			if callback then
@@ -8063,7 +8063,7 @@ run(function()
 	local modified = {}
 	local thread
 	
-	FastProxPrompt = vape.Categories.World:CreateModule({
+	FastProxPrompt = tenacity:Module('Exploit', {
 		Name = 'FastProxPrompt',
 		Function = function(callback)
 			if callback then
@@ -8114,7 +8114,7 @@ run(function()
 		end,
 		Tooltip = 'Allow you to adjust the HoldDuration time of a ProximityPrompt'
 	})
-	Mode = FastProxPrompt:CreateDropdown({
+	Mode = FastProxPrompt:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Signal', 'Property'},
 		Tooltip = 'Signal - Uses fireproximityprompt after the calculated delay\nProperty - Sets the HoldDuration property',
@@ -8125,7 +8125,7 @@ run(function()
 			end
 		end
 	})
-	Value = FastProxPrompt:CreateSlider({
+	Value = FastProxPrompt:Setting({Type='slider', 
 		Name = 'Modifier',
 		Min = 0,
 		Max = 100,
@@ -8145,7 +8145,7 @@ run(function()
 	local Value
 	local randomkey, module, old = httpService:GenerateGUID(false)
 	
-	Freecam = vape.Categories.World:CreateModule({
+	Freecam = tenacity:Module('Exploit', {
 		Name = 'Freecam',
 		Function = function(callback)
 			if callback then
@@ -8221,7 +8221,7 @@ run(function()
 		end,
 		Tooltip = 'Lets you fly and clip through walls freely\nwithout moving your player server-sided.'
 	})
-	Mode = Freecam:CreateDropdown({
+	Mode = Freecam:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Classic', 'Roblox'},
 		Function = function(val)
@@ -8235,7 +8235,7 @@ run(function()
 			end
 		end
 	})
-	Value = Freecam:CreateSlider({
+	Value = Freecam:Setting({Type='slider', 
 		Name = 'Speed',
 		Min = 1,
 		Max = 150,
@@ -8253,7 +8253,7 @@ run(function()
 	local Value
 	local changed, old = false
 	
-	Gravity = vape.Categories.World:CreateModule({
+	Gravity = tenacity:Module('Exploit', {
 		Name = 'Gravity',
 		Function = function(callback)
 			if callback then
@@ -8291,12 +8291,12 @@ run(function()
 		end,
 		Tooltip = 'Changes the rate you fall'
 	})
-	Mode = Gravity:CreateDropdown({
+	Mode = Gravity:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Workspace', 'Velocity', 'Impulse'},
 		Tooltip = 'Workspace - Adjusts the gravity for the entire game\nVelocity - Adjusts the local players gravity\nImpulse - Same as velocity while using forces instead'
 	})
-	Value = Gravity:CreateSlider({
+	Value = Gravity:Setting({Type='slider', 
 		Name = 'Gravity',
 		Min = 0,
 		Max = 192,
@@ -8355,7 +8355,7 @@ run(function()
 		end
 	end
 	
-	MurderMystery = vape.Categories.World:CreateModule({
+	MurderMystery = tenacity:Module('Exploit', {
 		Name = 'MurderMystery',
 		Function = function(callback)
 			if callback then
@@ -8363,9 +8363,9 @@ run(function()
 	
 				entitylib.getEntityColor = function(ent)
 					ent = ent.Player
-					if not (ent and vape.Settings.Modules.Options['Use team color'].Enabled) then return end
+					if not (ent and tenacity.Settings.Modules.Options['Use team color'].Enabled) then return end
 					if isFriend(ent, true) then
-						return Color3.fromHSV(vape.Categories.Friends.Options['Friends color'].Hue, vape.Categories.Friends.Options['Friends color'].Sat, vape.Categories.Friends.Options['Friends color'].Value)
+						return Color3.fromHSV(tenacity.Categories.Friends.Options['Friends color'].Hue, tenacity.Categories.Friends.Options['Friends color'].Sat, tenacity.Categories.Friends.Options['Friends color'].Value)
 					end
 					return murderer == ent and Color3.new(1, 0.3, 0.3) or sheriff == ent and Color3.new(0, 0.5, 1) or nil
 				end
@@ -8401,7 +8401,7 @@ end)
 run(function()
 	local Parkour
 	
-	Parkour = vape.Categories.World:CreateModule({
+	Parkour = tenacity:Module('Exploit', {
 		Name = 'Parkour',
 		Function = function(callback)
 			if callback then
@@ -8427,7 +8427,7 @@ run(function()
 	rayCheck.RespectCanCollide = true
 	local module, old
 	
-	vape.Categories.World:CreateModule({
+	tenacity:Module('Exploit', {
 		Name = 'SafeWalk',
 		Function = function(callback)
 			if callback then
@@ -8514,7 +8514,7 @@ run(function()
 		end
 	end
 	
-	Wallhop = vape.Categories.World:CreateModule({
+	Wallhop = tenacity:Module('Exploit', {
 		Name = 'Wallhop',
 		Function = function(callback)
 			if callback then
@@ -8529,7 +8529,7 @@ run(function()
 		end,
 		Tooltip = 'Automatically rotates camera for wallhopping.'
 	})
-	Offset = Wallhop:CreateSlider({
+	Offset = Wallhop:Setting({Type='slider', 
 		Name = 'Offset',
 		Min = -45,
 		Max = 45,
@@ -8550,7 +8550,7 @@ run(function()
 		end
 	end
 	
-	Xray = vape.Categories.World:CreateModule({
+	Xray = tenacity:Module('Exploit', {
 		Name = 'Xray',
 		Function = function(callback)
 			if callback then
@@ -8567,7 +8567,7 @@ run(function()
 		end,
 		Tooltip = 'Renders whitelisted parts through walls.'
 	})
-	List = Xray:CreateTextList({
+	List = Xray:Setting({Type='list', 
 		Name = 'Part',
 		Function = function()
 			if Xray.Enabled then
@@ -8639,7 +8639,7 @@ run(function()
 		end
 	end
 	
-	Atmosphere = vape.Legit:CreateModule({
+	Atmosphere = tenacity:Module('Render', {
 		Name = 'Atmosphere',
 		Function = function(callback)
 			if callback then
@@ -8682,7 +8682,7 @@ run(function()
 	})
 	for i, v in apidump do
 		Toggles[i] = {Objects = {}}
-		Toggles[i].Toggle = Atmosphere:CreateToggle({
+		Toggles[i].Toggle = Atmosphere:Setting({Type='toggle', 
 			Name = i,
 			Function = function(callback)
 				if Atmosphere.Enabled then
@@ -8698,7 +8698,7 @@ run(function()
 	
 		for i2, v2 in v do
 			if v2 == 'Text' or v2 == 'Number' then
-				Toggles[i].Objects[i2] = Atmosphere:CreateTextBox({
+				Toggles[i].Objects[i2] = Atmosphere:Setting({Type='text', 
 					Name = i2,
 					Function = function(enter)
 						if Atmosphere.Enabled and enter then
@@ -8711,7 +8711,7 @@ run(function()
 					Visible = false
 				})
 			elseif v2 == 'Color' then
-				Toggles[i].Objects[i2] = Atmosphere:CreateColorSlider({
+				Toggles[i].Objects[i2] = Atmosphere:Setting({Type='color', 
 					Name = i2,
 					Function = function()
 						if Atmosphere.Enabled then
@@ -8736,7 +8736,7 @@ run(function()
 	local FadeOut
 	local trail, point, point2
 	
-	Breadcrumbs = vape.Legit:CreateModule({
+	Breadcrumbs = tenacity:Module('Render', {
 		Name = 'Breadcrumbs',
 		Function = function(callback)
 			if callback then
@@ -8775,7 +8775,7 @@ run(function()
 		end,
 		Tooltip = 'Shows a trail behind your character'
 	})
-	Texture = Breadcrumbs:CreateTextBox({
+	Texture = Breadcrumbs:Setting({Type='text', 
 		Name = 'Texture',
 		Placeholder = 'Texture Id',
 		Function = function(enter)
@@ -8784,7 +8784,7 @@ run(function()
 			end
 		end
 	})
-	FadeIn = Breadcrumbs:CreateColorSlider({
+	FadeIn = Breadcrumbs:Setting({Type='color', 
 		Name = 'Fade In',
 		Function = function(hue, sat, val)
 			if trail then
@@ -8792,7 +8792,7 @@ run(function()
 			end
 		end
 	})
-	FadeOut = Breadcrumbs:CreateColorSlider({
+	FadeOut = Breadcrumbs:Setting({Type='color', 
 		Name = 'Fade Out',
 		Function = function(hue, sat, val)
 			if trail then
@@ -8800,7 +8800,7 @@ run(function()
 			end
 		end
 	})
-	Lifetime = Breadcrumbs:CreateSlider({
+	Lifetime = Breadcrumbs:Setting({Type='slider', 
 		Name = 'Lifetime',
 		Min = 1,
 		Max = 5,
@@ -8815,7 +8815,7 @@ run(function()
 			return val == 1 and 'second' or 'seconds'
 		end
 	})
-	Thickness = Breadcrumbs:CreateSlider({
+	Thickness = Breadcrumbs:Setting({Type='slider', 
 		Name = 'Thickness',
 		Min = 0,
 		Max = 2,
@@ -8855,7 +8855,7 @@ run(function()
 		motor.Parent = part
 	end
 	
-	Cape = vape.Legit:CreateModule({
+	Cape = tenacity:Module('Render', {
 		Name = 'Cape',
 		Function = function(callback)
 			if callback then
@@ -8912,7 +8912,7 @@ run(function()
 		end,
 		Tooltip = 'Add\'s a cape to your character'
 	})
-	Texture = Cape:CreateTextBox({
+	Texture = Cape:Setting({Type='text', 
 		Name = 'Texture'
 	})
 end)
@@ -8923,11 +8923,11 @@ run(function()
 	local Color
 	local hat
 	
-	ChinaHat = vape.Legit:CreateModule({
+	ChinaHat = tenacity:Module('Render', {
 		Name = 'China Hat',
 		Function = function(callback)
 			if callback then
-				if vape.ThreadFix then
+				if tenacity.ThreadFix then
 					setthreadidentity(8)
 				end
 	
@@ -8977,7 +8977,7 @@ run(function()
 			table.insert(materials, v.Name)
 		end
 	end
-	Material = ChinaHat:CreateDropdown({
+	Material = ChinaHat:Setting({Type='dropdown', 
 		Name = 'Material',
 		List = materials,
 		Function = function(val)
@@ -8986,7 +8986,7 @@ run(function()
 			end
 		end
 	})
-	Color = ChinaHat:CreateColorSlider({
+	Color = ChinaHat:Setting({Type='color', 
 		Name = 'Hat Color',
 		DefaultOpacity = 0.7,
 		Function = function(hue, sat, val, opacity)
@@ -9003,7 +9003,7 @@ run(function()
 	local TwentyFourHour
 	local label
 	
-	Clock = vape.Legit:CreateModule({
+	Clock = tenacity:Module('Render', {
 		Name = 'Clock',
 		Function = function(callback)
 			if callback then
@@ -9016,14 +9016,14 @@ run(function()
 		Size = UDim2.fromOffset(124, 46),
 		Tooltip = 'Shows the current local time'
 	})
-	Clock:CreateFont({
+	Clock:Setting({Type='font', 
 		Name = 'Font',
 		Blacklist = 'Gotham',
 		Function = function(val)
 			label.FontFace = val
 		end
 	})
-	Clock:CreateColorSlider({
+	Clock:Setting({Type='color', 
 		Name = 'Color',
 		DefaultValue = 0,
 		DefaultOpacity = 0.5,
@@ -9032,7 +9032,7 @@ run(function()
 			label.BackgroundTransparency = 1 - opacity
 		end
 	})
-	TwentyFourHour = Clock:CreateToggle({
+	TwentyFourHour = Clock:Setting({Type='toggle', 
 		Name = '24 Hour Clock'
 	})
 	label = Instance.new('TextLabel')
@@ -9047,7 +9047,7 @@ run(function()
 	local corner = Instance.new('UICorner')
 	corner.CornerRadius = UDim.new(0, 4)
 	corner.Parent = label
-	vape:StyleHUDCard(label)
+	tenacity:StyleHUDCard(label)
 end)
 
 run(function()
@@ -9159,7 +9159,7 @@ run(function()
 		end
 	end
 	
-	Disguise = vape.Legit:CreateModule({
+	Disguise = tenacity:Module('Render', {
 		Name = 'Disguise',
 		Function = function(callback)
 			if callback then
@@ -9173,7 +9173,7 @@ run(function()
 		end,
 		Tooltip = 'Changes your character or animation to a specific ID (animation packs or userid\'s only)'
 	})
-	Mode = Disguise:CreateDropdown({
+	Mode = Disguise:Setting({Type='dropdown', 
 		Name = 'Mode',
 		List = {'Character', 'Animation'},
 		Function = function()
@@ -9183,7 +9183,7 @@ run(function()
 			end
 		end
 	})
-	IDBox = Disguise:CreateTextBox({
+	IDBox = Disguise:Setting({Type='text', 
 		Name = 'Disguise',
 		Placeholder = 'Disguise User Id',
 		Function = function()
@@ -9200,7 +9200,7 @@ run(function()
 	local Value
 	local oldfov
 	
-	FOV = vape.Legit:CreateModule({
+	FOV = tenacity:Module('Render', {
 		Name = 'FOV',
 		Function = function(callback)
 			if callback then
@@ -9215,7 +9215,7 @@ run(function()
 		end,
 		Tooltip = 'Adjusts camera vision'
 	})
-	Value = FOV:CreateSlider({
+	Value = FOV:Setting({Type='slider', 
 		Name = 'FOV',
 		Min = 30,
 		Max = 120
@@ -9230,7 +9230,7 @@ run(function()
 	local FPS
 	local label
 	
-	FPS = vape.Legit:CreateModule({
+	FPS = tenacity:Module('Render', {
 		Name = 'FPS',
 		Function = function(callback)
 			if callback then
@@ -9255,14 +9255,14 @@ run(function()
 		Size = UDim2.fromOffset(124, 46),
 		Tooltip = 'Shows the current framerate'
 	})
-	FPS:CreateFont({
+	FPS:Setting({Type='font', 
 		Name = 'Font',
 		Blacklist = 'Gotham',
 		Function = function(val)
 			label.FontFace = val
 		end
 	})
-	FPS:CreateColorSlider({
+	FPS:Setting({Type='color', 
 		Name = 'Color',
 		DefaultValue = 0,
 		DefaultOpacity = 0.5,
@@ -9283,7 +9283,7 @@ run(function()
 	local corner = Instance.new('UICorner')
 	corner.CornerRadius = UDim.new(0, 4)
 	corner.Parent = label
-	vape:StyleHUDCard(label)
+	tenacity:StyleHUDCard(label)
 end)
 
 run(function()
@@ -9320,7 +9320,7 @@ run(function()
 		corner.CornerRadius = UDim.new(0, 4)
 		corner.Parent = key
 		corner.CornerRadius = UDim.new(0, 7)
-		vape:StyleHUDCard(key)
+		tenacity:StyleHUDCard(key)
 	
 		keys[keybutton] = {Key = key}
 	end
@@ -9339,18 +9339,18 @@ run(function()
 			local pressed = inputType.UserInputState == Enum.UserInputState.Begin
 			key.Pressed = pressed
 			key.Tween = tweenService:Create(key.Key, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				BackgroundColor3 = pressed and vape:GetGUIColorRGB() or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value),
+				BackgroundColor3 = pressed and tenacity:GetGUIColorRGB() or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value),
 				BackgroundTransparency = pressed and 0 or 1 - Color.Opacity
 			})
 			key.Tween2 = tweenService:Create(key.Key.TextLabel, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				TextColor3 = pressed and (select(3, vape:GetGUIColorRGB():ToHSV()) > 0.7 and Color3.new(0.08, 0.08, 0.08) or Color3.new(1, 1, 1)) or Color3.new(1, 1, 1)
+				TextColor3 = pressed and (select(3, tenacity:GetGUIColorRGB():ToHSV()) > 0.7 and Color3.new(0.08, 0.08, 0.08) or Color3.new(1, 1, 1)) or Color3.new(1, 1, 1)
 			})
 			key.Tween:Play()
 			key.Tween2:Play()
 		end
 	end
 	
-	Keystrokes = vape.Legit:CreateModule({
+	Keystrokes = tenacity:Module('Render', {
 		Name = 'Keystrokes',
 		Function = function(callback)
 			if callback then
@@ -9370,7 +9370,7 @@ run(function()
 	holder.Size = UDim2.fromScale(1, 1)
 	holder.BackgroundTransparency = 1
 	holder.Parent = Keystrokes.Children
-	Style = Keystrokes:CreateDropdown({
+	Style = Keystrokes:Setting({Type='dropdown', 
 		Name = 'Key Style',
 		List = {'Keyboard', 'Arrow'},
 		Function = function()
@@ -9380,7 +9380,7 @@ run(function()
 			end
 		end
 	})
-	Color = Keystrokes:CreateColorSlider({
+	Color = Keystrokes:Setting({Type='color', 
 		Name = 'Color',
 		DefaultValue = 0,
 		DefaultOpacity = 0.5,
@@ -9393,7 +9393,7 @@ run(function()
 			end
 		end
 	})
-	Keystrokes:CreateToggle({
+	Keystrokes:Setting({Type='toggle', 
 		Name = 'Show Spacebar',
 		Function = function(callback)
 			Keystrokes.Children.Size = UDim2.fromOffset(110, callback and 107 or 78)
@@ -9413,7 +9413,7 @@ run(function()
 	local Memory
 	local label
 	
-	Memory = vape.Legit:CreateModule({
+	Memory = tenacity:Module('Render', {
 		Name = 'Memory',
 		Function = function(callback)
 			if callback then
@@ -9426,14 +9426,14 @@ run(function()
 		Size = UDim2.fromOffset(124, 46),
 		Tooltip = 'A label showing the memory currently used by roblox'
 	})
-	Memory:CreateFont({
+	Memory:Setting({Type='font', 
 		Name = 'Font',
 		Blacklist = 'Gotham',
 		Function = function(val)
 			label.FontFace = val
 		end
 	})
-	Memory:CreateColorSlider({
+	Memory:Setting({Type='color', 
 		Name = 'Color',
 		DefaultValue = 0,
 		DefaultOpacity = 0.5,
@@ -9454,7 +9454,7 @@ run(function()
 	local corner = Instance.new('UICorner')
 	corner.CornerRadius = UDim.new(0, 4)
 	corner.Parent = label
-	vape:StyleHUDCard(label)
+	tenacity:StyleHUDCard(label)
 end)
 
 run(function()
@@ -9462,7 +9462,7 @@ run(function()
 	local Data
 	local label
 	
-	Ping = vape.Legit:CreateModule({
+	Ping = tenacity:Module('Render', {
 		Name = 'Ping',
 		Function = function(callback)
 			if callback then
@@ -9476,14 +9476,14 @@ run(function()
 		Size = UDim2.fromOffset(124, 46),
 		Tooltip = 'Shows the current connection speed to the roblox server'
 	})
-	Ping:CreateFont({
+	Ping:Setting({Type='font', 
 		Name = 'Font',
 		Blacklist = 'Gotham',
 		Function = function(val)
 			label.FontFace = val
 		end
 	})
-	Ping:CreateColorSlider({
+	Ping:Setting({Type='color', 
 		Name = 'Color',
 		DefaultValue = 0,
 		DefaultOpacity = 0.5,
@@ -9492,7 +9492,7 @@ run(function()
 			label.BackgroundTransparency = 1 - opacity
 		end
 	})
-	Data = Ping:CreateToggle({
+	Data = Ping:Setting({Type='toggle', 
 		Name = 'Data Ping',
 		Default = true
 	})
@@ -9508,7 +9508,7 @@ run(function()
 	local corner = Instance.new('UICorner')
 	corner.CornerRadius = UDim.new(0, 4)
 	corner.Parent = label
-	vape:StyleHUDCard(label)
+	tenacity:StyleHUDCard(label)
 end)
 
 run(function()
@@ -9561,7 +9561,7 @@ run(function()
 		end
 	end
 	
-	SongBeats = vape.Legit:CreateModule({
+	SongBeats = tenacity:Module('Render', {
 		Name = 'Song Beats',
 		Function = function(callback)
 			if callback then
@@ -9606,11 +9606,11 @@ run(function()
 		end,
 		Tooltip = 'Built in mp3 player'
 	})
-	List = SongBeats:CreateTextList({
+	List = SongBeats:Setting({Type='list', 
 		Name = 'Songs',
 		Placeholder = 'filepath/bpm/start'
 	})
-	FOV = SongBeats:CreateToggle({
+	FOV = SongBeats:Setting({Type='toggle', 
 		Name = 'Beat FOV',
 		Function = function(callback)
 			if FOVValue.Object then
@@ -9624,14 +9624,14 @@ run(function()
 		end,
 		Default = true
 	})
-	FOVValue = SongBeats:CreateSlider({
+	FOVValue = SongBeats:Setting({Type='slider', 
 		Name = 'Adjustment',
 		Min = 1,
 		Max = 30,
 		Default = 5,
 		Darker = true
 	})
-	Volume = SongBeats:CreateSlider({
+	Volume = SongBeats:Setting({Type='slider', 
 		Name = 'Volume',
 		Function = function(val)
 			if songobj then
@@ -9649,7 +9649,7 @@ run(function()
 	local Speedmeter
 	local label
 	
-	Speedmeter = vape.Legit:CreateModule({
+	Speedmeter = tenacity:Module('Render', {
 		Name = 'Speedmeter',
 		Function = function(callback)
 			if callback then
@@ -9664,14 +9664,14 @@ run(function()
 		Size = UDim2.fromOffset(124, 46),
 		Tooltip = 'A label showing the average velocity in studs'
 	})
-	Speedmeter:CreateFont({
+	Speedmeter:Setting({Type='font', 
 		Name = 'Font',
 		Blacklist = 'Gotham',
 		Function = function(val)
 			label.FontFace = val
 		end
 	})
-	Speedmeter:CreateColorSlider({
+	Speedmeter:Setting({Type='color', 
 		Name = 'Color',
 		DefaultValue = 0,
 		DefaultOpacity = 0.5,
@@ -9692,7 +9692,7 @@ run(function()
 	local corner = Instance.new('UICorner')
 	corner.CornerRadius = UDim.new(0, 4)
 	corner.Parent = label
-	vape:StyleHUDCard(label)
+	tenacity:StyleHUDCard(label)
 end)
 
 run(function()
@@ -9700,7 +9700,7 @@ run(function()
 	local Value
 	local old
 	
-	TimeChanger = vape.Legit:CreateModule({
+	TimeChanger = tenacity:Module('Render', {
 		Name = 'Time Changer',
 		Function = function(callback)
 			if callback then
@@ -9713,7 +9713,7 @@ run(function()
 		end,
 		Tooltip = 'Change the time of the current world'
 	})
-	Value = TimeChanger:CreateSlider({
+	Value = TimeChanger:Setting({Type='slider', 
 		Name = 'Time',
 		Min = 0,
 		Max = 24,

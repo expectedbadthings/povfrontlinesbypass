@@ -1,4 +1,4 @@
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--Tenacity cached source file.
 --[[
 	Prediction Library
 	Source: https://devforum.roblox.com/t/predict-projectile-ballistics-including-gravity-and-motion/1842434

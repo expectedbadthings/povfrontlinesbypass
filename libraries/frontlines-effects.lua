@@ -1,5 +1,5 @@
 -- Asset-free Frontlines impact visuals. One animator, bounded overlap, local-only parts.
-return function(vape)
+return function(tenacity)
  local runService = game:GetService('RunService')
  local debris = game:GetService('Debris')
  local effects = {}
@@ -132,7 +132,7 @@ return function(vape)
   local elapsed = 0
   animator = runService.Heartbeat:Connect(function(dt)
    elapsed += dt
-   local rate = vape.EffectUpdateRate and vape.EffectUpdateRate.Value or 30
+   local rate = tenacity.EffectUpdateRate and tenacity.EffectUpdateRate.Value or 30
    if elapsed < 1 / math.clamp(rate, 20, 60) then return end
    elapsed = 0
    local now = os.clock()
@@ -144,6 +144,6 @@ return function(vape)
    end
   end)
  end
- vape:Clean(function() for i = #effects, 1, -1 do remove(i) end end)
+ tenacity:Clean(function() for i = #effects, 1, -1 do remove(i) end end)
  return api
 end
