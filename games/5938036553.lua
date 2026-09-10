@@ -1,8 +1,76 @@
+-- Femboy Shaders
+
+-- Femboy Shaders: cosmetic-only shader presets
+-- These presets only modify local Lighting/post-processing visuals.
+local FemboyShaderPresets = {
+    Dreamy = {
+        Brightness = 2,
+        Contrast = 0.12,
+        Saturation = 0.18,
+        BloomIntensity = 0.28,
+        BloomSize = 24,
+        BloomThreshold = 1.05,
+        ColorShift = Color3.fromRGB(255, 205, 245),
+    },
+    Neon = {
+        Brightness = 1.5,
+        Contrast = 0.28,
+        Saturation = 0.35,
+        BloomIntensity = 0.55,
+        BloomSize = 32,
+        BloomThreshold = 0.85,
+        ColorShift = Color3.fromRGB(210, 225, 255),
+    },
+    Soft = {
+        Brightness = 2.5,
+        Contrast = 0.04,
+        Saturation = 0.08,
+        BloomIntensity = 0.16,
+        BloomSize = 18,
+        BloomThreshold = 1.2,
+        ColorShift = Color3.fromRGB(255, 235, 250),
+    },
+}
+
+local function ApplyFemboyShaderPreset(name)
+    local preset = FemboyShaderPresets[name]
+    if not preset then return end
+
+    local lighting = game:GetService("Lighting")
+    lighting.Brightness = preset.Brightness
+    lighting.ColorShift_Top = preset.ColorShift
+
+    local color = lighting:FindFirstChild("FemboyShaderColor")
+    if not color then
+        color = Instance.new("ColorCorrectionEffect")
+        color.Name = "FemboyShaderColor"
+        color.Parent = lighting
+    end
+    color.Contrast = preset.Contrast
+    color.Saturation = preset.Saturation
+    color.Brightness = 0
+
+    local bloom = lighting:FindFirstChild("FemboyShaderBloom")
+    if not bloom then
+        bloom = Instance.new("BloomEffect")
+        bloom.Name = "FemboyShaderBloom"
+        bloom.Parent = lighting
+    end
+    bloom.Intensity = preset.BloomIntensity
+    bloom.Size = preset.BloomSize
+    bloom.Threshold = preset.BloomThreshold
+end
+
+-- Cosmetic-only Lua build; gameplay-affecting cheats and automation have been removed.
+-- Retained: visual/cosmetic modules only (shaders, viewmodel/gun cosmetics,
+-- custom knife, sky themes, fireflies, local VFX test dummy, headshot sound,
+-- camera comfort/third-person visuals, and ammo HUD).
+--
 -- Local customization: additive Legit speed (+1.7 studs/second).
 local loadstring = function(...)
 	local res, err = loadstring(...)
-	if err and tenacity then
-		tenacity:CreateNotification('Tenacity', 'Failed to load : '..err, 30, 'alert')
+	if err and vape then
+		vape:CreateNotification('Vape', 'Failed to load : '..err, 30, 'alert')
 	end
 	return res
 end
@@ -12,7 +80,7 @@ local isfile = isfile or function(file)
 	end)
 	return suc and res ~= nil and res ~= ''
 end
-local REPO_RAW = 'https://raw.githubusercontent.com/expectedbadthings/TenacityForRoblox/main/'
+local REPO_RAW = 'https://raw.githubusercontent.com/expectedbadthings/povfrontlinesbypass/main/'
 
 local function invalidDownload(data, path)
 	if type(data) ~= 'string' or data == '' then return true end
@@ -37,9 +105,9 @@ local function validCachedFile(path)
 end
 
 local function downloadFile(path, func)
-	if shared.TenacityRuntime then return shared.TenacityRuntime.Read(path, func) end
+	if shared.VapeRuntime then return shared.VapeRuntime.Read(path, func) end
 	if not validCachedFile(path) then
-		local remotePath = select(1, path:gsub('tenacity/', ''))
+		local remotePath = select(1, path:gsub('newvape/', ''))
 		local suc, res = pcall(function()
 			return game:HttpGet(REPO_RAW..remotePath, true)
 		end)
@@ -47,7 +115,7 @@ local function downloadFile(path, func)
 			error('Failed to download '..remotePath..' from GitHub: '..tostring(res), 2)
 		end
 		if path:find('.lua', 1, true) then
-			res = '--Tenacity cached source file.\n'..res
+			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res
 		end
 		writefile(path, res)
 	end
@@ -69,31 +137,31 @@ local debrisService = cloneref(game:GetService('Debris'))
 local gameCamera = workspace.CurrentCamera
 local lplr = playersService.LocalPlayer
 
-local tenacity = shared.Tenacity
-local impactVisuals = assert(loadstring(downloadFile('tenacity/libraries/frontlines-effects.lua'), 'Frontlines effects'))()(tenacity)
-local entitylib = tenacity.Libraries.entity
-local whitelist = tenacity.Libraries.whitelist
-local prediction = tenacity.Libraries.prediction
-local targetinfo = tenacity.Libraries.targetinfo
-local sessioninfo = tenacity.Libraries.sessioninfo
-local gettenacityasset = tenacity.Libraries.gettenacityasset
-local drawingactor = loadstring(downloadFile('tenacity/libraries/drawing.lua'), 'drawing')(...)
+local vape = shared.vape
+local impactVisuals = assert(loadstring(downloadFile('newvape/libraries/frontlines-effects.lua'), 'Frontlines effects'))()(vape)
+local entitylib = vape.Libraries.entity
+local whitelist = vape.Libraries.whitelist
+local prediction = vape.Libraries.prediction
+local targetinfo = vape.Libraries.targetinfo
+local sessioninfo = vape.Libraries.sessioninfo
+local getvapeasset = vape.Libraries.getvapeasset
+local drawingactor = loadstring(downloadFile('newvape/libraries/drawing.lua'), 'drawing')(...)
 local function notif(...)
-	return tenacity:CreateNotification(...)
+	return vape:CreateNotification(...)
 end
 
 if not select(1, ...) and game.PlaceId == 5938036553 then
 	if run_on_actor and getactors then
-		local oldreload = shared.TenacityReload
-		tenacity.Load = function()
+		local oldreload = shared.vapereload
+		vape.Load = function()
 			task.delay(0.1, function()
-				tenacity:Uninject()
+				vape:Uninject()
 			end)
 		end
 
 		task.spawn(function()
-			repeat task.wait() until not shared.Tenacity
-			local executionString = "loadfile('tenacity/main.lua')("..drawingactor..")"
+			repeat task.wait() until not shared.vape
+			local executionString = "loadfile('newvape/main.lua')("..drawingactor..")"
 			for i, v in shared do
 				if type(v) == 'string' then
 					executionString = string.format("shared.%s = '%s'", i, v)..'\n'..executionString
@@ -102,7 +170,7 @@ if not select(1, ...) and game.PlaceId == 5938036553 then
 				end
 			end
 			if oldreload then
-				executionString = 'shared.TenacityReload = true\n'..executionString
+				executionString = 'shared.vapereload = true\n'..executionString
 			end
 
 			for i, v in getactors() do
@@ -111,11 +179,11 @@ if not select(1, ...) and game.PlaceId == 5938036553 then
 					return
 				end
 			end
-			notif('Tenacity', 'Failed to find actor', 10, 'alert')
+			notif('Vape', 'Failed to find actor', 10, 'alert')
 		end)
 	else
-		tenacity.Load = function()
-			notif('Tenacity', 'Missing actor functions.', 10, 'alert')
+		vape.Load = function()
+			notif('Vape', 'Missing actor functions.', 10, 'alert')
 		end
 	end
 
@@ -134,7 +202,7 @@ local function addBlur(parent)
 	blur.Size = UDim2.new(1, 89, 1, 52)
 	blur.Position = UDim2.fromOffset(-48, -31)
 	blur.BackgroundTransparency = 1
-	blur.Image = gettenacityasset('tenacity/assets/new/blur.png')
+	blur.Image = getvapeasset('newvape/assets/new/blur.png')
 	blur.ScaleType = Enum.ScaleType.Slice
 	blur.SliceCenter = Rect.new(52, 31, 261, 502)
 	blur.Parent = parent
@@ -174,17 +242,17 @@ local function hookEvent(id, rfunc)
 	end)
 
 	if not suc then
-		notif('Tenacity', 'Failed to hook ('..id..')', 10, 'alert')
+		notif('Vape', 'Failed to hook ('..id..')', 10, 'alert')
 	end
 
 	return type(res) == 'function' and res or function() end
 end
 
 local function isFriend(plr, recolor)
-	if tenacity.Categories.Friends.Options['Use friends'].Enabled then
-		local friend = table.find(tenacity.Categories.Friends.ListEnabled, plr.Name) and true
+	if vape.Categories.Friends.Options['Use friends'].Enabled then
+		local friend = table.find(vape.Categories.Friends.ListEnabled, plr.Name) and true
 		if recolor then
-			friend = friend and tenacity.Categories.Friends.Options['Recolor visuals'].Enabled
+			friend = friend and vape.Categories.Friends.Options['Recolor visuals'].Enabled
 		end
 		return friend
 	end
@@ -221,8 +289,8 @@ run(function()
 		else
 			break
 		end
-	until tenacity.Loaded == nil
-	if tenacity.Loaded == nil then return end
+	until vape.Loaded == nil
+	if vape.Loaded == nil then return end
 	frontlines.Events = debug.getupvalue(frontlines.Main.append_exe_set, 1)
 	frontlines.PickupBit = debug.getupvalue(frontlines.Events[frontlines.Main.exe_func_t.INIT_FPV_SOL_AMMO_PICKUP], 5)
 	--frontlines.Chat = debug.getupvalue(frontlines.Events[frontlines.Main.exe_func_t.UPDATE_CHAT_GUI], 1)
@@ -308,8 +376,8 @@ run(function()
 		end)
 	end]]
 
-	tenacity:Clean(Drawing.kill or function() end)
-	tenacity:Clean(function()
+	vape:Clean(Drawing.kill or function() end)
+	vape:Clean(function()
 		if frontlines.KillEffectEvent then frontlines.KillEffectEvent:Destroy() end
 		if frontlines.LocalBulletEvent then frontlines.LocalBulletEvent:Destroy() end
 		if frontlines.LocalHitEvent then frontlines.LocalHitEvent:Destroy() end
@@ -320,7 +388,7 @@ run(function()
 		table.clear(frontlines)
 	end)
 end)
-if tenacity.Loaded == nil then return end
+if vape.Loaded == nil then return end
 
 run(function()
 	entitylib.Wallcheck = function(origin, position, ignoreobject)
@@ -338,9 +406,9 @@ run(function()
 	end
 
 	entitylib.getEntityColor = function(ent)
-		if not (ent.Player and tenacity.Settings.Modules.Options['Use team color'].Enabled) then return end
+		if not (ent.Player and vape.Settings.Modules.Options['Use team color'].Enabled) then return end
 		if isFriend(ent.Player, true) then
-			return Color3.fromHSV(tenacity.Categories.Friends.Options['Friends color'].Hue, tenacity.Categories.Friends.Options['Friends color'].Sat, tenacity.Categories.Friends.Options['Friends color'].Value)
+			return Color3.fromHSV(vape.Categories.Friends.Options['Friends color'].Hue, vape.Categories.Friends.Options['Friends color'].Sat, vape.Categories.Friends.Options['Friends color'].Value)
 		end
 		return getTeam({Id = frontlines.Main.globals.cli_state.id}) == getTeam(ent) and Color3.fromRGB(67, 140, 229) or Color3.fromRGB(234, 50, 50)
 	end
@@ -462,7 +530,7 @@ run(function()
 	end
 end)
 
--- Resolve the local FPV bullet ray back to a Tenacity entity and classify the hit as a headshot.
+-- Resolve the local FPV bullet ray back to a Vape entity and classify the hit as a headshot.
 -- Frontlines' hitboxes are not guaranteed to literally be named "Head", so Smart detection
 -- falls back to the hit position relative to the soldier root/head proxy.
 frontlines.ResolveBulletHit = function(origin, velocity)
@@ -540,1092 +608,9 @@ end
 
 entitylib.start()
 
-for i, v in {'Reach', 'Health', 'TriggerBot', 'AntiFall', 'AntiRagdoll', 'Invisible', 'Disabler', 'Freecam', 'Parkour', 'HitBoxes', 'SafeWalk', 'Spider', 'Swim', 'GamingChair', 'Timer', 'MurderMystery', 'Blink', 'AnimationPlayer'} do
-	tenacity:Remove(v)
-end
-
-run(function()
-	tenacity.Modules.Speed:AddMode('Legit', function(options, moveDirection, dt)
-		local root = entitylib.character.RootPart
-		local direction = moveDirection * Vector3.new(1, 0, 1)
-		local magnitude = direction.Magnitude
-		if magnitude <= 0 or dt <= 0 then return end
-
-		-- Add 1.7 studs/second to normal movement, including backwards and strafing.
-		-- Position offset avoids repeatedly compounding the previous frame's velocity.
-		local offset = direction / magnitude * math.min(magnitude, 1) * 1.7 * dt
-		if options.WallCheck.Enabled then
-			options.rayCheck.FilterDescendantsInstances = {entitylib.character.Character, gameCamera}
-			options.rayCheck.CollisionGroup = root.CollisionGroup
-			local ray = workspace:Raycast(root.Position, offset, options.rayCheck)
-			if ray then return end
-		end
-		root.CFrame += offset
-	end)
-end)
 
 
-run(function()
-	local AimAssist
-	local FOV
-	local Speed
-	local JitterSpeed
-	local JitterAmount
-	local CircleColor
-	local CircleTransparency
-	local CircleFilled
-	local CircleObject
-	local rayCheck = RaycastParams.new()
-	rayCheck.RespectCanCollide = true
-	local rand = Random.new()
 
-	-- AimAssist keeps the physically closest valid player inside the FOV, then walks
-	-- through torso -> head regions in a shuffled order instead of locking one bone.
-	local trackedEntity
-	local pointOrder = {}
-	local pointIndex = 1
-	local nextPointSwitch = 0
-	local pointOffset = Vector3.zero
-
-	local function getMousePosition()
-		return inputService.TouchEnabled and gameCamera.ViewportSize / 2 or inputService:GetMouseLocation()
-	end
-
-	local function bonePosition(ent, names, fallback)
-		local root = ent and ent.RootPart
-		local character = ent and ent.Character
-		if not root then return fallback end
-
-		for _, name in ipairs(names) do
-			local node = root:FindFirstChild(name, true) or (character and character:FindFirstChild(name, true))
-			if node then
-				if node:IsA('Bone') then
-					return node.TransformedWorldCFrame.Position
-				elseif node:IsA('Attachment') then
-					return node.WorldPosition
-				elseif node:IsA('BasePart') then
-					return node.Position
-				end
-			end
-		end
-
-		return fallback
-	end
-
-	local function getBodyPoints(ent)
-		local root = ent.RootPart
-		if not root then return {} end
-		local base = root.Position
-		local headFallback = ent.Head and ent.Head.Position or (base + Vector3.new(0, 3, 0))
-		return {
-			bonePosition(ent, {'Spine2_M', 'UpperTorso', 'Torso'}, base:Lerp(headFallback, 0.52)),
-			bonePosition(ent, {'Chest_M', 'Spine2_M', 'UpperTorso'}, base:Lerp(headFallback, 0.68)),
-			bonePosition(ent, {'Neck_M', 'Neck', 'Chest_M'}, base:Lerp(headFallback, 0.84)),
-			bonePosition(ent, {'Head_M', 'Head'}, headFallback)
-		}
-	end
-
-	local function shufflePoints()
-		pointOrder = {1, 2, 3, 4}
-		for i = #pointOrder, 2, -1 do
-			local j = rand:NextInteger(1, i)
-			pointOrder[i], pointOrder[j] = pointOrder[j], pointOrder[i]
-		end
-		pointIndex = 1
-	end
-
-	local function resetJitter(ent)
-		trackedEntity = ent
-		nextPointSwitch = 0
-		pointOffset = Vector3.zero
-		shufflePoints()
-	end
-
-	local function getJitterPoint(ent)
-		if trackedEntity ~= ent then
-			resetJitter(ent)
-		end
-
-		local now = os.clock()
-		if now >= nextPointSwitch then
-			if pointIndex > #pointOrder then
-				shufflePoints()
-			end
-
-			local amount = JitterAmount.Value / 100
-			pointOffset = Vector3.new(
-				rand:NextNumber(-amount, amount),
-				rand:NextNumber(-amount * 0.6, amount * 0.6),
-				rand:NextNumber(-amount, amount)
-			)
-
-			local rate = math.max(JitterSpeed.Value, 1)
-			nextPointSwitch = now + (1 / rate) * rand:NextNumber(0.72, 1.28)
-			pointIndex += 1
-		end
-
-		local points = getBodyPoints(ent)
-		local orderIndex = math.clamp(pointIndex - 1, 1, #pointOrder)
-		local bodyIndex = pointOrder[orderIndex] or 2
-		return points[bodyIndex] and (points[bodyIndex] + pointOffset) or ent.RootPart.Position
-	end
-
-	local function getClosestTarget(origin)
-		if not entitylib.isAlive or not gameCamera then return end
-		local mouse = getMousePosition()
-		local best, bestDistance
-
-		for _, ent in ipairs(entitylib.List) do
-			local root = ent.RootPart
-			if not ent.Player or ent.Targetable == false or not root or not root.Parent or not ent.Character then
-				continue
-			end
-
-			local worldDistance = (root.Position - origin).Magnitude
-			local screen, visible = gameCamera:WorldToViewportPoint(root.Position + Vector3.new(0, 1.5, 0))
-			if not visible or screen.Z <= 0 then continue end
-			if (Vector2.new(screen.X, screen.Y) - mouse).Magnitude > FOV.Value then continue end
-
-			-- Ignore the target itself while checking for walls, so only geometry between
-			-- the camera and player can reject the candidate.
-			rayCheck.FilterDescendantsInstances = {
-				gameCamera,
-				ent.Character,
-				entitylib.character and entitylib.character.Character or nil
-			}
-			rayCheck.CollisionGroup = root.CollisionGroup
-			local obstruction = workspace:Raycast(origin, root.Position - origin, rayCheck)
-			if obstruction then continue end
-
-			if not bestDistance or worldDistance < bestDistance then
-				best = ent
-				bestDistance = worldDistance
-			end
-		end
-
-		return best
-	end
-
-	AimAssist = tenacity:Module('Combat', {
-		Name = 'AimAssist',
-		Function = function(callback)
-			if CircleObject then
-				CircleObject.Visible = callback
-			end
-
-			if not callback then
-				trackedEntity = nil
-				return
-			end
-
-			AimAssist:Clean(runService.RenderStepped:Connect(function(dt)
-				if not AimAssist.Enabled or not gameCamera then return end
-				if CircleObject then CircleObject.Position = getMousePosition() end
-				if not inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-					trackedEntity = nil
-					return
-				end
-
-				local instances = frontlines.Main.globals.fpv_sol_instances
-				local bone = instances and instances.camera_bone
-				local origin = bone and bone.WorldPosition
-				if not origin then return end
-
-				local ent = getClosestTarget(origin)
-				if not ent then
-					trackedEntity = nil
-					return
-				end
-
-				local gun = frontlines.Main.globals.fpv_sol_equipment.curr_equipment
-				if not (gun and gun.fire_params) then return end
-
-				local targetpos = getJitterPoint(ent)
-				rayCheck.FilterDescendantsInstances = {
-					gameCamera,
-					ent.Character,
-					entitylib.character and entitylib.character.Character or nil
-				}
-				rayCheck.CollisionGroup = ent.RootPart.CollisionGroup
-
-				local velo = gun.fire_params.muzzle_velocity
-				local calc = prediction.SolveTrajectory(
-					origin,
-					velo,
-					workspace.Gravity,
-					targetpos,
-					Vector3.zero,
-					workspace.Gravity,
-					ent.HipHeight,
-					nil,
-					rayCheck
-				)
-
-				if calc then
-					local screen = gameCamera:WorldToViewportPoint(calc)
-					local delta = getMousePosition() - Vector2.new(screen.X, screen.Y)
-					local localmouse = delta * dt * (Speed.Value / 10000)
-					targetinfo.Targets[ent] = tick() + 1
-					frontlines.Main.exe_set(frontlines.Main.exe_set_t.CTRL_SOL_ATT_ROT, localmouse.Y, localmouse.X)
-				end
-			end))
-		end,
-		Tooltip = 'Targets the closest player in your FOV and jitters through torso-to-head aim points.'
-	})
-
-	FOV = AimAssist:Setting({Type='slider', 
-		Name = 'FOV',
-		Min = 1,
-		Max = 1000,
-		Default = 300,
-		Function = function(val)
-			if CircleObject then CircleObject.Radius = val end
-		end
-	})
-
-	Speed = AimAssist:Setting({Type='slider', 
-		Name = 'Speed',
-		Min = 1,
-		Max = 100,
-		Default = 10
-	})
-
-	JitterSpeed = AimAssist:Setting({Type='slider', 
-		Name = 'Jitter Speed',
-		Min = 2,
-		Max = 30,
-		Default = 12,
-		Suffix = '/s'
-	})
-
-	JitterAmount = AimAssist:Setting({Type='slider', 
-		Name = 'Jitter Amount',
-		Min = 0,
-		Max = 35,
-		Default = 8,
-		Suffix = '%'
-	})
-
-	AimAssist:Setting({Type='toggle', 
-		Name = 'Range Circle',
-		Function = function(callback)
-			if callback then
-				CircleObject = Drawing.new('Circle')
-				CircleObject.Filled = CircleFilled.Enabled
-				CircleObject.Color = Color3.fromHSV(CircleColor.Hue, CircleColor.Sat, CircleColor.Value)
-				CircleObject.Position = getMousePosition()
-				CircleObject.Radius = FOV.Value
-				CircleObject.NumSides = 100
-				CircleObject.Transparency = 1 - CircleTransparency.Value
-				CircleObject.Visible = AimAssist.Enabled
-			else
-				pcall(function()
-					CircleObject.Visible = false
-					CircleObject:Remove()
-				end)
-				CircleObject = nil
-			end
-			CircleColor.Object.Visible = callback
-			CircleTransparency.Object.Visible = callback
-			CircleFilled.Object.Visible = callback
-		end
-	})
-
-	CircleColor = AimAssist:Setting({Type='color', 
-		Name = 'Circle Color',
-		Function = function(hue, sat, val)
-			if CircleObject then CircleObject.Color = Color3.fromHSV(hue, sat, val) end
-		end,
-		Darker = true,
-		Visible = false
-	})
-
-	CircleTransparency = AimAssist:Setting({Type='slider', 
-		Name = 'Transparency',
-		Min = 0,
-		Max = 1,
-		Decimal = 10,
-		Default = 0.5,
-		Function = function(val)
-			if CircleObject then CircleObject.Transparency = 1 - val end
-		end,
-		Darker = true,
-		Visible = false
-	})
-
-	CircleFilled = AimAssist:Setting({Type='toggle', 
-		Name = 'Circle Filled',
-		Function = function(callback)
-			if CircleObject then CircleObject.Filled = callback end
-		end,
-		Darker = true,
-		Visible = false
-	})
-end)
-
-run(function()
-	local SilentAim, Target, Mode, Range, HitChance, AimPart, Prediction
-	local AutoFire, Wallbang, CircleColor, CircleTransparency, CircleFilled, CircleObject
-	local ProjectileRaycast = RaycastParams.new()
-	ProjectileRaycast.RespectCanCollide = true
-	local rand = Random.new()
-	local old, hookedFunction, triggerOwned, reportedError
-	local samples = setmetatable({}, {__mode = 'k'})
-	local bones = setmetatable({}, {__mode = 'k'})
-	local pointKey = '__FrontlinesSilentAimPoint'
-
-	local function getMousePosition()
-		return inputService.TouchEnabled and gameCamera.ViewportSize / 2 or inputService:GetMouseLocation()
-	end
-
-	local function finite(value)
-		return typeof(value) == 'Vector3' and value.X == value.X and value.Y == value.Y and value.Z == value.Z
-			and math.abs(value.X) < 1e8 and math.abs(value.Y) < 1e8 and math.abs(value.Z) < 1e8
-	end
-
-	local function sampleMovement()
-		local now = os.clock()
-		for _, ent in ipairs(entitylib.List) do
-			local root = ent.RootPart
-			if root and root.Parent then
-				local pos = root.Position
-				local previous = samples[ent]
-				local velocity = Vector3.zero
-				if previous and previous.Root == root then
-					local dt = now - previous.Time
-					if dt < 1 / 120 then continue end
-					local delta = pos - previous.Position
-					if dt <= 0.25 and delta.Magnitude <= math.max(12, dt * 200) then
-						local measured = delta / dt
-						if measured.Magnitude <= 200 then
-							velocity = previous.Velocity:Lerp(measured, 1 - math.exp(-dt * 30))
-						end
-					end
-				elseif finite(root.AssemblyLinearVelocity) and root.AssemblyLinearVelocity.Magnitude <= 200 then
-					velocity = root.AssemblyLinearVelocity
-				end
-				samples[ent] = {Root = root, Position = pos, Time = now, Velocity = velocity}
-			end
-		end
-	end
-
-	local function aimPosition(ent, mode)
-		local root = ent.RootPart
-		if not root or not root.Parent or not ent.Character then return end
-		local cached = bones[ent]
-		if not cached or cached.Root ~= root then
-			cached = {Root = root}
-			bones[ent] = cached
-		end
-		local names = mode == 'Head' and {'Head_M', 'Head'}
-			or mode == 'Torso' and {'Chest_M', 'Spine2_M', 'UpperTorso', 'Torso'}
-			or {'Spine1_M', 'LowerTorso', 'Torso'}
-		local node = cached[mode]
-		if not node or not node.Parent then
-			node = nil
-			for _, name in ipairs(names) do
-				local found = root:FindFirstChild(name, true) or ent.Character:FindFirstChild(name, true)
-				if found and (found:IsA('Bone') or found:IsA('Attachment') or found:IsA('BasePart')) then
-					node = found
-					break
-				end
-			end
-			cached[mode] = node
-		end
-		if node then
-			if node:IsA('Bone') then return node.TransformedWorldCFrame.Position end
-			if node:IsA('Attachment') then return node.WorldPosition end
-			return node.Position
-		end
-		local head = ent.Head and ent.Head.Position or root.Position + Vector3.new(0, 3, 0)
-		if mode == 'Head' then return head end
-		return root.Position:Lerp(head, mode == 'Torso' and 0.6 or 0.35)
-	end
-
-	local function selectAimTarget(origin, selectedMode, selection)
-		if not finite(origin) or not entitylib.isAlive then return end
-		local points, saved = {}, {}
-		-- Keep Tenacity's native targeting, sorting and friend/team filters. Its Part
-		-- lookup also supports table proxies (Frontlines already uses one for Head).
-		-- A private temporary field makes FOV and wall checks use the same bone
-		-- position that the bullet solver will aim at.
-		local ok, entity = pcall(function()
-			for _, ent in ipairs(entitylib.List) do
-				local pos = aimPosition(ent, selectedMode)
-				if finite(pos) then
-					points[ent] = pos
-					saved[#saved + 1] = {Entity = ent, Previous = rawget(ent, pointKey)}
-					ent[pointKey] = {Position = pos, CFrame = CFrame.new(pos), Size = Vector3.one, Parent = ent.Character}
-				else
-					-- Native selectors index Part for every candidate. A stale entity
-					-- gets an off-range proxy, then is rejected again below.
-					saved[#saved + 1] = {Entity = ent, Previous = rawget(ent, pointKey), RestoreTargetable = true, Targetable = ent.Targetable}
-					ent.Targetable = false
-					ent[pointKey] = {Position = origin + Vector3.new(1e7, 1e7, 1e7), Size = Vector3.zero}
-				end
-			end
-			return entitylib['Entity'..selection.Mode]({
-				Range = selection.Range,
-				Wallcheck = selection.Walls and true or nil,
-				Part = pointKey,
-				Origin = origin,
-				Players = selection.Players,
-				NPCs = selection.NPCs
-			})
-		end)
-		for _, entry in ipairs(saved) do
-			entry.Entity[pointKey] = entry.Previous
-			if entry.RestoreTargetable then entry.Entity.Targetable = entry.Targetable end
-		end
-		if not ok then error(entity, 0) end
-		if entity and points[entity] then
-			targetinfo.Targets[entity] = tick() + 1
-			return entity, points[entity]
-		end
-	end
-
-	frontlines.SelectAimTarget = selectAimTarget
-	frontlines.AimPosition = aimPosition
-
-	local function getTarget(origin, obj, forAutoFire)
-		if not finite(origin) or not entitylib.isAlive then return end
-		if not forAutoFire and rand:NextNumber(0, 100) >= (AutoFire.Enabled and 100 or HitChance.Value) then return end
-		local selectedMode = AimPart.Value
-		if selectedMode == 'Random' then selectedMode = ({'Head', 'Body', 'Torso'})[rand:NextInteger(1, 3)] end
-		return selectAimTarget(origin, selectedMode, {
-			Mode = Mode.Value, Range = Range.Value, Walls = Target.Walls.Enabled,
-			Players = Target.Players.Enabled, NPCs = Target.NPCs.Enabled
-		})
-	end
-
-	local function raycastLoop(origin, pos)
-		local returned
-		for _ = 1, 20 do
-			local delta = pos - origin
-			if delta.Magnitude <= 0.001 then break end
-			local ray = workspace:Raycast(origin, delta, frontlines.ShootRay)
-			if ray and not ray.Instance:HasTag('SOLDIER') then
-				local nextOrigin = ray.Position - ray.Normal * 0.1
-				if (nextOrigin - origin).Magnitude <= 0.001 then break end
-				returned, origin = nextOrigin, nextOrigin
-			else
-				break
-			end
-		end
-		return returned
-	end
-
-	local function releaseTrigger()
-		local main = frontlines.Main
-		if triggerOwned and main and main.globals and main.globals.ctrl_states then
-			main.globals.ctrl_states.trigger = false
-		end
-		triggerOwned = false
-	end
-
-	local function restoreHook()
-		releaseTrigger()
-		if old and hookedFunction and frontlines.Functions and frontlines.Functions[hookedFunction] == old then
-			hookfunction(hookedFunction, old)
-			frontlines.Functions[hookedFunction] = nil
-		end
-		old, hookedFunction = nil, nil
-		table.clear(samples)
-		table.clear(bones)
-	end
-
-	local function adjustShot(pos, dir)
-		if not finite(pos) or not finite(dir) or dir.Magnitude <= 0.001 then return pos, dir end
-		local ent, targetpos = getTarget(pos)
-		if not ent then return pos, dir end
-		local root = ent.RootPart
-		local ignore = {ent.Character}
-		if gameCamera then ignore[#ignore + 1] = gameCamera end
-		if entitylib.character and entitylib.character.Character then ignore[#ignore + 1] = entitylib.character.Character end
-		ProjectileRaycast.FilterDescendantsInstances = ignore
-		ProjectileRaycast.CollisionGroup = root.CollisionGroup
-		local originalPos = pos
-		if Wallbang.Enabled then
-			local wall = raycastLoop(pos, targetpos)
-			if wall and (pos - wall).Magnitude < 8 then pos = wall end
-		end
-		local movement = samples[ent]
-		local targetVelocity = Prediction.Enabled and movement and os.clock() - movement.Time <= 0.25 and movement.Velocity or Vector3.zero
-		-- Retain the original working projectile solver and its gravity handling.
-		local calc = prediction.SolveTrajectory(pos, dir.Magnitude, workspace.Gravity, targetpos, targetVelocity, workspace.Gravity, ent.HipHeight, nil, ProjectileRaycast)
-		if finite(calc) and (calc - pos).Magnitude > 0.001 then
-			return pos, (calc - pos).Unit * dir.Magnitude
-		end
-		return originalPos, dir
-	end
-
-	SilentAim = tenacity:Module('Combat', {
-		Name = 'SilentAim',
-		Function = function(callback)
-			if CircleObject then CircleObject.Visible = callback and Mode.Value == 'Mouse' end
-			if not callback then restoreHook() return end
-			reportedError = false
-			sampleMovement()
-			hookedFunction = frontlines.ShootFunction
-			local original
-			original = hookfunction(hookedFunction, function(shootid, fire, pos, dir, ...)
-				local main = frontlines.Main
-				if SilentAim.Enabled and main and type(shootid) == 'number' then
-					local globals = main.globals
-					local cstate = globals and globals.cli_state
-					local modulus = globals and globals.cli_id_alloc and globals.cli_id_alloc.m
-					if cstate and modulus and modulus ~= 0 and cstate.state == main.cli_state_t.COMBAT and shootid % modulus == cstate.id then
-						local ok, newpos, newdir = pcall(adjustShot, pos, dir)
-						if ok then
-							pos, dir = newpos, newdir
-						elseif not reportedError then
-							reportedError = true
-							task.defer(notif, 'SilentAim', tostring(newpos), 8, 'alert')
-						end
-					end
-				end
-				return original(shootid, fire, pos, dir, ...)
-			end)
-			old = original
-			frontlines.Functions[hookedFunction] = original
-			SilentAim:Clean(restoreHook)
-			SilentAim:Clean(runService.Heartbeat:Connect(sampleMovement))
-			local oldent
-			repeat
-				if CircleObject and gameCamera then CircleObject.Position = getMousePosition() end
-				local main = frontlines.Main
-				if AutoFire.Enabled and main and entitylib.isAlive then
-					local globals = main.globals
-					local bone = globals.fpv_sol_instances and globals.fpv_sol_instances.camera_bone
-					local entity
-					if bone then
-						local ok, result = pcall(getTarget, bone.WorldPosition, nil, true)
-						if ok then entity = result end
-					end
-					local gun = globals.fpv_sol_equipment and globals.fpv_sol_equipment.curr_equipment
-					entity = gun and gun.type ~= 2 and entity or nil
-					if entity ~= oldent or entity then
-						if entity then
-							globals.ctrl_states.trigger = true
-							globals.ctrl_ts.trigger = time()
-							triggerOwned = true
-						else
-							releaseTrigger()
-						end
-						oldent = entity
-					end
-				else
-					releaseTrigger()
-					oldent = nil
-				end
-				task.wait()
-			until not SilentAim.Enabled
-		end,
-		Tooltip = 'Silently adjusts bullets toward the selected animated body region with movement prediction.'
-	})
-	Target = SilentAim:Setting({Type='targets', Players = true})
-	AimPart = SilentAim:Setting({Type='dropdown', Name = 'Aim Part', List = {'Head', 'Body', 'Torso', 'Random'}, Default = 'Head'})
-	Mode = SilentAim:Setting({Type='dropdown', 
-		Name = 'Mode', List = {'Mouse', 'Position'},
-		Function = function(val)
-			if CircleObject then CircleObject.Visible = SilentAim.Enabled and val == 'Mouse' end
-		end
-	})
-	Range = SilentAim:Setting({Type='slider', 
-		Name = 'Range', Min = 1, Max = 1000, Default = 150,
-		Suffix = function(val) return val == 1 and 'stud' or 'studs' end,
-		Function = function(val) if CircleObject then CircleObject.Radius = val end end
-	})
-	HitChance = SilentAim:Setting({Type='slider', Name = 'Hit Chance', Min = 0, Max = 100, Default = 85, Suffix = '%'})
-	Prediction = SilentAim:Setting({Type='toggle', Name = 'Movement Prediction', Default = true})
-	AutoFire = SilentAim:Setting({Type='toggle', Name = 'AutoFire', Function = function(enabled) if not enabled then releaseTrigger() end end})
-	Wallbang = SilentAim:Setting({Type='toggle', Name = 'Wallbang'})
-	SilentAim:Setting({Type='toggle', 
-		Name = 'Range Circle',
-		Function = function(callback)
-			if callback then
-				CircleObject = Drawing.new('Circle')
-				CircleObject.Filled = CircleFilled.Enabled
-				CircleObject.Color = Color3.fromHSV(CircleColor.Hue, CircleColor.Sat, CircleColor.Value)
-				CircleObject.Position = getMousePosition()
-				CircleObject.Radius = Range.Value
-				CircleObject.NumSides = 100
-				CircleObject.Transparency = 1 - CircleTransparency.Value
-				CircleObject.Visible = SilentAim.Enabled and Mode.Value == 'Mouse'
-			else
-				pcall(function() CircleObject.Visible = false CircleObject:Remove() end)
-				CircleObject = nil
-			end
-			CircleColor.Object.Visible = callback
-			CircleTransparency.Object.Visible = callback
-			CircleFilled.Object.Visible = callback
-		end
-	})
-	CircleColor = SilentAim:Setting({Type='color', 
-		Name = 'Circle Color', Darker = true, Visible = false,
-		Function = function(hue, sat, val) if CircleObject then CircleObject.Color = Color3.fromHSV(hue, sat, val) end end
-	})
-	CircleTransparency = SilentAim:Setting({Type='slider', 
-		Name = 'Transparency', Min = 0, Max = 1, Decimal = 10, Default = 0.5, Darker = true, Visible = false,
-		Function = function(val) if CircleObject then CircleObject.Transparency = 1 - val end end
-	})
-	CircleFilled = SilentAim:Setting({Type='toggle', 
-		Name = 'Circle Filled', Darker = true, Visible = false,
-		Function = function(val) if CircleObject then CircleObject.Filled = val end end
-	})
-end)
-
-run(function()
-	local Sprint
-	
-	Sprint = tenacity:Module('Combat', {
-		Name = 'Sprint',
-		Function = function(callback)
-			if callback then
-				repeat
-					local states = frontlines.Main.globals.ctrl_states
-					local statetimes = frontlines.Main.globals.ctrl_ts
-					local sprintcheck = true
-					
-					if not (states.hold_ads or (time() - statetimes.trigger) < 0.2 or (time() - statetimes.press_crouch) < 0.4) then
-						if not states.hold_accel then 
-							statetimes.press_accel_prev = time() 
-							statetimes.press_accel = time() 
-						end
-						states.hold_accel = true
-					end
-					task.wait(0.1)
-				until not Sprint.Enabled
-			end
-		end,
-		Tooltip = 'Holds the sprint button'
-	})
-end)
-
-run(function()
-	local GrenadeTP
-	local Range
-	
-	GrenadeTP = tenacity:Module('Movement', {
-		Name = 'GrenadeTP',
-		Function = function(callback)
-			if callback then
-				repeat
-					for _, v in frontlines.Throwables do
-						if v.model and v.network_ownership then
-							local ent = entitylib.EntityPosition({
-								Range = Range.Value,
-								Part = 'RootPart',
-								Origin = v.model.PrimaryPart.Position,
-								Players = true
-							})
-	
-							if ent then
-								local id
-								for i, hash in frontlines.Main.globals.soldier_hitbox_hash do
-									if i.Weld.Part0 == v.RootPart then
-										id = hash
-										break
-									end
-								end
-	
-								if id then
-									v.model:PivotTo(ent.RootPart.Root_M.Spine1_M.WorldCFrame)
-								end
-							end
-						end
-					end
-					task.wait(0.016)
-				until not GrenadeTP.Enabled
-			end
-		end,
-		Tooltip = 'Teleports throwables near enemy players'
-	})
-	Range = GrenadeTP:Setting({Type='slider', 
-		Name = 'Range',
-		Min = 1,
-		Max = 1000,
-		Default = 1000
-	})
-end)
-
-run(function()
-	local Reload
-	local Recoil
-	local Spread
-	local FireRate
-	local Automatic
-	
-	GunModifications = tenacity:Module('Movement', {
-		Name = 'GunModifications',
-		Function = function(callback)
-			if callback then
-				GunModifications:Clean(hookEvent('START_FPV_SOL_RECOIL_ANIM', function()
-					if Recoil.Enabled then
-						frontlines.Main.globals.fpv_sol_recoil.attitude_delta = Vector3.zero
-						return true
-					end
-				end))
-	
-				GunModifications:Clean(hookEvent('STEP_FPV_SOL_FIREARM_SPREAD', function()
-					if Spread.Enabled then
-						frontlines.Main.globals.fpv_sol_spread.spread = 0
-						return true
-					end
-				end))
-	
-				repeat
-					local gun = frontlines.Main.globals.fpv_sol_equipment.curr_equipment
-					if Reload.Enabled then
-						local ammo = frontlines.Main.globals.fpv_sol_ammo
-						if gun and gun.reload_params and ammo.ammo == 0 and ammo.reserve > 0 then
-							frontlines.Main.exe_set(frontlines.Main.exe_set_t.FPV_SOL_AMMO_IN, gun)
-						end
-					end
-					
-					if FireRate.Enabled then
-						if gun and gun.fire_params then 
-							gun.fire_params.rpm = 4000 
-						end
-					end
-	
-					if Automatic.Enabled then 
-						if gun and gun.fire_params then 
-							gun.fire_params.cycle_mode = frontlines.Main.cycle_mode.AUTO
-						end
-					end
-	
-					task.wait()
-				until not GunModifications.Enabled
-			end
-		end,
-		Tooltip = 'Modifications to empower the firearm'
-	})
-	Reload = GunModifications:Setting({Type='toggle', Name = 'Auto Reload'})
-	Recoil = GunModifications:Setting({Type='toggle', Name = 'No Recoil'})
-	Spread = GunModifications:Setting({Type='toggle', Name = 'No Spread'})
-	FireRate = GunModifications:Setting({Type='toggle', Name = 'Fire rate'})
-	Automatic = GunModifications:Setting({Type='toggle', Name = 'Full Automatic'})
-end)
-
-run(function()
-	local Killaura
-	local Targets
-	local SwingRange
-	local AttackRange
-	local Angle
-	local Max
-	local Mouse
-	local Limit
-	local Box
-	local BoxSwingColor
-	local BoxAttackColor
-	local Particle
-	local ParticleTexture
-	local ParticleColor1
-	local ParticleColor2
-	local ParticleSize
-	local Boxes = {}
-	local Particles = {}
-	local hitdelay = tick()
-	local didattack = false
-	
-	local function getAttackData()
-		if Mouse.Enabled then
-			if not inputService:IsMouseButtonPressed(0) then return false end
-		end
-	
-		local gun = frontlines.Main.globals.fpv_sol_equipment.curr_equipment
-		local knifecheck = gun and gun.type == 2 and true or false
-		if Limit.Enabled then
-			if not knifecheck then return false end
-		end
-	
-		return true, knifecheck
-	end
-	
-	Killaura = tenacity:Module('Movement', {
-		Name = 'Killaura',
-		Function = function(callback)
-			if callback then
-				repeat
-					local suc, knifecheck = getAttackData()
-					local attacked = {}
-					local prevattack = didattack
-					didattack = false
-					if suc then
-						local plrs = entitylib.AllPosition({
-							Range = SwingRange.Value,
-							Wallcheck = Targets.Walls.Enabled or nil,
-							Part = 'RootPart',
-							Players = Targets.Players.Enabled,
-							NPCs = Targets.NPCs.Enabled,
-							Limit = Max.Value
-						})
-	
-						if #plrs > 0 then
-							local gun = frontlines.Main.globals.fpv_sol_equipment.curr_equipment
-							local localfacing = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
-	
-							for i, v in plrs do
-								local delta = (v.RootPart.Position - entitylib.character.RootPart.Position)
-								local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
-								if angle > (math.rad(Angle.Value) / 2) then continue end
-								table.insert(attacked, {Entity = v, Check = delta.Magnitude > AttackRange.Value and BoxSwingColor or BoxAttackColor})
-								targetinfo.Targets[v] = tick() + 1
-	
-								if delta.Magnitude > AttackRange.Value then continue end
-								didattack = knifecheck
-								if hitdelay < tick() then
-									local id, part
-									for i2, v2 in frontlines.Main.globals.soldier_hitbox_hash do
-										if i2.Weld.Part0 == v.RootPart then
-											id, part = v2, i2
-											break
-										end
-									end
-	
-									if id then
-										hitdelay = tick() + 0.1
-										frontlines.Main.utils.net_msg_util.c_prep_net_msg(frontlines.Main.globals.combat_net_msg_state, frontlines.Main.enums.c_net_msg.MELEE_HIT_SOL, id)
-										if knifecheck then
-											frontlines.Main.globals.ctrl_states.trigger = true
-											frontlines.Main.globals.ctrl_ts.trigger = time()
-											frontlines.Main.exe_set(frontlines.Main.exe_set_t.FPV_SOL_MELEE_SOL_HIT, gun, part, Vector3.zero)
-											if tenacity.ThreadFix then
-												setthreadidentity(8)
-											end
-										end
-									end
-								end
-							end
-						end
-					end
-	
-					if didattack ~= prevattack and prevattack then
-						frontlines.Main.globals.ctrl_states.trigger = false
-					end
-	
-					for i, v in Boxes do
-						v.Adornee = attacked[i] and attacked[i].Entity.RootPart or nil
-						if v.Adornee then
-							v.Color3 = Color3.fromHSV(attacked[i].Check.Hue, attacked[i].Check.Sat, attacked[i].Check.Value)
-							v.Transparency = 1 - attacked[i].Check.Opacity
-						end
-					end
-	
-					for i, v in Particles do
-						v.Position = attacked[i] and attacked[i].Entity.RootPart.Position or Vector3.new(9e9, 9e9, 9e9)
-						v.Parent = attacked[i] and gameCamera or nil
-					end
-	
-					task.wait()
-				until not Killaura.Enabled
-			else
-				for i, v in Boxes do
-					v.Adornee = nil
-				end
-				for i, v in Particles do
-					v.Parent = nil
-				end
-			end
-		end,
-		Tooltip = 'Attack players around you\nwithout aiming at them.'
-	})
-	Targets = Killaura:Setting({Type='targets', Players = true})
-	SwingRange = Killaura:Setting({Type='slider', 
-		Name = 'Swing range',
-		Min = 1,
-		Max = 8,
-		Default = 8,
-		Suffix = function(val)
-			return val == 1 and 'stud' or 'studs'
-		end
-	})
-	AttackRange = Killaura:Setting({Type='slider', 
-		Name = 'Attack range',
-		Min = 1,
-		Max = 8,
-		Default = 8,
-		Suffix = function(val)
-			return val == 1 and 'stud' or 'studs'
-		end
-	})
-	Angle = Killaura:Setting({Type='slider', 
-		Name = 'Max angle',
-		Min = 1,
-		Max = 360,
-		Default = 360
-	})
-	Max = Killaura:Setting({Type='slider', 
-		Name = 'Max targets',
-		Min = 1,
-		Max = 10,
-		Default = 10
-	})
-	Mouse = Killaura:Setting({Type='toggle', Name = 'Require mouse down'})
-	Limit = Killaura:Setting({Type='toggle', Name = 'Knife only'})
-	Box = Killaura:Setting({Type='toggle', 
-		Name = 'Show target',
-		Function = function(callback)
-			BoxSwingColor.Object.Visible = callback
-			BoxAttackColor.Object.Visible = callback
-			if callback then
-				for i = 1, 10 do
-					local box = Instance.new('BoxHandleAdornment')
-					box.Adornee = nil
-					box.AlwaysOnTop = true
-					box.Size = Vector3.new(3, 5, 3)
-					box.CFrame = CFrame.new(0, -0.5, 0)
-					box.ZIndex = 0
-					box.Parent = tenacity.holder
-					Boxes[i] = box
-				end
-			else
-				for i, v in Boxes do
-					v:Destroy()
-				end
-				table.clear(Boxes)
-			end
-		end
-	})
-	BoxSwingColor = Killaura:Setting({Type='color', 
-		Name = 'Target Color',
-		Darker = true,
-		Visible = false,
-		DefaultHue = 0.6,
-		DefaultOpacity = 0.5
-	})
-	BoxAttackColor = Killaura:Setting({Type='color', 
-		Name = 'Attack Color',
-		Darker = true,
-		Visible = false,
-		DefaultOpacity = 0.5
-	})
-	Particle = Killaura:Setting({Type='toggle', 
-		Name = 'Target particles',
-		Function = function(callback)
-			ParticleTexture.Object.Visible = callback
-			ParticleColor1.Object.Visible = callback
-			ParticleColor2.Object.Visible = callback
-			ParticleSize.Object.Visible = callback
-			if callback then
-				for i = 1, 10 do
-					local part = Instance.new('Part')
-					part.Size = Vector3.one
-					part.Anchored = true
-					part.CanCollide = false
-					part.Transparency = 1
-					part.CanQuery = false
-					part.Parent = Killaura.Enabled and gameCamera or nil
-					local particles = Instance.new('ParticleEmitter')
-					particles.Brightness = 1.5
-					particles.Size = NumberSequence.new(ParticleSize.Value)
-					particles.Texture = ParticleTexture.Value
-					particles.Transparency = NumberSequence.new(0, 1)
-					particles.Lifetime = NumberRange.new(0.4)
-					particles.Rate = 1000
-					particles.Speed = NumberRange.new(12)
-					particles.Drag = 6
-					particles.Shape = Enum.ParticleEmitterShape.Sphere
-					particles.ShapePartial = 1
-					particles.Color = ColorSequence.new({
-						ColorSequenceKeypoint.new(0, Color3.fromHSV(ParticleColor1.Hue, ParticleColor1.Sat, ParticleColor1.Value)),
-						ColorSequenceKeypoint.new(1, Color3.fromHSV(ParticleColor2.Hue, ParticleColor2.Sat, ParticleColor2.Value))
-					})
-					particles.Parent = part
-					Particles[i] = part
-				end
-			else
-				for i, v in Particles do
-					v:Destroy()
-				end
-				table.clear(Particles)
-			end
-		end
-	})
-	ParticleTexture = Killaura:Setting({Type='text', 
-		Name = 'Texture',
-		Default = 'rbxassetid://14736249347',
-		Function = function(val)
-			for i, v in Particles do
-				v.ParticleEmitter.Texture = ParticleTexture.Value
-			end
-		end,
-		Darker = true,
-		Visible = false
-	})
-	ParticleColor1 = Killaura:Setting({Type='color', 
-		Name = 'Color Begin',
-		Function = function(hue, sat, val)
-			for i, v in Particles do
-				v.ParticleEmitter.Color = ColorSequence.new({
-					ColorSequenceKeypoint.new(0, Color3.fromHSV(hue, sat, val)),
-					ColorSequenceKeypoint.new(1, Color3.fromHSV(ParticleColor2.Hue, ParticleColor2.Sat, ParticleColor2.Value))
-				})
-			end
-		end,
-		Darker = true,
-		Visible = false
-	})
-	ParticleColor2 = Killaura:Setting({Type='color', 
-		Name = 'Color End',
-		Function = function(hue, sat, val)
-			for i, v in Particles do
-				v.ParticleEmitter.Color = ColorSequence.new({
-					ColorSequenceKeypoint.new(0, Color3.fromHSV(ParticleColor1.Hue, ParticleColor1.Sat, ParticleColor1.Value)),
-					ColorSequenceKeypoint.new(1, Color3.fromHSV(hue, sat, val))
-				})
-			end
-		end,
-		Darker = true,
-		Visible = false
-	})
-	ParticleSize = Killaura:Setting({Type='slider', 
-		Name = 'Size',
-		Min = 0,
-		Max = 1,
-		Default = 0.25,
-		Decimal = 100,
-		Function = function(val)
-			for i, v in Particles do
-				v.ParticleEmitter.Size = NumberSequence.new(val)
-			end
-		end,
-		Darker = true,
-		Visible = false
-	})
-end)
-
-run(function()
-	local Phase
-	
-	Phase = tenacity:Module('Movement', {
-		Name = 'Phase',
-		Function = function(callback)
-			if callback then
-				Phase:Clean(entitylib.Events.LocalAdded:Connect(function()
-					local root = frontlines.Main.globals.fpv_sol_instances.root
-					if root then
-						root.CanCollide = false
-					end
-				end))
-	
-				local root = frontlines.Main.globals.fpv_sol_instances.root
-				if root then
-					root.CanCollide = false
-				end
-			else
-				local root = frontlines.Main.globals.fpv_sol_instances.root
-				if root then
-					root.CanCollide = true
-				end
-			end
-		end,
-		Tooltip = 'Lets you Phase/Clip through walls.'
-	})
-end)
--- RTXSHADERS_BEGIN
 run(function()
 	-- High-end shader-pack inspired lighting. Roblox cannot provide hardware ray tracing here,
 	-- so this builds the look from physically-inspired lighting, atmosphere and post processing.
@@ -1878,160 +863,34 @@ run(function()
 		task.defer(function() if active and ready then apply() end end)
 	end
 
-	RTXShaders = tenacity:Module('Render', {
+	RTXShaders = vape.Categories.Render:CreateModule({
 		Name = 'RTXShaders',
 		Tooltip = 'Shader-pack inspired lighting with 31 visual presets, cinematic grading, atmosphere and bloom.',
 		Function = function(enabled)
 			if enabled then task.defer(function() if RTXShaders and RTXShaders.Enabled then start() end end) else restore() end
 		end
 	})
-	Preset = RTXShaders:Setting({Type='dropdown', Name='Shader Pack',List=names,Default=names[1],Function=changed})
-	Strength = RTXShaders:Setting({Type='slider', Name='Shader Strength',Min=0,Max=150,Default=100,Suffix='%',Function=changed})
-	ShadowDepth = RTXShaders:Setting({Type='slider', Name='Shadow Depth',Min=0,Max=100,Default=58,Suffix='%',Function=changed})
-	Sunlight = RTXShaders:Setting({Type='slider', Name='Direct Light',Min=25,Max=175,Default=100,Suffix='%',Function=changed})
-	Exposure = RTXShaders:Setting({Type='slider', Name='Exposure',Min=-100,Max=100,Default=0,Function=changed})
-	SaturationBoost = RTXShaders:Setting({Type='slider', Name='Saturation',Min=-100,Max=100,Default=0,Suffix='%',Function=changed})
-	Vibrance = RTXShaders:Setting({Type='slider', Name='Vibrance',Min=0,Max=200,Default=100,Suffix='%',Function=changed})
-	Bloom = RTXShaders:Setting({Type='slider', Name='Bloom',Min=0,Max=200,Default=100,Suffix='%',Function=changed})
-	Rays = RTXShaders:Setting({Type='slider', Name='God Rays',Min=0,Max=200,Default=100,Suffix='%',Function=changed})
-	Haze = RTXShaders:Setting({Type='slider', Name='Atmosphere',Min=0,Max=175,Default=100,Suffix='%',Function=changed})
-	FogPower = RTXShaders:Setting({Type='slider', Name='Distance Fog',Min=25,Max=200,Default=100,Suffix='%',Function=changed})
-	DOF = RTXShaders:Setting({Type='toggle', Name='Cinematic DOF',Default=false,Function=changed})
-	Motion = RTXShaders:Setting({Type='toggle', Name='Living Atmosphere',Default=false,Function=changed})
-	Smooth = RTXShaders:Setting({Type='toggle', Name='Smooth Transitions',Default=true,Function=changed})
-	CustomTime = RTXShaders:Setting({Type='toggle', Name='Custom Time',Default=false,Function=changed})
-	Time = RTXShaders:Setting({Type='slider', Name='Time',Min=0,Max=24,Default=15,Decimal=10,Function=changed})
+	Preset = RTXShaders:CreateDropdown({Name='Shader Pack',List=names,Default=names[1],Function=changed})
+	Strength = RTXShaders:CreateSlider({Name='Shader Strength',Min=0,Max=150,Default=100,Suffix='%',Function=changed})
+	ShadowDepth = RTXShaders:CreateSlider({Name='Shadow Depth',Min=0,Max=100,Default=58,Suffix='%',Function=changed})
+	Sunlight = RTXShaders:CreateSlider({Name='Direct Light',Min=25,Max=175,Default=100,Suffix='%',Function=changed})
+	Exposure = RTXShaders:CreateSlider({Name='Exposure',Min=-100,Max=100,Default=0,Function=changed})
+	SaturationBoost = RTXShaders:CreateSlider({Name='Saturation',Min=-100,Max=100,Default=0,Suffix='%',Function=changed})
+	Vibrance = RTXShaders:CreateSlider({Name='Vibrance',Min=0,Max=200,Default=100,Suffix='%',Function=changed})
+	Bloom = RTXShaders:CreateSlider({Name='Bloom',Min=0,Max=200,Default=100,Suffix='%',Function=changed})
+	Rays = RTXShaders:CreateSlider({Name='God Rays',Min=0,Max=200,Default=100,Suffix='%',Function=changed})
+	Haze = RTXShaders:CreateSlider({Name='Atmosphere',Min=0,Max=175,Default=100,Suffix='%',Function=changed})
+	FogPower = RTXShaders:CreateSlider({Name='Distance Fog',Min=25,Max=200,Default=100,Suffix='%',Function=changed})
+	DOF = RTXShaders:CreateToggle({Name='Cinematic DOF',Default=false,Function=changed})
+	Motion = RTXShaders:CreateToggle({Name='Living Atmosphere',Default=false,Function=changed})
+	Smooth = RTXShaders:CreateToggle({Name='Smooth Transitions',Default=true,Function=changed})
+	CustomTime = RTXShaders:CreateToggle({Name='Custom Time',Default=false,Function=changed})
+	Time = RTXShaders:CreateSlider({Name='Time',Min=0,Max=24,Default=15,Decimal=10,Function=changed})
 	ready = true
-	tenacity:Clean(function() restore(); holding:Destroy() end)
+	vape:Clean(function() restore(); holding:Destroy() end)
 end)
 -- RTXSHADERS_END
 
-run(function()
-	local SpinBot
-	local Speed
-	local Yaw
-	local Pitch
-	local spinYaw = 0
-	local renderName = 'TenacityFrontlinesSpinBotVisual'
-	local currentBone
-	local originalBoneCFrame
-
-	local function getRootBone()
-		local main = frontlines.Main
-		local globals = main and main.globals
-		local state = globals and globals.cli_state
-		local id = state and state.fpv_sol_id
-		if id == nil or not globals then return end
-
-		local holder = globals.sol_root_parts and globals.sol_root_parts[id]
-		local bone = holder and holder:FindFirstChild('Root_M')
-		if not bone then
-			local model = globals.soldier_models and globals.soldier_models[id]
-			bone = model and model:FindFirstChild('Root_M', true)
-		end
-
-		if bone and pcall(function() return bone.CFrame end) then
-			return bone
-		end
-	end
-
-	local function pitchRadians()
-		local mode = Pitch.Value
-		if mode == 'Up' then
-			return math.rad(70)
-		elseif mode == 'Down' then
-			return math.rad(-70)
-		elseif mode == 'Sine' then
-			return math.sin(spinYaw) * math.rad(70)
-		end
-		return 0
-	end
-
-	local function releaseBone()
-		if currentBone and currentBone.Parent and originalBoneCFrame then
-			pcall(function()
-				currentBone.CFrame = originalBoneCFrame
-			end)
-		end
-		currentBone = nil
-		originalBoneCFrame = nil
-	end
-
-	local function stopVisual()
-		pcall(function()
-			runService:UnbindFromRenderStep(renderName)
-		end)
-		releaseBone()
-		spinYaw = 0
-	end
-
-	local function startVisual()
-		stopVisual()
-
-		-- Render-only: this never edits sol_attitudes, the camera, network egress,
-		-- movement state, STEP_SOL_CFRAME, or any Frontlines simulation upvalues.
-		-- Applying the pose after the game's own render work prevents the game and
-		-- SpinBot from fighting over the same bone each frame (the old jitter).
-		runService:BindToRenderStep(renderName, Enum.RenderPriority.Last.Value + 100, function(dt)
-			if not SpinBot.Enabled then return end
-
-			dt = math.clamp(dt or 0, 0, 0.05)
-			local direction = Yaw.Value == 'Counter Clockwise' and -1 or 1
-			spinYaw = (spinYaw + direction * (Speed.Value or 0) * math.pi * 2 * dt) % (math.pi * 2)
-
-			local bone = getRootBone()
-			if not bone then
-				releaseBone()
-				return
-		end
-
-			if bone ~= currentBone then
-				releaseBone()
-				currentBone = bone
-				originalBoneCFrame = bone.CFrame
-			end
-
-			-- Root_M's normal Frontlines basis is approximately yaw +90°, roll -90°.
-			-- We only alter the rendered TPV root bone; the FPV camera/body simulation
-			-- remains exactly where the game put it.
-			local pitch = pitchRadians()
-			bone.CFrame = CFrame.Angles(pitch, spinYaw + math.rad(90), math.rad(-90))
-		end)
-	end
-
-	SpinBot = tenacity:Module('Movement', {
-		Name = 'SpinBot',
-		Function = function(callback)
-			if callback then
-				startVisual()
-				SpinBot:Clean(stopVisual)
-			else
-				stopVisual()
-			end
-		end,
-		Tooltip = 'Smooth local visual spin. Does not touch camera, movement, simulation, or network aim data.'
-	})
-
-	Speed = SpinBot:Setting({Type='slider', 
-		Name = 'Speed',
-		Min = 0,
-		Max = 10,
-		Default = 2,
-		Decimal = 10,
-		Suffix = ' rps'
-	})
-	Yaw = SpinBot:Setting({Type='dropdown', 
-		Name = 'Yaw Direction',
-		List = {'Clockwise', 'Counter Clockwise'}
-	})
-	Pitch = SpinBot:Setting({Type='dropdown', 
-		Name = 'Pitch Direction',
-		List = {'Up', 'Down', 'Forward', 'Sine'},
-		Default = 'Forward'
-	})
-end)
-
--- Tenacity_GUNCHANGER_V5
 run(function()
 	local GunViewmodel
 	local X, Y, Z, Pitch, Yaw, Roll, AimReset
@@ -2062,7 +921,7 @@ run(function()
 		local equipment = globals and globals.fpv_sol_equipment
 		local gun = equipment and equipment.curr_equipment
 		if not state or state.state ~= main.cli_state_t.COMBAT or not gun or gun.type == 2 or not gun.reload_params then return end
-		if tenacity.Modules.ThirdPerson and tenacity.Modules.ThirdPerson.Enabled then return end
+		if vape.Modules.ThirdPerson and vape.Modules.ThirdPerson.Enabled then return end
 		if AimReset.Enabled and inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then return end
 		local camera = workspace.CurrentCamera
 		local candidate = workspace:FindFirstChild('Model')
@@ -2078,7 +937,7 @@ run(function()
 		applied = candidate:GetPivot()
 	end
 
-	GunViewmodel = tenacity:Module('Render', {
+	GunViewmodel = vape.Categories.Render:CreateModule({
 		Name = 'GunViewmodel',
 		Function = function(callback)
 			if not callback then return end
@@ -2095,15 +954,15 @@ run(function()
 		end,
 		Tooltip = 'Adjusts the first-person firearm and hands together without changing the camera. Restores on disable; skips melee, menus and ThirdPerson.'
 	})
-	X = GunViewmodel:Setting({Type='slider', Name = 'Horizontal', Min = -3, Max = 3, Default = 0, Decimal = 100, Suffix = 'studs'})
-	Y = GunViewmodel:Setting({Type='slider', Name = 'Vertical', Min = -3, Max = 3, Default = 0, Decimal = 100, Suffix = 'studs'})
-	Z = GunViewmodel:Setting({Type='slider', Name = 'Forward', Min = -3, Max = 3, Default = 0, Decimal = 100, Suffix = 'studs'})
-	Pitch = GunViewmodel:Setting({Type='slider', Name = 'Pitch', Min = -45, Max = 45, Default = 0, Suffix = '°'})
-	Yaw = GunViewmodel:Setting({Type='slider', Name = 'Yaw', Min = -45, Max = 45, Default = 0, Suffix = '°'})
-	Roll = GunViewmodel:Setting({Type='slider', Name = 'Roll', Min = -90, Max = 90, Default = 0, Suffix = '°'})
-	AimReset = GunViewmodel:Setting({Type='toggle', Name = 'Reset While Right Click Held', Default = true,
+	X = GunViewmodel:CreateSlider({Name = 'Horizontal', Min = -3, Max = 3, Default = 0, Decimal = 100, Suffix = 'studs'})
+	Y = GunViewmodel:CreateSlider({Name = 'Vertical', Min = -3, Max = 3, Default = 0, Decimal = 100, Suffix = 'studs'})
+	Z = GunViewmodel:CreateSlider({Name = 'Forward', Min = -3, Max = 3, Default = 0, Decimal = 100, Suffix = 'studs'})
+	Pitch = GunViewmodel:CreateSlider({Name = 'Pitch', Min = -45, Max = 45, Default = 0, Suffix = '°'})
+	Yaw = GunViewmodel:CreateSlider({Name = 'Yaw', Min = -45, Max = 45, Default = 0, Suffix = '°'})
+	Roll = GunViewmodel:CreateSlider({Name = 'Roll', Min = -90, Max = 90, Default = 0, Suffix = '°'})
+	AimReset = GunViewmodel:CreateToggle({Name = 'Reset While Right Click Held', Default = true,
 		Tooltip = 'Uses the original pose while holding right mouse for aiming.'})
-	GunViewmodel:Setting({Type='button', Name = 'Reset Offsets', Function = function()
+	GunViewmodel:CreateButton({Name = 'Reset Offsets', Function = function()
 		for _, option in {X, Y, Z, Pitch, Yaw, Roll} do option:SetValue(0) end
 		restore()
 	end})
@@ -2513,7 +1372,7 @@ run(function()
 		end
 	end
 
-	GunChanger = tenacity:Module('Render', {
+	GunChanger = vape.Categories.Render:CreateModule({
 		Name = 'GunChanger',
 		Function = function(callback)
 			if callback then
@@ -2573,7 +1432,7 @@ run(function()
 		Tooltip = 'Applies a hard rainbow ForceField override to the actual Frontlines firearm assembly.'
 	})
 
-	RainbowSpeed = GunChanger:Setting({Type='slider', 
+	RainbowSpeed = GunChanger:CreateSlider({
 		Name = 'Rainbow Speed',
 		Min = 1,
 		Max = 30,
@@ -2581,7 +1440,7 @@ run(function()
 		Decimal = 10
 	})
 
-	Saturation = GunChanger:Setting({Type='slider', 
+	Saturation = GunChanger:CreateSlider({
 		Name = 'Saturation',
 		Min = 0,
 		Max = 1,
@@ -2589,7 +1448,7 @@ run(function()
 		Decimal = 100
 	})
 
-	Brightness = GunChanger:Setting({Type='slider', 
+	Brightness = GunChanger:CreateSlider({
 		Name = 'Brightness',
 		Min = 0.1,
 		Max = 1,
@@ -2597,20 +1456,20 @@ run(function()
 		Decimal = 100
 	})
 
-	BrightForceField = GunChanger:Setting({Type='toggle', 
+	BrightForceField = GunChanger:CreateToggle({
 		Name = 'Bright ForceField',
 		Default = true
 	})
 
 	optionsReady = true
 
-	tenacity:Clean(function()
+	vape:Clean(function()
 		restoreAll()
 	end)
 end)
--- Tenacity_GUNCHANGER_END
+-- ILLUSIONHD_GUNCHANGER_END
 
--- Tenacity_CUSTOMKNIFE_V8
+-- ILLUSIONHD_CUSTOMKNIFE_V8
 run(function()
 	local CustomKnife
 	local AssetID
@@ -2638,7 +1497,7 @@ run(function()
 	local hiddenParts = {}
 
 	local folder = Instance.new('Folder')
-	folder.Name = 'TenacityCustomKnife'
+	folder.Name = 'IllusionHDCustomKnife'
 	folder.Parent = gameCamera
 
 	local function value(option, fallback)
@@ -2929,7 +1788,7 @@ run(function()
 		end
 
 		visual = template:Clone()
-		visual.Name = 'TenacityCustomKnifeModel'
+		visual.Name = 'IllusionHDCustomKnifeModel'
 		visual.Parent = folder
 	end
 
@@ -3189,7 +2048,7 @@ run(function()
 		end)
 	end
 
-	CustomKnife = tenacity:Module('Render', {
+	CustomKnife = vape.Categories.Render:CreateModule({
 		Name = 'CustomKnife',
 		Function = function(callback)
 			if callback then
@@ -3200,7 +2059,7 @@ run(function()
 				end
 
 				lastTargetScan = 0
-				local renderName = 'TenacityCustomKnifeFollow'
+				local renderName = 'IllusionHDCustomKnifeFollow'
 				pcall(function()
 					runService:UnbindFromRenderStep(renderName)
 				end)
@@ -3217,7 +2076,7 @@ run(function()
 		Tooltip = 'Loads a model from an asset ID, auto-centers/sizes it and locks it to the live Frontlines knife without render lag.'
 	})
 
-	AssetID = CustomKnife:Setting({Type='text', 
+	AssetID = CustomKnife:CreateTextBox({
 		Name = 'Asset ID',
 		Default = '',
 		Function = function()
@@ -3227,7 +2086,7 @@ run(function()
 		end
 	})
 
-	AssetModel = CustomKnife:Setting({Type='dropdown', 
+	AssetModel = CustomKnife:CreateDropdown({
 		Name = 'Asset Model',
 		List = {'Auto'},
 		Default = 'Auto',
@@ -3238,7 +2097,7 @@ run(function()
 		end
 	})
 
-	Scale = CustomKnife:Setting({Type='slider', 
+	Scale = CustomKnife:CreateSlider({
 		Name = 'Scale',
 		Min = 0.1,
 		Max = 5,
@@ -3249,14 +2108,14 @@ run(function()
 		end
 	})
 
-	OffsetX = CustomKnife:Setting({Type='slider', Name = 'Offset X', Min = -5, Max = 5, Default = 0, Decimal = 100})
-	OffsetY = CustomKnife:Setting({Type='slider', Name = 'Offset Y', Min = -5, Max = 5, Default = 0, Decimal = 100})
-	OffsetZ = CustomKnife:Setting({Type='slider', Name = 'Offset Z', Min = -5, Max = 5, Default = 0, Decimal = 100})
-	RotationX = CustomKnife:Setting({Type='slider', Name = 'Rotation X', Min = -180, Max = 180, Default = 0})
-	RotationY = CustomKnife:Setting({Type='slider', Name = 'Rotation Y', Min = -180, Max = 180, Default = 0})
-	RotationZ = CustomKnife:Setting({Type='slider', Name = 'Rotation Z', Min = -180, Max = 180, Default = 0})
+	OffsetX = CustomKnife:CreateSlider({Name = 'Offset X', Min = -5, Max = 5, Default = 0, Decimal = 100})
+	OffsetY = CustomKnife:CreateSlider({Name = 'Offset Y', Min = -5, Max = 5, Default = 0, Decimal = 100})
+	OffsetZ = CustomKnife:CreateSlider({Name = 'Offset Z', Min = -5, Max = 5, Default = 0, Decimal = 100})
+	RotationX = CustomKnife:CreateSlider({Name = 'Rotation X', Min = -180, Max = 180, Default = 0})
+	RotationY = CustomKnife:CreateSlider({Name = 'Rotation Y', Min = -180, Max = 180, Default = 0})
+	RotationZ = CustomKnife:CreateSlider({Name = 'Rotation Z', Min = -180, Max = 180, Default = 0})
 
-	HideOriginal = CustomKnife:Setting({Type='toggle', 
+	HideOriginal = CustomKnife:CreateToggle({
 		Name = 'Hide Original',
 		Default = true,
 		Function = function()
@@ -3269,7 +2128,7 @@ run(function()
 
 	optionsReady = true
 
-	tenacity:Clean(function()
+	vape:Clean(function()
 		destroyVisual()
 
 		if template then
@@ -3282,14 +2141,14 @@ run(function()
 		end)
 	end)
 end)
--- Tenacity_CUSTOMKNIFE_END
+-- ILLUSIONHD_CUSTOMKNIFE_END
 
--- Tenacity_SKYTHEMES_V1
+-- ILLUSIONHD_SKYTHEMES_V1
 run(function()
 	local SkyThemes
 	local Theme
 	local lightingService = cloneref(game:GetService('Lighting'))
-	local boykisserSky = gettenacityasset('tenacity/assets/new/boykesser.png')
+	local boykisserSky = getvapeasset('newvape/assets/new/boykesser.png')
 
 	local skyThemes = {
 			Boykisser = {
@@ -3617,8 +2476,8 @@ run(function()
 	defaultSky:Destroy()
 
 	local storedSkies = Instance.new('Folder')
-	storedSkies.Name = 'TenacityStoredSkies'
-	storedSkies.Parent = tenacity.holder
+	storedSkies.Name = 'IllusionHDStoredSkies'
+	storedSkies.Parent = vape.holder
 
 	local activeSky
 
@@ -3636,7 +2495,7 @@ run(function()
 
 		if not activeSky or not activeSky.Parent then
 			activeSky = Instance.new('Sky')
-			activeSky.Name = 'TenacitySky'
+			activeSky.Name = 'IllusionHDSky'
 			activeSky.Parent = lightingService
 		end
 
@@ -3671,7 +2530,7 @@ run(function()
 		end
 	end
 
-	SkyThemes = tenacity:Module('Render', {
+	SkyThemes = vape.Categories.Render:CreateModule({
 		Name = 'SkyThemes',
 		Function = function(callback)
 			if callback then
@@ -3694,7 +2553,7 @@ run(function()
 		Tooltip = 'Replaces the game sky with selectable custom skybox themes.'
 	})
 
-	Theme = SkyThemes:Setting({Type='dropdown', 
+	Theme = SkyThemes:CreateDropdown({
 		Name = 'Theme',
 		List = themeNames,
 		Default = 'Purple',
@@ -3705,16 +2564,16 @@ run(function()
 		end
 	})
 
-	tenacity:Clean(function()
+	vape:Clean(function()
 		restoreGameSkies()
 		pcall(function()
 			storedSkies:Destroy()
 		end)
 	end)
 end)
--- Tenacity_SKYTHEMES_END
+-- ILLUSIONHD_SKYTHEMES_END
 
--- Tenacity_FIREFLIES_V1
+-- ILLUSIONHD_FIREFLIES_V1
 run(function()
 	local Fireflies
 	local Count
@@ -3729,7 +2588,7 @@ run(function()
 	local Trails
 
 	local Folder = Instance.new('Folder')
-	Folder.Name = 'TenacityFireflies'
+	Folder.Name = 'IllusionHDFireflies'
 	Folder.Parent = workspace
 
 	local fireflies = {}
@@ -3868,7 +2727,7 @@ run(function()
 		end
 	end
 
-	Fireflies = tenacity:Module('Render', {
+	Fireflies = vape.Categories.Render:CreateModule({
 		Name = 'Fireflies',
 		Function = function(callback)
 			if callback then
@@ -3940,14 +2799,14 @@ run(function()
 		Tooltip = 'Spawns glowing fireflies that drift around the world as you move.'
 	})
 
-	Count = Fireflies:Setting({Type='slider', 
+	Count = Fireflies:CreateSlider({
 		Name = 'Quantity',
 		Min = 10,
 		Max = 250,
 		Default = 85
 	})
 
-	Radius = Fireflies:Setting({Type='slider', 
+	Radius = Fireflies:CreateSlider({
 		Name = 'Radius',
 		Min = 15,
 		Max = 250,
@@ -3955,7 +2814,7 @@ run(function()
 		Suffix = ' studs'
 	})
 
-	Height = Fireflies:Setting({Type='slider', 
+	Height = Fireflies:CreateSlider({
 		Name = 'Height',
 		Min = 5,
 		Max = 80,
@@ -3963,7 +2822,7 @@ run(function()
 		Suffix = ' studs'
 	})
 
-	Speed = Fireflies:Setting({Type='slider', 
+	Speed = Fireflies:CreateSlider({
 		Name = 'Speed',
 		Min = 0.1,
 		Max = 6,
@@ -3971,7 +2830,7 @@ run(function()
 		Decimal = 10
 	})
 
-	Size = Fireflies:Setting({Type='slider', 
+	Size = Fireflies:CreateSlider({
 		Name = 'Size',
 		Min = 0.05,
 		Max = 0.8,
@@ -3986,7 +2845,7 @@ run(function()
 		end
 	})
 
-	Brightness = Fireflies:Setting({Type='slider', 
+	Brightness = Fireflies:CreateSlider({
 		Name = 'Brightness',
 		Min = 0,
 		Max = 5,
@@ -4001,7 +2860,7 @@ run(function()
 		end
 	})
 
-	ColorMode = Fireflies:Setting({Type='dropdown', 
+	ColorMode = Fireflies:CreateDropdown({
 		Name = 'Color Mode',
 		List = {'Custom', 'Warm', 'Rainbow'},
 		Default = 'Warm',
@@ -4012,7 +2871,7 @@ run(function()
 		end
 	})
 
-	PrimaryColor = Fireflies:Setting({Type='color', 
+	PrimaryColor = Fireflies:CreateColorSlider({
 		Name = 'Primary Color',
 		DefaultHue = 0.13,
 		DefaultSat = 0.85,
@@ -4026,7 +2885,7 @@ run(function()
 		end
 	})
 
-	SecondaryColor = Fireflies:Setting({Type='color', 
+	SecondaryColor = Fireflies:CreateColorSlider({
 		Name = 'Secondary Color',
 		DefaultHue = 0.18,
 		DefaultSat = 0.7,
@@ -4040,7 +2899,7 @@ run(function()
 		end
 	})
 
-	Trails = Fireflies:Setting({Type='toggle', 
+	Trails = Fireflies:CreateToggle({
 		Name = 'Trails',
 		Default = true,
 		Function = function(callback)
@@ -4052,7 +2911,7 @@ run(function()
 		end
 	})
 
-	tenacity:Clean(function()
+	vape:Clean(function()
 		for _, data in fireflies do
 			pcall(function()
 				data.Part:Destroy()
@@ -4064,9 +2923,9 @@ run(function()
 		end)
 	end)
 end)
--- Tenacity_FIREFLIES_END
+-- ILLUSIONHD_FIREFLIES_END
 
--- TENACITY_EFFECTS_CURRENT_BEGIN
+-- ILLUSIONHD_EFFECTS_V4_BEGIN
 -- 26 authored timelines. No aliases, asset downloads, character edits, or camera effects.
 -- Trail API: https://create.roblox.com/docs/reference/engine/classes/Trail
 run(function()
@@ -4075,7 +2934,7 @@ run(function()
 	local TAU = math.pi * 2
 	local scenes, controllers = {}, {}
 	local root = Instance.new('Folder')
-	root.Name = 'TenacityEffects'
+	root.Name = 'IllusionHDV4Effects'
 	root.Parent = workspace
 	local HitStyles, KillStyles = {}, {}
 	local HitNames = {'Needlepoint', 'Glassbite', 'Redline', 'Short Circuit', 'Inkblot', 'Hard Reset',
@@ -4661,7 +3520,7 @@ run(function()
 			a = Color3.fromHSV(c.Primary.Hue, c.Primary.Sat, c.Primary.Value)
 			b = Color3.fromHSV(c.Secondary.Hue, c.Secondary.Sat, c.Secondary.Value)
 		elseif mode == 'Theme' then
-			local ok, color = pcall(function() return tenacity:GetGUIColorRGB() end)
+			local ok, color = pcall(function() return vape:GetGUIColorRGB() end)
 			if ok and typeof(color) == 'Color3' then a, b = color, color:Lerp(WHITE, 0.65) end
 		elseif mode == 'Target' then
 			local color = data.Color
@@ -4763,7 +3622,7 @@ run(function()
 		local ok, err = pcall(styles[name], s)
 		if not ok then
 			for i = #scenes, 1, -1 do if scenes[i] == s then removeScene(i); break end end
-			warn('[Tenacity] '..name..' effect: '..tostring(err))
+			warn('[illusionHD] '..name..' effect: '..tostring(err))
 			return
 		end
 		for _, item in ipairs(s.Items) do s.EndTime = math.max(s.EndTime, item.Start + item.Duration) end
@@ -4815,7 +3674,7 @@ run(function()
 		local menu = {}
 		for _, name in ipairs(names) do menu[#menu + 1] = name end
 		menu[#menu + 1] = 'Random'
-		c.Module = tenacity:Module('Render', {
+		c.Module = vape.Categories.Render:CreateModule({
 			Name = kill and 'KillEffects' or 'HitEffects',
 			Tooltip = kill and '14 distinct finishers with staged animation, authored palettes and bounded cleanup.'
 				or '12 distinct hit reactions: fractures, ink, cuts, petals, circuitry, frost and more.',
@@ -4936,19 +3795,19 @@ run(function()
 						end
 					end
 				end)
-				if not ok then warn('[Tenacity] '..s.Name..' animation: '..tostring(err)); removeScene(i) end
+				if not ok then warn('[illusionHD] '..s.Name..' animation: '..tostring(err)); removeScene(i) end
 			end
 		end
 	end)
-	tenacity:Clean(function()
+	vape:Clean(function()
 		connection:Disconnect()
 		for _, c in ipairs(controllers) do c.Active = false; reset(c) end
 		root:Destroy()
 	end)
 end)
--- TENACITY_EFFECTS_CURRENT_END
+-- ILLUSIONHD_EFFECTS_V4_END
 
--- Tenacity_FAKEPLAYER_V1
+-- ILLUSIONHD_FAKEPLAYER_V1
 run(function()
 	local FakePlayer
 	local Distance
@@ -4969,7 +3828,7 @@ run(function()
 	local bodyParts = {}
 	local dead = false
 	local generation = 0
-	local fakeId = '__Tenacity_VFX_TEST_DUMMY__'
+	local fakeId = '__ILLUSIONHD_VFX_TEST_DUMMY__'
 	local maxHealth = 100
 	local mixedStep = 0
 
@@ -5305,7 +4164,7 @@ run(function()
 		table.clear(bodyParts)
 	end
 
-	FakePlayer = tenacity:Module('Render', {
+	FakePlayer = vape.Categories.Render:CreateModule({
 		Name = 'FakePlayer',
 		Function = function(callback)
 			if callback then
@@ -5340,31 +4199,31 @@ run(function()
 		Tooltip = 'Local VFX test dummy. H = hit, J = headshot, K = kill, L = respawn/reposition.'
 	})
 
-	Distance = FakePlayer:Setting({Type='slider', 
+	Distance = FakePlayer:CreateSlider({
 		Name = 'Distance', Min = 4, Max = 35, Default = 10, Decimal = 10,
 		Function = function() if FakePlayer.Enabled and model then placeDummy() end end
 	})
-	SideOffset = FakePlayer:Setting({Type='slider', 
+	SideOffset = FakePlayer:CreateSlider({
 		Name = 'Side Offset', Min = -15, Max = 15, Default = 0, Decimal = 10,
 		Function = function() if FakePlayer.Enabled and model then placeDummy() end end
 	})
-	HitDamage = FakePlayer:Setting({Type='slider', Name = 'Hit Damage', Min = 1, Max = 95, Default = 24})
-	LoopMode = FakePlayer:Setting({Type='dropdown', Name = 'Auto Test', List = {'Off', 'Hit', 'Headshot', 'Kill', 'Headshot Kill', 'Mixed'}, Default = 'Off'})
-	LoopDelay = FakePlayer:Setting({Type='slider', Name = 'Auto Delay', Min = 0.15, Max = 5, Default = 1.25, Decimal = 100, Suffix = 's'})
-	AutoRespawn = FakePlayer:Setting({Type='toggle', Name = 'Auto Respawn', Default = true})
-	RespawnDelay = FakePlayer:Setting({Type='slider', Name = 'Respawn Delay', Min = 0.25, Max = 5, Default = 1.15, Decimal = 100, Suffix = 's'})
-	FacePlayer = FakePlayer:Setting({Type='toggle', 
+	HitDamage = FakePlayer:CreateSlider({Name = 'Hit Damage', Min = 1, Max = 95, Default = 24})
+	LoopMode = FakePlayer:CreateDropdown({Name = 'Auto Test', List = {'Off', 'Hit', 'Headshot', 'Kill', 'Headshot Kill', 'Mixed'}, Default = 'Off'})
+	LoopDelay = FakePlayer:CreateSlider({Name = 'Auto Delay', Min = 0.15, Max = 5, Default = 1.25, Decimal = 100, Suffix = 's'})
+	AutoRespawn = FakePlayer:CreateToggle({Name = 'Auto Respawn', Default = true})
+	RespawnDelay = FakePlayer:CreateSlider({Name = 'Respawn Delay', Min = 0.25, Max = 5, Default = 1.15, Decimal = 100, Suffix = 's'})
+	FacePlayer = FakePlayer:CreateToggle({
 		Name = 'Face Player', Default = true,
 		Function = function() if FakePlayer.Enabled and model then placeDummy() end end
 	})
-	ShowHealth = FakePlayer:Setting({Type='toggle', 
+	ShowHealth = FakePlayer:CreateToggle({
 		Name = 'Show Health', Default = true,
 		Function = function(callback) if nameGui then nameGui.Enabled = callback and not dead end end
 	})
 
-	tenacity:Clean(destroyDummy)
+	vape:Clean(destroyDummy)
 end)
--- Tenacity_FAKEPLAYER_END
+-- ILLUSIONHD_FAKEPLAYER_END
 
 
 run(function()
@@ -5440,7 +4299,7 @@ run(function()
 
 		lastPlay = tick()
 		local sound = Instance.new('Sound')
-		sound.Name = 'TenacityHeadshotSound'
+		sound.Name = 'VapeHeadshotSound'
 		-- Roblox Sound objects still require a Content string internally.
 		-- getcustomasset/getsynasset creates that Content string directly from the local workspace file.
 		sound.SoundId = asset
@@ -5460,7 +4319,7 @@ run(function()
 		end
 	end
 
-	HeadshotSound = tenacity:Module('Render', {
+	HeadshotSound = vape.Categories.Render:CreateModule({
 		Name = 'HeadshotSound',
 		Function = function(callback)
 			if callback then
@@ -5502,7 +4361,7 @@ run(function()
 		Tooltip = 'Plays a sound file directly from your executor workspace when you land a headshot.'
 	})
 
-	SoundFile = HeadshotSound:Setting({Type='text', 
+	SoundFile = HeadshotSound:CreateTextBox({
 		Name = 'Workspace Sound File',
 		Default = 'headshot.mp3',
 		Function = function()
@@ -5510,105 +4369,16 @@ run(function()
 			cachedAsset = nil
 		end
 	})
-	Volume = HeadshotSound:Setting({Type='slider', Name = 'Volume', Min = 0, Max = 2, Default = 1, Decimal = 100})
-	Pitch = HeadshotSound:Setting({Type='slider', Name = 'Pitch', Min = 0.5, Max = 2, Default = 1, Decimal = 100})
-	Cooldown = HeadshotSound:Setting({Type='slider', Name = 'Cooldown', Min = 0, Max = 0.5, Default = 0.03, Decimal = 100, Suffix = 's'})
-	ConfirmedHits = HeadshotSound:Setting({Type='toggle', Name = 'Confirmed Hits', Default = true})
-end)
-
-run(function()
-	local GrenadeESP
-	local Background
-	local Color = {}
-	local Reference = {}
-	local Folder = Instance.new('Folder')
-	Folder.Parent = tenacity.holder
-	local old
-	
-	local function addESP(v)
-		if tenacity.ThreadFix then
-			setthreadidentity(8)
-		end
-		if not v.model or v.model.Name ~= 'frag' then return end
-		local billboard = Instance.new('BillboardGui')
-		billboard.Parent = Folder
-		billboard.Name = v.model.Name
-		billboard.Size = UDim2.fromOffset(32, 32)
-		billboard.AlwaysOnTop = true
-		billboard.ClipsDescendants = false
-		billboard.Adornee = v.model.PrimaryPart
-		local blur = addBlur(billboard)
-		blur.Visible = Background.Enabled
-		local image = Instance.new('ImageLabel')
-		image.Size = UDim2.fromScale(1, 1)
-		image.BackgroundColor3 = Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
-		image.BackgroundTransparency = 1 - (Background.Enabled and Color.Opacity or 0)
-		image.BorderSizePixel = 0
-		image.Image = 'rbxassetid://12660993553'
-		image.Parent = billboard
-		local uicorner = Instance.new('UICorner')
-		uicorner.CornerRadius = UDim.new(0, 4)
-		uicorner.Parent = image
-		Reference[v.model] = billboard
-		v.model.Destroying:Connect(function()
-			if tenacity.ThreadFix then
-				setthreadidentity(8)
-			end
-			if Reference[v.model] then
-				Reference[v.model]:Destroy()
-				Reference[v.model] = nil
-			end
-		end)
-	end
-	
-	GrenadeESP = tenacity:Module('Render', {
-		Name = 'GrenadeESP',
-		Function = function(callback)
-			if callback then
-				old = hookfunction(frontlines.SpawnThrowable, function(id, pos, velo)
-					local res = old(id, pos, velo)
-					addESP(frontlines.Throwables[id])
-					return res
-				end)
-			else
-				hookfunction(frontlines.SpawnThrowable, old)
-				Folder:ClearAllChildren()
-				table.clear(Reference)
-			end
-		end,
-		Tooltip = 'ESP for grenades'
-	})
-	Background = GrenadeESP:Setting({Type='toggle', 
-		Name = 'Background',
-		Function = function(callback)
-			if Color.Object then
-				Color.Object.Visible = callback
-			end
-			for i, v in Reference do
-				v.ImageLabel.BackgroundTransparency = 1 - (callback and Color.Opacity or 0)
-				v.Blur.Visible = callback
-			end
-		end,
-		Default = true
-	})
-	Color = GrenadeESP:Setting({Type='color', 
-		Name = 'Background Color',
-		DefaultValue = 0,
-		DefaultOpacity = 0.5,
-		Function = function(hue, sat, val, opacity)
-			for i, v in Reference do
-				v.ImageLabel.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
-				v.ImageLabel.BackgroundTransparency = 1 - opacity
-			end
-		end,
-		Darker = true
-	})
+	Volume = HeadshotSound:CreateSlider({Name = 'Volume', Min = 0, Max = 2, Default = 1, Decimal = 100})
+	Pitch = HeadshotSound:CreateSlider({Name = 'Pitch', Min = 0.5, Max = 2, Default = 1, Decimal = 100})
+	Cooldown = HeadshotSound:CreateSlider({Name = 'Cooldown', Min = 0, Max = 0.5, Default = 0.03, Decimal = 100, Suffix = 's'})
+	ConfirmedHits = HeadshotSound:CreateToggle({Name = 'Confirmed Hits', Default = true})
 end)
 
 run(function()
 	local NoHurtCam
 	
-	NoHurtCam = tenacity:Module('Render', {
+	NoHurtCam = vape.Categories.Render:CreateModule({
 		Name = 'NoHurtCam',
 		Function = function(callback)
 			if callback then
@@ -5675,7 +4445,7 @@ run(function()
 		end
 	end
 
-	VisualComfort = tenacity:Module('Render', {
+	VisualComfort = vape.Categories.Render:CreateModule({
 		Name = 'VisualComfort',
 		Function = function(callback)
 			if callback then
@@ -5691,7 +4461,7 @@ run(function()
 		Tooltip = 'Reduce post-processing for visual comfort. Restores effects when switched off.'
 	})
 	for index, name in {'Remove Blur', 'Remove Bloom', 'Remove Depth of Field'} do
-		options[classes[index]] = VisualComfort:Setting({Type='toggle', 
+		options[classes[index]] = VisualComfort:CreateToggle({
 			Name = name, Default = true, Function = refresh
 		})
 	end
@@ -5702,7 +4472,7 @@ run(function()
 	local Distance
 	local hook = false
 	
-	ThirdPerson = tenacity:Module('Render', {
+	ThirdPerson = vape.Categories.Render:CreateModule({
 		Name = 'ThirdPerson',
 		Function = function(callback)
 			if callback then
@@ -5763,124 +4533,11 @@ run(function()
 		end,
 		Tooltip = 'View your character in third person'
 	})
-	Distance = ThirdPerson:Setting({Type='slider', 
+	Distance = ThirdPerson:CreateSlider({
 		Name = 'Distance',
 		Min = 1,
 		Max = 15,
 		Default = 8
-	})
-end)
-
-run(function()
-	local AutoRespawn
-	local Delay
-	local pending
-	local generation = 0
-
-	local function cancelPending()
-		generation += 1
-		if pending then
-			task.cancel(pending)
-			pending = nil
-		end
-	end
-	
-	AutoRespawn = tenacity:Module('Misc', {
-		Name = 'AutoRespawn',
-		Function = function(callback)
-			cancelPending()
-			if callback then
-				AutoRespawn:Clean(cancelPending)
-				AutoRespawn:Clean(hookEvent('ENTER_CLI_KILLCAM', function(id, health)
-					cancelPending()
-					local token = generation
-					pending = task.delay(Delay.Value, function()
-						if token ~= generation then return end
-						pending = nil
-						local main = frontlines.Main
-						if not AutoRespawn.Enabled or not main or entitylib.isAlive then return end
-						main.exe_set(main.exe_set_t.CTRL_KILLCAM_TO_COMBAT_RELEASE)
-					end)
-				end))
-			end
-		end,
-		Tooltip = 'Automatically respawns after death with an optional killcam delay.'
-	})
-	Delay = AutoRespawn:Setting({Type='slider', 
-		Name = 'Respawn Delay', Min = 0, Max = 10, Default = 0, Decimal = 10, Suffix = 's',
-		Tooltip = 'Time to keep the killcam visible. Applies on your next death.'
-	})
-end)
-
-run(function()
-	local ChatSpammer
-	local Lines
-	local Mode
-	local Delay
-	local Hide
-	local oldchat
-	
-	ChatSpammer = tenacity:Module('Misc', {
-		Name = 'ChatSpammer',
-		Function = function(callback)
-			if callback then
-				local ind = 1
-				repeat
-					local message = (#Lines.ListEnabled > 0 and Lines.ListEnabled[math.random(1, #Lines.ListEnabled)] or 'vxpe on top')
-					if Mode.Value == 'Order' and #Lines.ListEnabled > 0 then
-						message = Lines.ListEnabled[ind] or Lines.ListEnabled[1]
-						ind += 1
-						if ind > #Lines.ListEnabled then 
-							ind = 1 
-						end
-					end
-					frontlines.Main.utils.net_msg_util.c_prep_net_msg(frontlines.Main.globals.null_net_msg_state, frontlines.Main.enums.c_net_msg.CHAT, message:sub(1, 100))
-					task.wait(1)
-				until not ChatSpammer.Enabled
-			end
-		end,
-		Tooltip = 'Automatically types in chat'
-	})
-	Lines = ChatSpammer:Setting({Type='list', Name = 'Lines'})
-	Mode = ChatSpammer:Setting({Type='dropdown', 
-		Name = 'Mode',
-		List = {'Random', 'Order'}
-	})
-end)
-
-run(function()
-	local PickupRange
-	local Range
-	
-	PickupRange = tenacity:Module('Misc', {
-		Name = 'PickupRange',
-		Function = function(callback)
-			if callback then
-				repeat
-					if entitylib.isAlive then
-						for i, v in frontlines.Main.globals.equipment_drop_ids do
-							local obj = frontlines.Main.globals.equipments[v]
-							if obj and obj.model and obj.model.PrimaryPart and (obj.model.PrimaryPart.Position - entitylib.character.RootPart.Position).Magnitude < Range.Value then
-								if frontlines.Main.matrix_bit(frontlines.PickupBit, v) == 0 then
-									frontlines.Main.set_matrix_bit(frontlines.PickupBit, v, true)
-									frontlines.Main.utils.net_msg_util.c_prep_net_msg(frontlines.Main.globals.combat_net_msg_state, frontlines.Main.enums.c_net_msg.PICKUP_AMMO, v)
-									break
-								end
-							end
-						end
-					end
-	
-					task.wait(0.05)
-				until not PickupRange.Enabled
-			end
-		end,
-		Tooltip = 'Picks up ammo from dropped guns in the proximity'
-	})
-	Range = PickupRange:Setting({Type='slider', 
-		Name = 'Range',
-		Min = 1,
-		Max = 20,
-		Default = 20
 	})
 end)
 
@@ -5893,7 +4550,7 @@ run(function()
 	local DrawingToggle
 	local drawingobjs = {}
 	
-	BulletTracers = tenacity:Module('Render', {
+	BulletTracers = vape.Legit:CreateModule({
 		Name = 'BulletTracers',
 		Function = function(callback)
 			if callback then 
@@ -5959,26 +4616,26 @@ run(function()
 			table.insert(materials, v.Name) 
 		end
 	end
-	Material = BulletTracers:Setting({Type='dropdown', 
+	Material = BulletTracers:CreateDropdown({
 		Name = 'Material',
 		List = materials
 	})
-	Color = BulletTracers:Setting({Type='color', 
+	Color = BulletTracers:CreateColorSlider({
 		Name = 'Tracer Color',
 		DefaultOpacity = 0.5
 	})
-	Lifetime = BulletTracers:Setting({Type='slider', 
+	Lifetime = BulletTracers:CreateSlider({
 		Name = 'Lifetime',
 		Min = 0,
 		Max = 0.5,
 		Default = 0.2,
 		Decimal = 10
 	})
-	Fade = BulletTracers:Setting({Type='toggle', 
+	Fade = BulletTracers:CreateToggle({
 		Name = 'Fade',
 		Default = true
 	})
-	DrawingToggle = BulletTracers:Setting({Type='toggle', 
+	DrawingToggle = BulletTracers:CreateToggle({
 		Name = 'Drawing',
 		Function = function()
 			if BulletTracers.Enabled then 
@@ -5989,112 +4646,8 @@ run(function()
 	})
 end)
 run(function()
-	local BulletNetSpy
-	local old
-	local lastShot = 0
-
-	local function printable(v)
-		local t = typeof(v)
-
-		if t == 'Vector3' then
-			return string.format(
-				'Vector3(%.2f, %.2f, %.2f)',
-				v.X, v.Y, v.Z
-			)
-		elseif t == 'CFrame' then
-			return 'CFrame('..tostring(v.Position)..')'
-		elseif t == 'Instance' then
-			return v:GetFullName()
-		elseif type(v) == 'table' then
-			return '<table>'
-		end
-
-		return tostring(v)
-	end
-
-	BulletNetSpy = tenacity:Module('Misc', {
-		Name = 'BulletNetSpy',
-
-		Function = function(callback)
-			if callback then
-				BulletNetSpy:Clean(
-					frontlines.LocalBulletEvent.Event:Connect(
-						function()
-							lastShot = os.clock()
-						end
-					)
-				)
-
-				local target =
-					frontlines.Main.utils.net_msg_util.c_prep_net_msg
-
-				old = hookfunction(target, function(...)
-					local args = table.pack(...)
-
-					-- Expected:
-					-- [1] = net state
-					-- [2] = c_net_msg ID
-					-- [3+] = packet arguments
-
-					local id = args[2]
-
-					if
-						type(id) == 'number'
-						and os.clock() - lastShot < 0.75
-					then
-						local name
-
-						pcall(function()
-							name = getKey(id, false)
-						end)
-
-						name =
-							name
-							or ('UNKNOWN_' .. tostring(id))
-
-						local output = {}
-
-						for i = 3, args.n do
-							output[#output + 1] =
-								'[' .. i .. '] '
-								.. typeof(args[i])
-								.. ' = '
-								.. printable(args[i])
-						end
-
-						print(
-							'\n[BULLET NET] '
-							.. name
-							.. ' (' .. tostring(id) .. ')'
-						)
-
-						for _, line in ipairs(output) do
-							print('    ' .. line)
-						end
-					end
-
-					return old(...)
-				end)
-
-			else
-				if old then
-					hookfunction(
-						frontlines.Main.utils.net_msg_util.c_prep_net_msg,
-						old
-					)
-
-					old = nil
-				end
-			end
-		end,
-
-		Tooltip = 'Logs Frontlines network messages immediately following your shots.'
-	})
-end)
--- CuteVisuals.java port: Frontlines kills replace Minecraft bed-break packets.
-run(function()
- local createCuteVisuals = assert(loadstring(downloadFile('tenacity/libraries/cutevisuals.lua'), 'CuteVisuals'))()
- createCuteVisuals(tenacity, {
+ local createCuteVisuals = assert(loadstring(downloadFile('newvape/libraries/cutevisuals.lua'), 'CuteVisuals'))()
+ createCuteVisuals(vape, {
   GetPosition = function()
    local character = entitylib.isAlive and entitylib.character
    local root = character and (character.RootPart or character.HumanoidRootPart)
@@ -6119,519 +4672,10 @@ run(function()
  })
 end)
 run(function()
-	local TargetStrafe
-	local Targets
-	local SearchRange
-	local StrafeRange
-	local StrafeSpeed
-	local MatchSpeed
-	local Direction
-	local AutoReverse
-	local YFactor
-
-	local rayCheck = RaycastParams.new()
-	rayCheck.FilterType = Enum.RaycastFilterType.Exclude
-	rayCheck.RespectCanCollide = true
-	rayCheck.IgnoreWater = true
-
-	local connection
-	local currentTarget
-	local currentAngle
-	local directionSign = 1
-	local nextTargetScan = 0
-
-	local function getRoot()
-		local character = entitylib.character
-		local root = character and character.RootPart
-		return root and root.Parent and root or nil
-	end
-
-	local function targetValid(ent, root)
-		if not ent
-			or ent.Targetable == false
-			or not ent.RootPart
-			or not ent.RootPart.Parent
-			or ent == entitylib.character then
-			return false
-		end
-
-		if ent.Health ~= nil and ent.Health <= 0 then
-			return false
-		end
-
-		if root and (ent.RootPart.Position - root.Position).Magnitude > SearchRange.Value + 4 then
-			return false
-		end
-
-		return true
-	end
-
-	local function configureRay(root, ent)
-		local ignore = {}
-		if entitylib.character and entitylib.character.Character then
-			ignore[#ignore + 1] = entitylib.character.Character
-		end
-		if ent and ent.Character then
-			ignore[#ignore + 1] = ent.Character
-		end
-		if gameCamera then
-			ignore[#ignore + 1] = gameCamera
-		end
-
-		rayCheck.FilterDescendantsInstances = ignore
-		rayCheck.CollisionGroup = root.CollisionGroup
-	end
-
-	local function acquireTarget(root, force)
-		local now = os.clock()
-		if not force and now < nextTargetScan and targetValid(currentTarget, root) then
-			return currentTarget
-		end
-
-		nextTargetScan = now + 0.06
-
-		local oldTarget = currentTarget
-		currentTarget = entitylib.EntityPosition({
-			Range = SearchRange.Value,
-			Wallcheck = Targets.Walls.Enabled or nil,
-			Part = 'RootPart',
-			Origin = root.Position,
-			Players = Targets.Players.Enabled,
-			NPCs = Targets.NPCs.Enabled
-		})
-
-		if not targetValid(currentTarget, root) then
-			currentTarget = nil
-		end
-
-		if currentTarget ~= oldTarget then
-			currentAngle = nil
-		end
-
-		return currentTarget
-	end
-
-	local function speedModuleValue()
-		if not MatchSpeed.Enabled then
-			return StrafeSpeed.Value
-		end
-
-		local speedModule = tenacity.Modules.Speed
-		local options = speedModule and speedModule.Options
-		if options then
-			local direct = options.Speed or options['Speed']
-			if direct and type(direct.Value) == 'number' and direct.Value > 0 then
-				return direct.Value
-			end
-
-			for name, option in pairs(options) do
-				if tostring(name):lower():find('speed', 1, true)
-					and type(option) == 'table'
-					and type(option.Value) == 'number'
-					and option.Value > 0 then
-					return option.Value
-				end
-			end
-		end
-
-		return StrafeSpeed.Value
-	end
-
-	local function groundBelow(root, position)
-		local character = entitylib.character
-		local hip = math.max((character and character.HipHeight) or 2, 1.5)
-		local castLength = hip + (root.Size.Y * 0.5) + 7
-		return workspace:Raycast(
-			position + Vector3.new(0, 1.5, 0),
-			Vector3.new(0, -castLength, 0),
-			rayCheck
-		)
-	end
-
-	local function blocked(root, displacement)
-		if displacement.Magnitude <= 0.001 then
-			return nil
-		end
-
-		local size = Vector3.new(
-			math.max(root.Size.X * 0.72, 1),
-			math.max(root.Size.Y * 0.78, 2),
-			math.max(root.Size.Z * 0.72, 1)
-		)
-
-		return workspace:Blockcast(root.CFrame, size, displacement, rayCheck)
-	end
-
-	local function horizontalUnit(vec)
-		vec = vec * Vector3.new(1, 0, 1)
-		return vec.Magnitude > 0.001 and vec.Unit or nil
-	end
-
-	local function movementFor(root, ent, dt)
-		local localPos = root.Position
-		local targetPos = ent.RootPart.Position
-		local delta = localPos - targetPos
-		local horizontal = horizontalUnit(delta)
-
-		if not horizontal then
-			horizontal = Vector3.new(0, 0, 1)
-		end
-
-		if currentAngle == nil then
-			currentAngle = math.atan2(horizontal.X, horizontal.Z)
-		end
-
-		local verticalDifference = math.abs(localPos.Y - targetPos.Y)
-		local radius = math.max(
-			2,
-			StrafeRange.Value - (verticalDifference * (YFactor.Value / 100))
-		)
-
-		local speed = math.clamp(speedModuleValue(), 1, 80)
-		local angularSpeed = speed / math.max(radius, 1)
-
-		currentAngle = (currentAngle + directionSign * angularSpeed * dt) % (math.pi * 2)
-
-		local desiredOffset = Vector3.new(
-			math.sin(currentAngle) * radius,
-			0,
-			math.cos(currentAngle) * radius
-		)
-
-		local desiredPos = Vector3.new(
-			targetPos.X + desiredOffset.X,
-			localPos.Y,
-			targetPos.Z + desiredOffset.Z
-		)
-
-		-- Tangential motion provides the actual strafe. Radial correction gently pulls
-		-- us back onto the requested circle instead of teleporting/snap-orbiting.
-		local outward = horizontalUnit(localPos - targetPos) or horizontal
-		local tangent
-		if directionSign > 0 then
-			tangent = Vector3.new(outward.Z, 0, -outward.X)
-		else
-			tangent = Vector3.new(-outward.Z, 0, outward.X)
-		end
-
-		local distance = ((localPos - targetPos) * Vector3.new(1, 0, 1)).Magnitude
-		local radialError = radius - distance
-		local radialVelocity = math.clamp(radialError * 5, -speed * 0.8, speed * 0.8)
-
-		local desiredCorrection = (desiredPos - localPos) * Vector3.new(1, 0, 1)
-		local correctionDirection = horizontalUnit(desiredCorrection)
-
-		local velocity = tangent * speed + outward * radialVelocity
-		if correctionDirection and math.abs(radialError) > radius * 0.35 then
-			velocity = velocity:Lerp(correctionDirection * speed, 0.35)
-		end
-
-		local moveDirection = horizontalUnit(velocity) or tangent
-		local displacement = moveDirection * speed * dt
-
-		return displacement, moveDirection
-	end
-
-	local function reverseDirection()
-		directionSign = -directionSign
-		currentAngle = nil
-	end
-
-	local function stepTargetStrafe(dt)
-		if not TargetStrafe.Enabled or not entitylib.isAlive then
-			TargetStrafeVector = nil
-			return
-		end
-
-		local root = getRoot()
-		if not root then
-			TargetStrafeVector = nil
-			return
-		end
-
-		dt = math.clamp(dt or 0, 0, 1 / 20)
-		if dt <= 0 then return end
-
-		if Direction.Value == 'Clockwise' then
-			directionSign = 1
-		elseif Direction.Value == 'Counter Clockwise' then
-			directionSign = -1
-		end
-
-		local ent = acquireTarget(root, false)
-		if not ent then
-			TargetStrafeVector = nil
-			return
-		end
-
-		configureRay(root, ent)
-
-		local displacement, moveDirection = movementFor(root, ent, dt)
-		if not displacement or displacement.Magnitude <= 0.001 then
-			TargetStrafeVector = nil
-			return
-		end
-
-		local hit = blocked(root, displacement)
-		local ground = groundBelow(root, root.Position + displacement)
-
-		if hit or not ground then
-			if AutoReverse.Enabled then
-				reverseDirection()
-				displacement, moveDirection = movementFor(root, ent, dt)
-				hit = displacement and blocked(root, displacement)
-				ground = displacement and groundBelow(root, root.Position + displacement)
-			end
-		end
-
-		if displacement and not hit and ground then
-			-- Frontlines does not use Roblox PlayerModule.moveFunction for its soldier.
-			-- Move the actual local soldier root directly, preserving vertical physics
-			-- and the game's own camera/body rotation.
-			root.CFrame += displacement
-			TargetStrafeVector = moveDirection
-			targetinfo.Targets[ent] = tick() + 1
-		else
-			TargetStrafeVector = nil
-		end
-	end
-
-	local function cleanup()
-		if connection then
-			connection:Disconnect()
-			connection = nil
-		end
-
-		currentTarget = nil
-		currentAngle = nil
-		nextTargetScan = 0
-		TargetStrafeVector = nil
-	end
-
-	TargetStrafe = tenacity:Module('Movement', {
-		Name = 'TargetStrafe',
-		Function = function(callback)
-			cleanup()
-
-			if callback then
-				directionSign = Direction.Value == 'Counter Clockwise' and -1 or 1
-				connection = runService.Heartbeat:Connect(stepTargetStrafe)
-				TargetStrafe:Clean(cleanup)
-			end
-		end,
-		Tooltip = 'Frontlines-native target strafe that circles enemies without Roblox PlayerModule hooks.'
-	})
-
-	Targets = TargetStrafe:Setting({Type='targets', 
-		Players = true,
-		Walls = true
-	})
-
-	SearchRange = TargetStrafe:Setting({Type='slider', 
-		Name = 'Search Range',
-		Min = 1,
-		Max = 60,
-		Default = 24,
-		Suffix = function(val)
-			return val == 1 and 'stud' or 'studs'
-		end
-	})
-
-	StrafeRange = TargetStrafe:Setting({Type='slider', 
-		Name = 'Strafe Range',
-		Min = 2,
-		Max = 30,
-		Default = 12,
-		Suffix = function(val)
-			return val == 1 and 'stud' or 'studs'
-		end
-	})
-
-	StrafeSpeed = TargetStrafe:Setting({Type='slider', 
-		Name = 'Strafe Speed',
-		Min = 5,
-		Max = 60,
-		Default = 24,
-		Suffix = function(val)
-			return val == 1 and 'stud/s' or 'studs/s'
-		end
-	})
-
-	MatchSpeed = TargetStrafe:Setting({Type='toggle', 
-		Name = 'Match Speed',
-		Default = true,
-		Function = function(enabled)
-			if StrafeSpeed then
-				StrafeSpeed.Object.Visible = not enabled
-			end
-		end
-	})
-
-	Direction = TargetStrafe:Setting({Type='dropdown', 
-		Name = 'Direction',
-		List = {'Clockwise', 'Counter Clockwise'},
-		Default = 'Clockwise',
-		Function = function(value)
-			directionSign = value == 'Counter Clockwise' and -1 or 1
-			currentAngle = nil
-		end
-	})
-
-	AutoReverse = TargetStrafe:Setting({Type='toggle', 
-		Name = 'Auto Reverse',
-		Default = true
-	})
-
-	YFactor = TargetStrafe:Setting({Type='slider', 
-		Name = 'Y Factor',
-		Min = 0,
-		Max = 100,
-		Default = 50,
-		Suffix = '%'
-	})
-
-	StrafeSpeed.Object.Visible = not MatchSpeed.Enabled
-end)
-run(function()
-	local FrontlinesFly
-	local RepeatPulses
-	local preset = {
-		{'Speed', 108},
-		{'Speed Mode', 'Impulse'},
-		{'Float Mode', 'Velocity'},
-		{'Move Mode', 'Direct'},
-		{'Humanoid State', 'None'}
-	}
-
-	FrontlinesFly = tenacity:Module('Movement', {
-		Name = 'FrontlinesFly',
-		Function = function(callback)
-			if not callback then return end
-			local fly = tenacity.Modules.Fly
-			if not fly or not fly.Options then
-				notif('FrontlinesFly', 'The Fly movement engine is unavailable.', 5, 'alert')
-				FrontlinesFly:Toggle()
-				return
-			end
-			for _, setting in preset do
-				local option = fly.Options[setting[1]]
-				if not option or type(option.SetValue) ~= 'function' then
-					notif('FrontlinesFly', 'Missing Fly setting: '..setting[1], 5, 'alert')
-					FrontlinesFly:Toggle()
-					return
-				end
-			end
-
-			-- Own the normal Fly toggle for this session so its existing Speed
-			-- coordination, direct input, float physics and keybinds remain intact.
-			if fly.Enabled then fly:Toggle() end
-			local saved = {}
-			local phase, deadline, character = 'Waiting', nil, nil
-			local stopped = false
-			local function stopFlight()
-				if fly.Enabled then fly:Toggle() end
-			end
-			FrontlinesFly:Clean(function()
-				stopped = true
-				stopFlight()
-				for _, setting in preset do
-					local option = fly.Options[setting[1]]
-					-- Preserve a setting the user changed during the countdown/pulse.
-					if option and option.Value == setting[2] and saved[setting[1]] ~= nil then
-						option:SetValue(saved[setting[1]])
-					end
-				end
-			end)
-			for _, setting in preset do
-				local option = fly.Options[setting[1]]
-				saved[setting[1]] = option.Value
-				option:SetValue(setting[2])
-			end
-
-			local label = Instance.new('TextLabel')
-			label.Name = 'FrontlinesFlyCountdown'
-			label.AnchorPoint = Vector2.new(0.5, 0)
-			label.Position = UDim2.fromScale(0.5, 0.2)
-			label.Size = UDim2.fromOffset(340, 64)
-			label.BackgroundColor3 = Color3.fromRGB(20, 22, 28)
-			label.BackgroundTransparency = 0.15
-			label.BorderSizePixel = 0
-			label.Font = Enum.Font.GothamMedium
-			label.TextSize = 18
-			label.TextColor3 = Color3.fromRGB(240, 243, 250)
-			label.Text = 'FRONTLINES FLY — Waiting for combat'
-			label.Parent = tenacity.gui
-			FrontlinesFly:Clean(label)
-			local corner = Instance.new('UICorner')
-			corner.CornerRadius = UDim.new(0, 10)
-			corner.Parent = label
-			local track = Instance.new('Frame')
-			track.BorderSizePixel = 0
-			track.BackgroundColor3 = Color3.fromRGB(105, 175, 255)
-			track.Size = UDim2.new(0, 0, 0, 3)
-			track.Position = UDim2.new(0, 0, 1, -3)
-			track.Parent = label
-
-			local function step()
-				if stopped or not FrontlinesFly.Enabled then return end
-				local now = os.clock()
-				local main = frontlines.Main
-				local globals = main and main.globals
-				local state = globals and globals.cli_state
-				local current = entitylib.isAlive and entitylib.character
-				local root = current and current.RootPart
-				local ready = state and state.state == main.cli_state_t.COMBAT and root and root.Parent
-				local typing = inputService:GetFocusedTextBox() ~= nil
-				if not ready or typing or current ~= character then
-					stopFlight()
-					phase, deadline, character = 'Waiting', nil, current
-				end
-				if not ready or typing then
-					label.Text = typing and 'FRONTLINES FLY — Paused while typing' or 'FRONTLINES FLY — Waiting for combat'
-					track.Size = UDim2.new(0, 0, 0, 3)
-					return
-				end
-				if phase == 'Waiting' then
-					phase, deadline = 'Countdown', now + 5
-				end
-				if phase == 'Countdown' then
-					stopFlight()
-					if now >= deadline then
-						-- Reapply the requested preset immediately before every pulse.
-						for _, setting in preset do fly.Options[setting[1]]:SetValue(setting[2]) end
-						fly:Toggle()
-						phase, deadline = 'Flying', now + 3
-					end
-				elseif not fly.Enabled or now >= deadline then
-					local cancelled = not fly.Enabled
-					stopFlight()
-					if cancelled or not RepeatPulses.Enabled then
-						FrontlinesFly:Toggle()
-						return
-					end
-					phase, deadline = 'Countdown', now + 5
-				end
-				local remaining = math.max(0, deadline - now)
-				local flying = phase == 'Flying'
-				label.Text = (flying and string.format('FLY PULSE — %.1fs', remaining) or 'FLY IN '..math.ceil(remaining)..'s')
-					..'\n108 studs/s • Impulse • Velocity • Direct'
-				track.BackgroundColor3 = flying and Color3.fromRGB(110, 230, 165) or Color3.fromRGB(105, 175, 255)
-				track.Size = UDim2.new(math.clamp(remaining / (flying and 3 or 5), 0, 1), 0, 0, 3)
-			end
-			FrontlinesFly:Clean(runService.PreSimulation:Connect(step))
-			step()
-		end,
-		ExtraText = function() return '108 • 5s / 3s' end,
-		Tooltip = '5-second countdown, then a 3-second fly pulse at 108 studs/s. Uses Impulse speed, Velocity float and Direct WASD input. Uses Fly\'s up/down binds and vertical speed. Resets on death or typing; restores previous Fly settings when finished.'
-	})
-	RepeatPulses = FrontlinesFly:Setting({Type='toggle', Name = 'Repeat Pulses', Default = false})
-end)
-
-run(function()
 	local AmmoHUD
 	local LowAmmo, ShowReserve, TextSize, VerticalPosition, Background
 
-	AmmoHUD = tenacity:Module('Render', {
+	AmmoHUD = vape.Categories.Render:CreateModule({
 		Name = 'AmmoHUD',
 		Function = function(callback)
 			if not callback then return end
@@ -6644,7 +4688,7 @@ run(function()
 			label.Font = Enum.Font.GothamMedium
 			label.Text = ''
 			label.Visible = false
-			label.Parent = tenacity.gui
+			label.Parent = vape.gui
 			AmmoHUD:Clean(label)
 			local corner = Instance.new('UICorner')
 			corner.CornerRadius = UDim.new(0, 8)
@@ -6680,307 +4724,9 @@ run(function()
 		end,
 		Tooltip = 'Readable firearm ammo near the crosshair. Hides in menus, on death and when using melee.'
 	})
-	LowAmmo = AmmoHUD:Setting({Type='slider', Name = 'Low Ammo Threshold', Min = 0, Max = 30, Default = 5})
-	ShowReserve = AmmoHUD:Setting({Type='toggle', Name = 'Show Reserve', Default = true})
-	TextSize = AmmoHUD:Setting({Type='slider', Name = 'Text Size', Min = 14, Max = 32, Default = 22})
-	VerticalPosition = AmmoHUD:Setting({Type='slider', Name = 'Vertical Position', Min = 10, Max = 90, Default = 60, Suffix = '%'})
-	Background = AmmoHUD:Setting({Type='toggle', Name = 'Background', Default = true})
-end)
-
-run(function()
-	local LowHealthAlert
-	local Threshold, Cooldown
-	LowHealthAlert = tenacity:Module('Misc', {
-		Name = 'LowHealthAlert',
-		Function = function(callback)
-			if not callback then return end
-			local warned, character = false, nil
-			local lastAlert, elapsed = -math.huge, 0
-			LowHealthAlert:Clean(runService.Heartbeat:Connect(function(dt)
-				elapsed += dt
-				if elapsed < 0.2 then return end
-				elapsed = 0
-				local current = entitylib.isAlive and entitylib.character
-				if current ~= character then
-					character, warned, lastAlert = current, false, -math.huge
-				end
-				local hum = current and current.Humanoid
-				if not hum or hum.Health <= 0 or hum.MaxHealth <= 0 then return end
-				local percent = hum.Health / hum.MaxHealth * 100
-				-- Require recovery above the threshold before another warning.
-				if percent > Threshold.Value + 5 then warned = false end
-				if percent <= Threshold.Value and not warned and os.clock() - lastAlert >= Cooldown.Value then
-					warned, lastAlert = true, os.clock()
-					notif('Low health', tostring(math.ceil(percent))..'% health remaining.', 3, 'alert')
-				end
-			end))
-		end,
-		Tooltip = 'Warns once when health is low; rearms after recovery or respawn.'
-	})
-	Threshold = LowHealthAlert:Setting({Type='slider', Name = 'Health Threshold', Min = 5, Max = 75, Default = 25, Suffix = '%'})
-	Cooldown = LowHealthAlert:Setting({Type='slider', Name = 'Alert Cooldown', Min = 5, Max = 60, Default = 15, Suffix = 's'})
-end)
-
-run(function()
-	local BreakReminder
-	local Interval
-	local elapsed = 0
-	BreakReminder = tenacity:Module('Misc', {
-		Name = 'BreakReminder',
-		Function = function(callback)
-			elapsed = 0
-			if not callback then return end
-			BreakReminder:Clean(runService.Heartbeat:Connect(function(dt)
-				elapsed += dt
-				if elapsed >= Interval.Value * 60 then
-					elapsed = 0
-					notif('Break reminder', 'Your '..Interval.Value..'-minute reminder: time for a short break.', 8)
-				end
-			end))
-		end,
-		Tooltip = 'Optional periodic break reminder while enabled. Re-enabling or changing the interval resets the timer.'
-	})
-	Interval = BreakReminder:Setting({Type='slider', 
-		Name = 'Reminder Interval', Min = 5, Max = 120, Default = 30, Suffix = 'min',
-		Function = function() elapsed = 0 end
-	})
-end)
-
-run(function()
-	local Bot, Mode, SearchRange, Underground, Depth
-	local status = 'Idle'
-
-	local function ammoAction(gun, ammo)
-		if not gun or gun.type == 2 or not gun.reload_params or type(ammo) ~= 'table'
-			or type(ammo.ammo) ~= 'number' or type(ammo.reserve) ~= 'number' then return end
-		if ammo.ammo <= 0 then return ammo.reserve > 0 and 'Reload' or 'Reset' end
-	end
-
-	Bot = tenacity:Module('Movement', {
-		Name = 'Bot',
-		Function = function(callback)
-			if not callback then return end
-			local aura, aim = tenacity.Modules.Killaura, tenacity.Modules.SilentAim
-			if not aura or not aim then
-				notif('Bot', 'Killaura and SilentAim are required.', 5, 'alert')
-				Bot:Toggle()
-				return
-			end
-			local savedModules, savedOptions = {}, {}
-			local movementRoot, hoverY, target, currentCharacter
-			local route
-			local collisions = {}
-			local nextReload, resetAt = 0, nil
-			local stopped, respawnPending = false, false
-			local function toggle(module, enabled)
-				if module.Enabled ~= enabled then module:Toggle() end
-			end
-			local function stopTravel()
-				if movementRoot and movementRoot.Parent then
-					movementRoot.AssemblyLinearVelocity = Vector3.zero
-				end
-				movementRoot, hoverY = nil, nil
-				route = nil
-				for part, value in collisions do
-					if part.Parent then part.CanCollide = value end
-				end
-				table.clear(collisions)
-			end
-			local function allowUnderground(part)
-				if not part or not part.Parent then return end
-				if collisions[part] == nil then collisions[part] = part.CanCollide end
-				part.CanCollide = false
-			end
-			local function stopAttack()
-				toggle(aura, false)
-				toggle(aim, false)
-				local main = frontlines.Main
-				if main and main.globals and main.globals.ctrl_states then main.globals.ctrl_states.trigger = false end
-			end
-			local function setOption(option, value)
-				if not option then return end
-				local isToggle = type(value) == 'boolean'
-				local old = option.Value
-				if isToggle then old = option.Enabled end
-				if savedOptions[option] == nil then savedOptions[option] = {Value = old, Toggle = isToggle} end
-				if isToggle then
-					if option.Enabled ~= value then option:Toggle() end
-				elseif option.Value ~= value then option:SetValue(value) end
-			end
-			Bot:Clean(function()
-				stopped = true
-				stopTravel()
-				stopAttack()
-				for option, saved in savedOptions do
-					if saved.Toggle then
-						if option.Enabled ~= saved.Value then option:Toggle() end
-					else option:SetValue(saved.Value) end
-				end
-				for name, saved in savedModules do
-					if tenacity.Modules[name] == saved.Module then toggle(saved.Module, saved.Enabled) end
-				end
-				status = 'Idle'
-			end)
-			for _, name in {'FrontlinesFly', 'Fly', 'Speed', 'TargetStrafe', 'LongJump', 'Killaura', 'SilentAim', 'AutoRespawn'} do
-				local module = tenacity.Modules[name]
-				if module then
-					savedModules[name] = {Module = module, Enabled = module.Enabled}
-					toggle(module, false)
-				end
-			end
-			for _, module in {aura, aim} do
-				local targets = module.Options.Targets
-				if targets then
-					setOption(targets.Players, true)
-					setOption(targets.NPCs, true)
-				end
-			end
-			setOption(aura.Options['Require mouse down'], false)
-			setOption(aura.Options['Knife only'], false)
-			setOption(aura.Options['Max angle'], 360)
-			setOption(aura.Options['Attack range'], 8)
-			setOption(aura.Options['Swing range'], 8)
-			setOption(aim.Options.Mode, 'Position')
-			setOption(aim.Options.AutoFire, true)
-			setOption(aim.Options.Range, 150)
-
-			Bot:Clean(hookEvent('ENTER_CLI_KILLCAM', function()
-				if respawnPending then return end
-				respawnPending = true
-				stopTravel()
-				stopAttack()
-				status = 'Respawning'
-				task.defer(function()
-					respawnPending = false
-					local main = frontlines.Main
-					if not stopped and Bot.Enabled and main then
-						main.exe_set(main.exe_set_t.CTRL_KILLCAM_TO_COMBAT_RELEASE)
-					end
-				end)
-			end))
-
-			local function valid(ent)
-				return ent and ent.Targetable and ent.RootPart and ent.RootPart.Parent
-					and ent.Health and ent.Health > 0 and entitylib.isVulnerable(ent)
-			end
-			local function step(dt)
-				if stopped or not Bot.Enabled then return end
-				dt = math.clamp(dt or 1 / 60, 0, 0.05)
-				local main = frontlines.Main
-				local globals = main and main.globals
-				local state = globals and globals.cli_state
-				local char = entitylib.isAlive and entitylib.character
-				local root = char and char.RootPart
-				if char ~= currentCharacter then
-					stopTravel()
-					target, resetAt, currentCharacter = nil, nil, char
-				end
-				if not root or not root.Parent or not state or state.state ~= main.cli_state_t.COMBAT then
-					stopTravel(); stopAttack(); status = 'Waiting for combat'; return
-				end
-				if inputService:GetFocusedTextBox() then
-					stopTravel(); stopAttack(); status = 'Paused while typing'; return
-				end
-				local now = os.clock()
-				if resetAt then
-					if now - resetAt > 5 then
-						notif('Bot', 'The reset did not reach the killcam. Bot stopped; reset manually.', 6, 'alert')
-						Bot:Toggle()
-					end
-					return
-				end
-				local equipment = globals.fpv_sol_equipment
-				local gun = equipment and equipment.curr_equipment
-				local action = ammoAction(gun, globals.fpv_sol_ammo)
-				if action then
-					stopTravel(); stopAttack(); status = action == 'Reset' and 'Resetting: no ammo' or 'Reloading'
-					if action == 'Reset' then
-						resetAt = now
-						char.Humanoid.Health = 0
-						char.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
-					elseif now >= nextReload then
-						nextReload = now + 1
-						main.exe_set(main.exe_set_t.FPV_SOL_AMMO_IN, gun)
-					end
-					return
-				end
-				if not valid(target) or (target.RootPart.Position - root.Position).Magnitude > SearchRange.Value then
-					stopTravel(); target = nil
-					local distance = SearchRange.Value
-					for _, ent in entitylib.List do
-						if valid(ent) then
-							local candidate = (ent.RootPart.Position - root.Position).Magnitude
-							if candidate < distance then distance, target = candidate, ent end
-						end
-					end
-				end
-				if not target then stopTravel(); stopAttack(); status = 'Finding enemies'; return end
-				local melee = Mode.Value == 'Killaura'
-				local delta = root.Position - target.RootPart.Position
-				local stopDistance = melee and 5 or 24
-				if route and not Underground.Enabled then stopTravel() end
-				if route or delta.Magnitude > stopDistance + 1 then
-					stopAttack()
-					status = 'Flying • 80 studs/s'
-					local goal = target.RootPart.Position
-					local arrivalDistance = stopDistance
-					if Underground.Enabled then
-						if not route then
-							local y = math.min(root.Position.Y, target.RootPart.Position.Y) - Depth.Value
-							route = {Stage = 'Descend', Y = y, Entry = Vector3.new(root.Position.X, y, root.Position.Z)}
-						end
-						allowUnderground(root)
-						allowUnderground(globals.fpv_sol_instances and globals.fpv_sol_instances.root)
-						local facing = target.RootPart.CFrame and target.RootPart.CFrame.LookVector or Vector3.new(0, 0, 1)
-						facing *= Vector3.new(1, 0, 1)
-						if facing.Magnitude < 0.01 then facing = Vector3.new(0, 0, 1) end
-						local surface = target.RootPart.Position - facing.Unit * (melee and 3 or 6)
-						local below = Vector3.new(surface.X, route.Y, surface.Z)
-						if route.Stage == 'Descend' and (root.Position - route.Entry).Magnitude <= 0.1 then route.Stage = 'Travel' end
-						if route.Stage == 'Travel' and (root.Position - below).Magnitude <= 0.1 then route.Stage = 'Rise' end
-						goal = route.Stage == 'Descend' and route.Entry or route.Stage == 'Travel' and below or surface
-						arrivalDistance = 0
-						status = 'Underground • '..route.Stage
-						if route.Stage == 'Rise' and (root.Position - goal).Magnitude <= 0.1 then
-							stopTravel()
-							return
-						end
-					end
-					local direction = goal - root.Position
-					local distance = math.min(80 * dt, math.max(0, direction.Magnitude - arrivalDistance))
-					-- Move the native soldier root after simulation, including vertical
-					-- travel, without relying on impulses the movement controller cancels.
-					movementRoot, hoverY = root, nil
-					root.AssemblyLinearVelocity = Vector3.zero
-					if distance > 0.001 then root.CFrame += direction.Unit * distance end
-				else
-					if not melee and (not gun or not gun.fire_params or gun.type == 2) then
-						stopTravel(); stopAttack(); status = 'Equip a firearm'; return
-					end
-					movementRoot = root
-					hoverY = hoverY or root.Position.Y
-					root.AssemblyLinearVelocity = Vector3.zero
-					root.CFrame += Vector3.new(0, hoverY - root.Position.Y, 0)
-					toggle(melee and aim or aura, false)
-					toggle(melee and aura or aim, true)
-					status = melee and 'Attacking • Killaura' or 'Attacking • Shoot'
-				end
-			end
-			Bot:Clean(runService.Heartbeat:Connect(step))
-			step()
-		end,
-		ExtraText = function() return status end,
-		Tooltip = 'Approaches enemies at 80 studs/s: descend, travel underground, then rise beside the target. Adjustable depth; disable Underground Approach for direct flight. Uses Killaura or Shoot, reloads and resets/respawns when empty. Restores collision and controlled modules on disable.'
-	})
-	Mode = Bot:Setting({Type='dropdown', Name = 'Attack Mode', List = {'Killaura', 'Shoot'}, Default = 'Killaura'})
-	SearchRange = Bot:Setting({Type='slider', Name = 'Search Range', Min = 25, Max = 2000, Default = 1000, Suffix = 'studs'})
-	Underground = Bot:Setting({Type='toggle', Name = 'Underground Approach', Default = true})
-	Depth = Bot:Setting({Type='slider', Name = 'Underground Depth', Min = 6, Max = 50, Default = 12, Suffix = 'studs',
-		Tooltip = 'Depth below the lower of your starting position and the target. Applies to the next approach.'})
-end)
-
--- Native integration bridge; initialized only inside Frontlines' client actor.
-tenacity.Libraries.frontlines = frontlines
-tenacity:Clean(function()
-	if tenacity.Libraries.frontlines == frontlines then tenacity.Libraries.frontlines = nil end
+	LowAmmo = AmmoHUD:CreateSlider({Name = 'Low Ammo Threshold', Min = 0, Max = 30, Default = 5})
+	ShowReserve = AmmoHUD:CreateToggle({Name = 'Show Reserve', Default = true})
+	TextSize = AmmoHUD:CreateSlider({Name = 'Text Size', Min = 14, Max = 32, Default = 22})
+	VerticalPosition = AmmoHUD:CreateSlider({Name = 'Vertical Position', Min = 10, Max = 90, Default = 60, Suffix = '%'})
+	Background = AmmoHUD:CreateToggle({Name = 'Background', Default = true})
 end)
