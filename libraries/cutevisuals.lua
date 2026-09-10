@@ -1,11 +1,11 @@
 -- Luau port of the supplied CuteVisuals.java. Minecraft bed events are supplied by the game adapter.
-return function(tenacity, adapter)
+return function(vape, adapter)
  local runService = game:GetService('RunService')
  local debris = game:GetService('Debris')
  local module
  local options = {}
  local folder = Instance.new('Folder')
- folder.Name = 'TenacityCuteVisuals'
+ folder.Name = 'VapeCuteVisuals'
  folder.Parent = workspace
  local pools = {Hearts = {}, Dots = {}, Burst = {}, Rainbow = {}}
  local caps = {Hearts = 50, Dots = 100, Burst = 200, Rainbow = 5}
@@ -185,7 +185,7 @@ return function(tenacity, adapter)
    end
   end
  end
- module=tenacity:Module('Render', {Name='CuteVisuals',Tooltip='Floating pink hearts, drifting dots, pastel bursts and rainbow celebrations. Ported from CuteVisuals.java.',Function=function(enabled)
+ module=vape.Categories.Render:CreateModule({Name='CuteVisuals',Tooltip='Floating pink hearts, drifting dots, pastel bursts and rainbow celebrations. Ported from CuteVisuals.java.',Function=function(enabled)
   clear()
   if enabled then
    module:Clean(runService.RenderStepped:Connect(update))
@@ -193,10 +193,10 @@ return function(tenacity, adapter)
   end
  end})
  local function toggle(key,name,default,pool)
-  options[key]=module:Setting({Type='toggle', Name=name,Default=default,Function=function(on)if not on and pool then clearPool(pool)end end})
+  options[key]=module:CreateToggle({Name=name,Default=default,Function=function(on)if not on and pool then clearPool(pool)end end})
  end
  local function slider(key,name,default,min,max,decimal,suffix)
-  options[key]=module:Setting({Type='slider', Name=name,Default=default,Min=min,Max=max,Decimal=decimal or 1,Suffix=suffix})
+  options[key]=module:CreateSlider({Name=name,Default=default,Min=min,Max=max,Decimal=decimal or 1,Suffix=suffix})
  end
  toggle('Hearts','Hearts',true,'Hearts')
  slider('HeartsRate','Hearts Spawn Rate',200,50,500,1,'ms')
@@ -216,9 +216,9 @@ return function(tenacity, adapter)
  slider('RainbowWidth','Rainbow Line Width',5,1,12)
  slider('RainbowLife','Rainbow Duration',3000,1000,6000,1,'ms')
  toggle('Sound','Burst Sound',false)
- options.SoundAsset=module:Setting({Type='text', Name='Sound Asset',Placeholder='Roblox sound asset ID',Tooltip='Minecraft orb/level-up audio is not a Roblox asset; supply a sound ID.'})
- module:Setting({Type='button', Name='Preview Burst',Function=function()if module.Enabled then local p=adapter.GetPosition();burst(p)end end})
+ options.SoundAsset=module:CreateTextBox({Name='Sound Asset',Placeholder='Roblox sound asset ID',Tooltip='Minecraft orb/level-up audio is not a Roblox asset; supply a sound ID.'})
+ module:CreateButton({Name='Preview Burst',Function=function()if module.Enabled then local p=adapter.GetPosition();burst(p)end end})
  module.EmitBurst=burst
- tenacity:Clean(function()clear();folder:Destroy()end)
+ vape:Clean(function()clear();folder:Destroy()end)
  return module
 end
