@@ -1,4 +1,4 @@
--- Tenacity 5.1 interface port. Roblox module/control and profile APIs are preserved.
+-- Vape interface: restrained surfaces, shared accents, event-driven controls.
 local vape = {
 	ActiveBinds = {},
 	Categories = {},
@@ -432,31 +432,6 @@ uipallet = {
 	ModuleThemeObjects = setmetatable({}, {__mode = 'k'})
 }
 
--- Palettes transcribed from Tenacity utils/render/Theme.java.
-for name, theme in {
-		['Spearmint'] = {{Color3.fromRGB(97, 194, 162), Color3.fromRGB(65, 130, 108)}, 9},
-		['Jade Green'] = {{Color3.fromRGB(0, 168, 107), Color3.fromRGB(0, 105, 66)}, 9},
-		['Green Spirit'] = {{Color3.fromRGB(0, 135, 62), Color3.fromRGB(159, 226, 191)}, 9},
-		['Rosy Pink'] = {{Color3.fromRGB(255, 102, 204), Color3.fromRGB(191, 77, 153)}, 9},
-		['Magenta'] = {{Color3.fromRGB(213, 63, 119), Color3.fromRGB(157, 68, 110)}, 9},
-		['Hot Pink'] = {{Color3.fromRGB(231, 84, 128), Color3.fromRGB(172, 79, 198)}, 9},
-		['Lavender'] = {{Color3.fromRGB(219, 166, 247), Color3.fromRGB(152, 115, 172)}, 9},
-		['Amethyst'] = {{Color3.fromRGB(144, 99, 205), Color3.fromRGB(98, 67, 140)}, 9},
-		['Purple Fire'] = {{Color3.fromRGB(104, 71, 141), Color3.fromRGB(177, 162, 202)}, 9},
-		['Sunset Pink'] = {{Color3.fromRGB(255, 145, 20), Color3.fromRGB(245, 105, 231)}, 9},
-		['Blaze Orange'] = {{Color3.fromRGB(255, 169, 77), Color3.fromRGB(255, 130, 0)}, 9},
-		['Pink Blood'] = {{Color3.fromRGB(228, 0, 70), Color3.fromRGB(255, 166, 201)}, 9},
-		['Pastel'] = {{Color3.fromRGB(255, 109, 106), Color3.fromRGB(191, 82, 80)}, 9},
-		['Neon Red'] = {{Color3.fromRGB(210, 39, 48), Color3.fromRGB(184, 25, 42)}, 9},
-		['Deep Ocean'] = {{Color3.fromRGB(60, 82, 145), Color3.fromRGB(0, 20, 64)}, 9},
-		['Chambray Blue'] = {{Color3.fromRGB(33, 46, 182), Color3.fromRGB(60, 82, 145)}, 9},
-		['Mint Blue'] = {{Color3.fromRGB(66, 158, 157), Color3.fromRGB(40, 94, 93)}, 9},
-		['Pacific Blue'] = {{Color3.fromRGB(5, 169, 199), Color3.fromRGB(4, 115, 135)}, 9},
-		['Tropical Ice'] = {{Color3.fromRGB(102, 255, 209), Color3.fromRGB(6, 149, 255)}, 9},
-		Tenacity = {{Color3.fromRGB(236, 133, 209), Color3.fromRGB(28, 167, 222)}, 9},
-		['Red Coffee'] = {{Color3.new(0, 0, 0), Color3.fromRGB(225, 34, 59)}, 1},
-} do uipallet.Themes[name] = theme end
-
 local themecolors = {
 	Color3.fromRGB(248, 57, 57),
 	Color3.fromRGB(250, 128, 55),
@@ -470,15 +445,15 @@ local themecolors = {
 	Color3.fromRGB(100, 100, 110)
 }
 
-local themeNames = {'Tenacity'}
+local themeNames = {'Vape'}
 for themeName in uipallet.Themes do
-	if themeName ~= 'Tenacity' then
+	if themeName ~= 'Vape' then
 		table.insert(themeNames, themeName)
 	end
 end
 table.sort(themeNames, function(a, b)
-	if a == 'Tenacity' then return b ~= 'Tenacity' end
-	if b == 'Tenacity' then return false end
+	if a == 'Vape' then return b ~= 'Vape' end
+	if b == 'Vape' then return false end
 	return a:lower() < b:lower()
 end)
 
@@ -500,7 +475,7 @@ end
 -- Animated named gradient themes ------------------------------------------------
 -- GUI accents are theme-only now. The legacy HSV GUI color remains only as a
 -- compatibility shim for external modules; it is no longer user-facing.
-vape.ActiveThemeName = 'Tenacity'
+vape.ActiveThemeName = 'Vape'
 vape.ThemePhase = 0
 
 local function getThemePalette(name)
@@ -894,7 +869,7 @@ end
 -- GUI style system -------------------------------------------------------------
 -- new.lua keeps Vape V4 as the default presentation while allowing the same
 -- live interface to switch to the newer modern styling without reinjection.
-vape.GUIStyleName = 'Dropdown'
+vape.GUIStyleName = 'Vape V4'
 vape.GUIStyleObjects = setmetatable({}, {__mode = 'k'})
 
 local function styleCorner(object, radius)
@@ -972,11 +947,6 @@ function vape:ApplyGUIStyleObject(object, role)
 		styleStroke(object, modern and 0.65 or 0.8, modern and 1.1 or 1, true)
 		styleShadow(object, modern)
 		styleAccent(object, modern, 37)
-		local outline = object:FindFirstChildWhichIsA('UIStroke')
-		if outline then
-			outline.Transparency = 0.12
-			self:RegisterThemeSolid(outline, 'Color', 0.08)
-		end
 	elseif role == 'CategoryListWindow' then
 		object.BackgroundColor3 = modern and color.Dark(uipallet.Main, 0.012) or uipallet.Main
 		object.BackgroundTransparency = modern and 0.018 or 0
@@ -2809,13 +2779,12 @@ function vape:LoadGUI()
 
 	vape.GUIStyle = guipane:CreateDropdown({
 		Name = 'GUI Style',
-		List = {'Dropdown', 'Modern', 'Compact'},
+		List = {'Vape V4', 'Modern'},
 		Function = function(value)
-			vape.GUIStyleName = table.find({'Dropdown', 'Modern', 'Compact'}, value) and value or 'Dropdown'
-			if vape.Tenacity then vape.Tenacity:SetMode(vape.GUIStyleName) end
+			vape.GUIStyleName = value == 'Vape V4' and 'Vape V4' or 'Modern'
 			vape:ApplyGUIStyle()
 		end,
-		Tooltip = 'Tenacity Dropdown, Modern sidebar, or Compact tabbed layout.'
+		Tooltip = 'Switch the same Vape V4 interface between the original presentation and newer rounded/glass styling.'
 	})
 
 	vape.GradientTheme = guipane:CreateDropdown({
@@ -2830,7 +2799,7 @@ function vape:LoadGUI()
 			refreshAdvancedGUI()
 			vape:UpdateGUI()
 		end,
-		Tooltip = 'Tenacity theme palettes and additional animated colors.'
+		Tooltip = 'Primary GUI color system. Choose Vape for a solid green accent, or an animated palette.'
 	})
 
 	local ScaleSlider = {Object = {}, Value = 1}
@@ -10874,389 +10843,5 @@ vape.Components = setmetatable(components, {
 })
 
 vape:LoadGUI()
-
--- Tenacity ClickGUI / SideGUI adaptation. Kept in this file so existing loaders
--- need no additional download. The Java cloud API is deliberately not emulated.
-run(function()
-	local ui = {Mode = 'Dropdown', Selected = 'Combat', Panels = {}, Tabs = {}, Page = 'Configs', Local = true}
-	vape.Tenacity = ui
-	local statePath = 'newvape/profiles/tenacity-ui.json'
-	local state = loadJson(statePath) or {}
-	local dark, raised, muted = Color3.fromRGB(20, 20, 20), Color3.fromRGB(35, 35, 35), Color3.fromRGB(165, 165, 175)
-	local function create(class, parent, properties)
-		local object = Instance.new(class)
-		object.Name = 'Tenacity'..class
-		if object:IsA('GuiObject') then object.BorderSizePixel = 0; object.ZIndex = parent.ZIndex + 1 end
-		if object:IsA('TextLabel') or object:IsA('TextButton') or object:IsA('TextBox') then
-			object.FontFace = uipallet.Font
-			object.TextSize = 14
-			object.TextColor3 = uipallet.Text
-			object.BackgroundTransparency = 1
-		end
-		for key, value in properties do object[key] = value end
-		object.Parent = parent
-		return object
-	end
-	local function label(parent, text, x, y, w, h, size)
-		return create('TextLabel', parent, {Text = text, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h), TextSize = size or 14, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd})
-	end
-	local function button(parent, text, x, y, w, action)
-		local b = create('TextButton', parent, {Text = text, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 30), BackgroundTransparency = 0, BackgroundColor3 = raised, AutoButtonColor = false})
-		addCorner(b, UDim.new(0, 5))
-		b.MouseEnter:Connect(function() tween:Tween(b, uiMotionFast, {BackgroundColor3 = Color3.fromRGB(52, 52, 58)}) end)
-		b.MouseLeave:Connect(function() tween:Tween(b, uiMotionFast, {BackgroundColor3 = raised}) end)
-		b.Activated:Connect(action)
-		return b
-	end
-	local function field(parent, placeholder, x, y, w)
-		local b = create('TextBox', parent, {Text = '', PlaceholderText = placeholder, PlaceholderColor3 = muted, ClearTextOnFocus = false, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 30), BackgroundTransparency = 0, BackgroundColor3 = raised})
-		addCorner(b, UDim.new(0, 5))
-		return b
-	end
-	local function scroll(parent, x, y, w, h)
-		return create('ScrollingFrame', parent, {BackgroundColor3 = dark, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 3, ScrollBarImageColor3 = muted})
-	end
-	local function accent(object)
-		vape:ApplyThemeGradient(object, 'BackgroundColor3', 0, true, 0)
-	end
-	local function persist()
-		state.Mode, state.Selected = ui.Mode, ui.Selected
-		state.CompactCards = ui.CompactCards
-		state.Initialized = ui.Initialized
-		local ok, err = pcall(writefile, statePath, httpService:JSONEncode(state))
-		if not ok then vape:CreateNotification('Tenacity', 'Could not save layout: '..tostring(err), 4, 'alert') end
-	end
-	local bar = create('Frame', clickgui, {Name = 'TenacityHotbar', BackgroundColor3 = dark, Position = UDim2.fromOffset(18, 14), Size = UDim2.fromOffset(960, 44), ZIndex = 20})
-	addCorner(bar, UDim.new(0, 7))
-	local brand = label(bar, 'Tenacity', 14, 0, 122, 44, 24)
-	brand.FontFace = uipallet.FontSemiBold
-	vape:ApplyThemeGradient(brand, 'TextColor3', 0, true, 0)
-	local modeButton
-	modeButton = button(bar, 'Dropdown', 148, 7, 100, function()
-		local modes = {'Dropdown', 'Modern', 'Compact'}
-		local mode = modes[(table.find(modes, ui.Mode) or 1) % 3 + 1]
-		vape.GUIStyle:SetValue(mode)
-		persist()
-	end)
-	button(bar, 'Configs', 256, 7, 80, function() ui:Open('Configs') end)
-	button(bar, 'Themes', 344, 7, 80, function() ui:Open('Themes') end)
-	button(bar, 'Info', 432, 7, 58, function() ui:Open('Info') end)
-	button(bar, 'Scripts', 498, 7, 72, function() ui:Open('Scripts') end)
-	button(bar, 'Settings', 578, 7, 80, function()
-		local main = vape.Categories.Main.Object
-		main.Visible = not main.Visible
-		main.Position = UDim2.fromOffset(18, 70)
-	end)
-	button(bar, 'Save', 666, 7, 56, function() vape:QuickSave() end)
-	button(bar, 'Arrange', 730, 7, 72, function() ui:Arrange() end)
-	local search = field(bar, 'Search modules...', 810, 7, 140)
-	local shell = create('Frame', clickgui, {Name = 'TenacityClient', BackgroundColor3 = Color3.fromRGB(30, 31, 35), Size = UDim2.fromOffset(740, 510), Position = UDim2.fromOffset(220, 120), Visible = false})
-	addCorner(shell, UDim.new(0, 10))
-	addDragHandler(shell)
-	label(shell, 'Tenacity  /  Modules', 18, 0, 460, 40, 20)
-	local shellAccent = create('Frame', shell, {Position = UDim2.fromOffset(0, 40), Size = UDim2.new(1, 0, 0, 2)})
-	accent(shellAccent)
-	local navigation = create('Frame', shell, {BackgroundColor3 = Color3.fromRGB(47, 49, 54), Position = UDim2.fromOffset(0, 42), Size = UDim2.fromOffset(150, 468)})
-	local selectedLabel = label(shell, '', 168, 48, 550, 28, 18)
-	local categoryNames = {}
-	for name, category in vape.Categories do
-		if category.Type == 'Category' then table.insert(categoryNames, name) end
-	end
-	table.sort(categoryNames)
-	if not table.find(categoryNames, ui.Selected) then ui.Selected = categoryNames[1] end
-	for index, name in categoryNames do
-		local category = vape.Categories[name]
-		local children = category.Object:FindFirstChild('Children')
-		-- Tenacity centers bold category names above the module stack.
-		for _, child in category.Object:GetChildren() do
-			if child:IsA('TextLabel') and child.Text == name then
-				child.Position = UDim2.fromOffset(30, 0)
-				child.Size = UDim2.new(1, -60, 0, 37)
-				child.FontFace = uipallet.FontSemiBold
-				child.TextSize = 15
-				child.TextXAlignment = Enum.TextXAlignment.Center
-			end
-		end
-		ui.Panels[name] = {Category = category, Children = children, Position = children.Position, Size = children.Size}
-		ui.Tabs[name] = button(navigation, name, 8, 12 + (index - 1) * 42, 134, function()
-			ui.Selected = name
-			ui:SetMode(ui.Mode)
-			persist()
-		end)
-	end
-	function ui:Filter()
-		local query = search.Text
-		for name, module in vape.Modules do
-			local visible = module.Visible and matchesModuleSearch(name, module.Category, module.Tooltip, query) and matchesModuleState(module, name, query)
-			module.Object.Visible = visible
-			if not visible and module.SetExpanded then module:SetExpanded(false) end
-		end
-	end
-	search:GetPropertyChangedSignal('Text'):Connect(function() ui:Filter() end)
-	function ui:Arrange()
-		local available = gui.AbsoluteSize.X / scale.Scale
-		local columns = math.max(1, math.floor((available - 36) / 232))
-		for index, name in categoryNames do
-			local category = self.Panels[name].Category
-			category.Object.Position = UDim2.fromOffset(18 + ((index - 1) % columns) * 232, 82 + math.floor((index - 1) / columns) * 330)
-			if not category.Expanded then category:Expand() end
-			if not category.Button.Enabled then category.Button:Toggle() end
-		end
-		self:SetMode(self.Mode)
-	end
-	function ui:SetMode(mode)
-		self.Mode = table.find({'Dropdown', 'Modern', 'Compact'}, mode) and mode or 'Dropdown'
-		modeButton.Text = self.Mode
-		vape.GUIStyleName = self.Mode
-		shell.Visible = self.Mode ~= 'Dropdown'
-		local compact = self.Mode == 'Compact'
-		local width, height = shell.Size.X.Offset, shell.Size.Y.Offset
-		navigation.Position = UDim2.fromOffset(0, 42)
-		navigation.Size = compact and UDim2.fromOffset(width, 44) or UDim2.fromOffset(150, height - 42)
-		selectedLabel.Visible = not compact
-		selectedLabel.Text = self.Selected or ''
-		for index, name in categoryNames do
-			local p, tab = self.Panels[name], self.Tabs[name]
-			local tabWidth = (width - 16) / math.max(#categoryNames, 1)
-			tab.Position = compact and UDim2.fromOffset(8 + (index - 1) * tabWidth, 7) or UDim2.fromOffset(8, 12 + (index - 1) * 42)
-			tab.Size = UDim2.fromOffset(compact and tabWidth - 5 or 134, 30)
-			tab.TextTruncate = Enum.TextTruncate.AtEnd
-			tab.TextColor3 = name == self.Selected and vape:GetThemeColor(0) or muted
-			if self.Mode == 'Dropdown' then
-				p.Children.Parent = p.Category.Object
-				p.Children.Position, p.Children.Size = p.Position, p.Size
-				p.Children.Visible = p.Category.Expanded
-				p.Category.Object.Visible = p.Category.Button.Enabled
-			else
-				p.Category.Object.Visible = false
-				p.Children.Parent = shell
-				p.Children.Position = compact and UDim2.fromOffset(12, 94) or UDim2.fromOffset(162, 86)
-				p.Children.Size = compact and UDim2.fromOffset(width - 24, height - 106) or UDim2.fromOffset(width - 174, height - 98)
-				p.Children.Visible = name == self.Selected
-			end
-		end
-		for _, module in vape.Modules do
-			module.Object.Size = UDim2.new(1, 0, 0, self.Mode == 'Dropdown' and 32 or 40)
-			local dots = module.Object:FindFirstChild('Dots')
-			if dots then dots.Size = UDim2.new(0, 25, 1, 0) end
-		end
-		self:Filter()
-		vape:ApplyGUIStyle()
-	end
-
-	-- The side panel uses the Java SideGUI's 550:350 aspect ratio and dark cards.
-	local shade = create('TextButton', clickgui, {Name = 'TenacitySideBackdrop', Text = '', AutoButtonColor = false, BackgroundColor3 = Color3.new(), BackgroundTransparency = 0.4, Size = UDim2.fromScale(1, 1), Visible = false, ZIndex = 100})
-	local side = create('Frame', shade, {Name = 'TenacitySideGUI', BackgroundColor3 = Color3.fromRGB(30, 30, 30), Position = UDim2.fromOffset(250, 130), Size = UDim2.fromOffset(880, 560)})
-	addCorner(side, UDim.new(0, 9))
-	addDragHandler(side)
-	local heading = label(side, 'Configs', 18, 12, 420, 36, 28)
-	heading.FontFace = uipallet.FontSemiBold
-	button(side, 'Close', 794, 14, 68, function() shade.Visible = false end)
-	local tabs = {'Configs', 'Themes', 'Info', 'Scripts'}
-	for i, page in tabs do button(side, page, 18 + (i - 1) * 94, 56, 86, function() ui:Open(page) end) end
-	local body = create('Frame', side, {BackgroundTransparency = 1, Position = UDim2.fromOffset(18, 100), Size = UDim2.fromOffset(844, 442)})
-	local refresh
-	local function clearBody()
-		for _, child in body:GetChildren() do child:Destroy() end
-	end
-	local function message(text, errorMessage)
-		vape:CreateNotification('Configs', text, 5, errorMessage and 'alert' or 'info')
-	end
-	local function guard(action)
-		if not vape.Loaded or vape.SwitchingProfile then message('Wait for the current config to finish loading.', true); return end
-		local ok, err = pcall(action)
-		if not ok then message(tostring(err), true) end
-	end
-	local function configPath(name) return 'newvape/profiles/'..name..vape.Place..'.txt' end
-	local function validName(name)
-		return type(name) == 'string' and #name > 0 and #name <= 48 and name:match('^[%w _%-]+$') and name:match('%S')
-	end
-	local function addConfig(name, data)
-		assert(validName(name), 'Use 1-48 letters, numbers, spaces, hyphens or underscores.')
-		assert(not vape.Categories.Profiles:GetValue(name) and not isfile(configPath(name)), 'A config with that name already exists.')
-		writefile(configPath(name), data)
-		vape.Categories.Profiles:ChangeValue(name)
-		vape:Save()
-		message('Saved '..name)
-	end
-	local function form(title, submit, multiline)
-		local cover = create('Frame', side, {BackgroundColor3 = dark, Position = UDim2.fromOffset(110, 130), Size = UDim2.fromOffset(660, 320), ZIndex = 150})
-		addCorner(cover, UDim.new(0, 8))
-		label(cover, title, 18, 12, 600, 32, 22)
-		local name = field(cover, 'Config name', 18, 56, 624)
-		local data = field(cover, multiline and 'Paste exported Roblox config JSON here' or 'Save a copy of your current module settings', 18, 100, 624)
-		data.Size = UDim2.fromOffset(624, 154)
-		data.MultiLine, data.TextWrapped = true, true
-		data.TextYAlignment = Enum.TextYAlignment.Top
-		data.TextEditable = multiline == true
-		button(cover, 'Cancel', 430, 274, 98, function() cover:Destroy() end)
-		button(cover, 'Save', 540, 274, 102, function()
-			guard(function()
-				submit(name.Text:match('^%s*(.-)%s*$'), data.Text)
-				cover:Destroy()
-				refresh()
-			end)
-		end)
-		name:CaptureFocus()
-	end
-	local function exportConfig(name)
-		guard(function()
-			if name == vape.Profile then vape:Save() end
-			local data = readfile(configPath(name))
-			if setclipboard then setclipboard(data); message('Copied '..name..' to clipboard')
-			else
-				local display = create('Frame', side, {BackgroundColor3 = dark, Position = UDim2.fromOffset(110, 130), Size = UDim2.fromOffset(660, 320), ZIndex = 150})
-				label(display, 'Copy config JSON', 18, 12, 500, 32, 20)
-				local box = field(display, '', 18, 56, 624)
-				box.Size = UDim2.fromOffset(624, 205)
-				box.MultiLine, box.TextWrapped, box.Text = true, true, data
-				button(display, 'Close', 544, 276, 98, function() display:Destroy() end)
-				box:CaptureFocus(); box.SelectionStart = 1; box.CursorPosition = #data + 1
-			end
-		end)
-	end
-	function ui:Configs()
-		button(body, 'Save current config', 0, 0, 154, function() guard(function() vape:Save(); message('Saved '..vape.Profile); refresh() end) end)
-		button(body, 'Save as...', 162, 0, 100, function()
-			form('Save Config', function(name)
-				vape:Save()
-				addConfig(name, readfile(configPath(vape.Profile)))
-			end)
-		end)
-		button(body, 'Import', 270, 0, 74, function()
-			form('Import Roblox Config', function(name, data)
-				local decoded = httpService:JSONDecode(data)
-				assert(type(decoded) == 'table' and decoded.v == 1 and type(decoded.Modules) == 'table' and type(decoded.Categories) == 'table' and type(decoded.Legit) == 'table', 'Expected an exported Roblox config (Java configs are incompatible).')
-				for _, entries in {decoded.Modules, decoded.Categories, decoded.Legit} do
-					for key, value in entries do assert(type(key) == 'string' and type(value) == 'table', 'Invalid config entry.') end
-				end
-				addConfig(name, httpService:JSONEncode(decoded))
-			end, true)
-		end)
-		button(body, self.Local and 'Local  [selected]' or 'Local', 386, 0, 124, function() self.Local = true; refresh() end)
-		button(body, self.Local and 'Cloud' or 'Cloud  [selected]', 518, 0, 124, function() self.Local = false; refresh() end)
-		button(body, self.CompactCards and 'Cards: Compact' or 'Cards: Full', 650, 0, 126, function() self.CompactCards = not self.CompactCards; persist(); refresh() end)
-		if not self.Local then
-			local info = label(body, 'Cloud configs require Tenacity\'s Java account service.\nUse Local to save, load, import, and export Roblox configs.', 18, 100, 800, 100, 18)
-			info.TextWrapped = true
-			return
-		end
-		local filter = field(body, 'Filter configs...', 0, 42, 420)
-		local sortButton
-		sortButton = button(body, self.ReverseSort and 'Sort: Z-A' or 'Sort: A-Z', 430, 42, 128, function() self.ReverseSort = not self.ReverseSort; refresh() end)
-		label(body, 'Active: '..vape.Profile, 576, 42, 264, 30).TextColor3 = muted
-		local list = scroll(body, 0, 84, 844, 358)
-		addCorner(list, UDim.new(0, 6))
-		local function render()
-			for _, child in list:GetChildren() do child:Destroy() end
-			local profiles = {}
-			for _, profile in vape.Categories.Profiles.List do
-				if profile.Name:lower():find(filter.Text:lower(), 1, true) then table.insert(profiles, profile.Name) end
-			end
-			table.sort(profiles, function(a, b) if self.ReverseSort then return a:lower() > b:lower() end return a:lower() < b:lower() end)
-			local height = self.CompactCards and 90 or 140
-			for i, name in profiles do
-				local card = create('Frame', list, {BackgroundColor3 = raised, Position = UDim2.fromOffset(10 + (i - 1) % 3 * 276, 10 + math.floor((i - 1) / 3) * (height + 10)), Size = UDim2.fromOffset(264, height)})
-				addCorner(card, UDim.new(0, 6))
-				label(card, name, 12, 8, 240, 28, 18)
-				if name == vape.Profile then
-					local line = create('Frame', card, {Size = UDim2.new(1, 0, 0, 2)})
-					accent(line)
-				end
-				if not self.CompactCards then
-					label(card, name == vape.Profile and 'Currently active' or 'Local config', 12, 40, 240, 22).TextColor3 = muted
-					label(card, 'Place '..tostring(vape.Place), 12, 62, 240, 20, 12).TextColor3 = muted
-				end
-				button(card, name == vape.Profile and 'Active' or 'Load', 10, height - 40, 72, function()
-					guard(function() if name ~= vape.Profile and vape:SwitchProfile(name) then message('Loaded '..name) end; refresh() end)
-				end)
-				button(card, 'Export', 90, height - 40, 74, function() exportConfig(name) end)
-				local delete
-				delete = button(card, 'Delete', 172, height - 40, 82, function()
-					guard(function()
-						assert(name ~= 'default' and name ~= vape.Profile, 'Switch to another config before deleting; default is protected.')
-						assert(delfile, 'This environment cannot delete config files.')
-						if delete.Text ~= 'Confirm?' then delete.Text = 'Confirm?'; return end
-						vape.Categories.Profiles:ChangeValue(name)
-						vape:Save(); refresh()
-					end)
-				end)
-			end
-			if #profiles == 0 then label(list, 'No matching configs. Use Save as... to create one.', 18, 20, 800, 40, 16) end
-		end
-		filter:GetPropertyChangedSignal('Text'):Connect(render)
-		render()
-	end
-	function ui:Themes()
-		local list = scroll(body, 0, 0, 844, 442)
-		for i, name in themeNames do
-			local b = button(list, name, 10 + (i - 1) % 3 * 276, 10 + math.floor((i - 1) / 3) * 66, 264, function() vape.GradientTheme:SetValue(name); persist() end)
-			b.Size = UDim2.fromOffset(264, 56)
-			local strip = create('Frame', b, {Position = UDim2.fromOffset(8, 44), Size = UDim2.new(1, -16, 0, 5), BackgroundColor3 = Color3.new(1, 1, 1)})
-			local colors = vape:GetThemeColors(name)
-			create('UIGradient', strip, {Color = ColorSequence.new(colors[1], colors[#colors])})
-		end
-	end
-	function ui:Open(page)
-		self.Page = page
-		clearBody()
-		heading.Text = page
-		shade.Visible = true
-		if page == 'Configs' then self:Configs()
-		elseif page == 'Themes' then self:Themes()
-		elseif page == 'Scripts' then
-			local text = label(body, 'Scripts', 8, 12, 800, 34, 22)
-			local help = label(body, 'Tenacity Java scripts cannot run in Roblox.\nYour installed Roblox modules are available in the ClickGUI.\nThe Java script marketplace requires Tenacity\'s cloud service.', 8, 58, 800, 130, 17)
-			help.TextWrapped = true
-		else
-			label(body, 'Tenacity 5.1  /  Roblox interface', 8, 12, 800, 36, 24)
-			local help = label(body, 'Left click a module to toggle it. Right click to expand settings.\nShift + right click favorites a module. Drag category headers to arrange them.\nUse the layout button for Dropdown, Modern, or Compact.\nSearch supports category filters (#Combat) and state filters (@on, @fav).\nConfigs use your existing Roblox profiles and keybinds.\nSettings opens friends, targets, overlays, keybinds, and GUI preferences.', 8, 64, 810, 210, 17)
-			help.TextWrapped = true
-			button(body, 'Open settings', 8, 300, 150, function() shade.Visible = false; vape.Categories.Main.Object.Visible = true end)
-		end
-	end
-	refresh = function() ui:Open(ui.Page) end
-	local function fit()
-		local viewport = gui.AbsoluteSize / math.max(scale.Scale, 0.01)
-		local sideScale = side:FindFirstChildWhichIsA('UIScale') or create('UIScale', side, {})
-		sideScale.Scale = math.min(1, (viewport.X - 24) / 880, (viewport.Y - 24) / 560)
-		side.Position = UDim2.fromOffset(math.max(12, (viewport.X - 880 * sideScale.Scale) / 2), math.max(12, (viewport.Y - 560 * sideScale.Scale) / 2))
-		local barScale = bar:FindFirstChildWhichIsA('UIScale') or create('UIScale', bar, {})
-		barScale.Scale = math.min(1, (viewport.X - 36) / 960)
-		-- Existing slider and color-picker coordinates use the shared GUI scale.
-		-- Resize the shell rather than nesting a second scale around these controls.
-		shell.Size = UDim2.fromOffset(math.min(740, viewport.X - 24), math.min(510, viewport.Y - 90))
-		shell.Position = UDim2.fromOffset(math.max(12, (viewport.X - shell.Size.X.Offset) / 2), 80)
-		ui:SetMode(ui.Mode)
-	end
-	vape:Clean(gui:GetPropertyChangedSignal('AbsoluteSize'):Connect(fit))
-	vape:Clean(scale:GetPropertyChangedSignal('Scale'):Connect(fit))
-	vape:Clean(clickgui:GetPropertyChangedSignal('Visible'):Connect(function()
-		if clickgui.Visible then ui:SetMode(ui.Mode); fit() else shade.Visible = false end
-	end))
-	vape:Clean(inputService.InputBegan:Connect(function(input)
-		if clickgui.Visible and shade.Visible and input.KeyCode == Enum.KeyCode.Escape and not inputService:GetFocusedTextBox() then shade.Visible = false end
-	end))
-	local originalLoad = vape.Load
-	function vape:Load(skipgui, ...)
-		local hadLayout = isfile('newvape/profiles/'..game.GameId..'.gui.txt')
-		local result = originalLoad(self, skipgui, ...)
-		if not skipgui and (not ui.Initialized or not hadLayout) then ui:Arrange(); ui.Initialized = true end
-		ui:SetMode(ui.Mode)
-		return result
-	end
-	local originalSave = vape.Save
-	function vape:Save(...)
-		originalSave(self, ...)
-		if self.Loaded then persist() end
-	end
-	ui.CompactCards = state.CompactCards == true
-	ui.Initialized = state.Initialized == true
-	ui.Selected = table.find(categoryNames, state.Selected) and state.Selected or ui.Selected
-	ui.Mode = table.find({'Dropdown', 'Modern', 'Compact'}, state.Mode) and state.Mode or 'Dropdown'
-	vape.Categories.Main.Object.Visible = false
-	vape.GUIStyle:SetValue(ui.Mode)
-	fit()
-end)
 
 return vape
